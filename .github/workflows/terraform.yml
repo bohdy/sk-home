@@ -41,13 +41,13 @@ jobs:
     steps:
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3.1.2
+        uses: hashicorp/setup-terraform@v4.0.0
         with:
-          terraform_version: 1.14.3
+          terraform_version: 1.14.8
 
       # Keep formatting enforcement simple and consistent across all stacks.
       - name: Check Terraform formatting
