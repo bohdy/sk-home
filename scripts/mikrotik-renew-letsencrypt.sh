@@ -20,6 +20,7 @@ KNOWN_HOSTS_FILE="${MIKROTIK_SSH_KNOWN_HOSTS_FILE:-${SSH_DIR}/known_hosts}"
 SSH_KEY_FILE="${MIKROTIK_SSH_PRIVATE_KEY_FILE:-${SSH_DIR}/id_ed25519}"
 SSH_PORT="${MIKROTIK_SSH_PORT:-22}"
 SSH_USERNAME="${MIKROTIK_SSH_USERNAME:?Set MIKROTIK_SSH_USERNAME in the workflow or shell environment.}"
+ACME_SERVER="${ACME_SERVER:-letsencrypt}"
 
 # Use Cloudflare API tokens through the variable names that acme.sh expects.
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -z "${CF_Token:-}" ]]; then
@@ -81,7 +82,7 @@ acme_issue_or_renew() {
   local fqdn="$1"
   local acme_args=(
     --home "${ACME_HOME}"
-    --server letsencrypt
+    --server "${ACME_SERVER}"
     --dns dns_cf
     --issue
     -d "${fqdn}"
