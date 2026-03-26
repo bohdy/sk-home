@@ -1,0 +1,13 @@
+# Set the project identifier for this repository's infrastructure stack.
+project_name = "sk-home"
+
+# Choose the target environment for local planning or future deployments.
+environment = "home"
+
+# Identify the tailnet managed by the overlay stack.
+tailnet_name = "example.tailnet"
+
+# Add optional non-sensitive metadata tags as needed.
+additional_tags = {
+  owner = "home-lab"
+}

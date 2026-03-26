@@ -1,0 +1,56 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "terraform/**"
+  push:
+    branches:
+      - main
+      - "chore/**"
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "terraform/**"
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.stack }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - terraform/stacks/network-core
+          - terraform/stacks/wifi
+          - terraform/stacks/identity-edge
+          - terraform/stacks/overlay
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+
+    steps:
+      # Check out the repository so Terraform commands can run against the stack.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install a pinned Terraform version so local and CI behavior stay aligned.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.2
+
+      # Keep formatting enforcement simple and consistent across all stacks.
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      # Install providers and modules for the selected stack before validation.
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      # Validate the selected stack structure and provider configuration.
+      - name: Terraform validate
+        run: terraform validate

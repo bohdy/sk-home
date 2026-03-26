@@ -1,0 +1,27 @@
+# Set the project identifier for this repository's infrastructure stack.
+project_name = "sk-home"
+
+# Choose the target environment for local planning or future deployments.
+environment = "home"
+
+# Identify the physical site managed by the network-core stack.
+site_name = "primary"
+
+# Add optional non-sensitive metadata tags as needed.
+additional_tags = {
+  owner = "home-lab"
+}
+
+# Point Terraform at the RouterOS API-SSL endpoints for each MikroTik device.
+# The RouterOS provider accepts apis://host[:port] URLs for secure API access.
+mikrotik_gw_hosturl         = "apis://10.1.100.1:8729"
+mikrotik_switch_1pp_hosturl = "apis://10.1.100.2:8729"
+mikrotik_switch_1np_hosturl = "apis://10.1.100.3:8729"
+
+# Use a dedicated automation user and provide the password from a local
+# uncommitted .tfvars file or TF_VAR_mikrotik_password environment variable.
+mikrotik_username = "terraform"
+
+# Skip TLS verification only while using self-signed certificates during
+# bootstrap. Set this to false once trusted certificates are in place.
+mikrotik_insecure = true
