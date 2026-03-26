@@ -1,0 +1,150 @@
+name: MikroTik Certificates
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_renewal:
+        description: Force a certificate reissue instead of letting acme.sh renew only when needed.
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Run weekly so Let's Encrypt renewals happen well before certificate expiry.
+    - cron: "19 3 * * 1"
+  pull_request:
+    paths:
+      - ".github/workflows/mikrotik-certificates.yml"
+      - "config/mikrotik-letsencrypt-targets.csv"
+      - "scripts/mikrotik-renew-letsencrypt.sh"
+      - "README.md"
+      - "terraform/stacks/network-core/README.md"
+  push:
+    branches:
+      - main
+      - "chore/**"
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - ".github/workflows/mikrotik-certificates.yml"
+      - "config/mikrotik-letsencrypt-targets.csv"
+      - "scripts/mikrotik-renew-letsencrypt.sh"
+      - "README.md"
+      - "terraform/stacks/network-core/README.md"
+
+jobs:
+  validate:
+    name: Validate automation files
+    runs-on: self-hosted
+
+    steps:
+      # Fail fast when the self-hosted runner lacks the shell needed to parse
+      # and execute the repository automation scripts.
+      - name: Preflight runner tools
+        run: |
+          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+
+      # Check out the repository so the workflow can validate the committed
+      # script and inventory files directly.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Catch shell syntax errors before a scheduled renewal run needs the script.
+      - name: Validate renewal script syntax
+        run: bash -n scripts/mikrotik-renew-letsencrypt.sh
+
+      # Ensure the inventory keeps the expected CSV shape and does not lose the
+      # required hostname or management IP columns.
+      - name: Validate inventory entries
+        run: |
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            IFS=',' read -r fqdn host service_name certificate_name <<<"$line"
+            [[ -n "$fqdn" ]] || { echo "Missing fqdn in line: $line"; exit 1; }
+            [[ -n "$host" ]] || { echo "Missing management host in line: $line"; exit 1; }
+            [[ -n "$service_name" ]] || { echo "Missing service name in line: $line"; exit 1; }
+            [[ -n "$certificate_name" ]] || { echo "Missing certificate name in line: $line"; exit 1; }
+          done < config/mikrotik-letsencrypt-targets.csv
+
+  renew:
+    name: Issue and install certificates
+    runs-on: self-hosted
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    env:
+      # Keep the Cloudflare token outside version control while exposing the
+      # names expected by the renewal script and acme.sh.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # Reuse the existing MikroTik automation username secret so the SSH-based
+      # certificate workflow stays aligned with the Terraform workflow.
+      MIKROTIK_SSH_USERNAME: ${{ secrets.MIKROTIK_USERNAME }}
+
+      # Allow manual runs to bypass normal renewal timing checks when needed.
+      FORCE_RENEWAL: ${{ inputs.force_renewal || 'false' }}
+
+    steps:
+      # Confirm the runner can reach the external dependencies needed for DNS-01
+      # issuance and the internal RouterOS management endpoints.
+      - name: Preflight runner tools
+        run: |
+          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v openssl >/dev/null 2>&1 || { echo "Missing required tool: openssl"; exit 1; }
+          command -v ssh >/dev/null 2>&1 || { echo "Missing required tool: ssh"; exit 1; }
+          command -v scp >/dev/null 2>&1 || { echo "Missing required tool: scp"; exit 1; }
+          command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Resolve acme.sh from the runner user's common install locations because
+      # service-managed GitHub runners often start with a minimal PATH that does
+      # not include user shell initialization files.
+      - name: Resolve acme.sh
+        run: |
+          ACME_BIN=""
+
+          if command -v acme.sh >/dev/null 2>&1; then
+            ACME_BIN="$(command -v acme.sh)"
+          elif [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
+            ACME_BIN="${HOME}/.acme.sh/acme.sh"
+          elif [[ -x "/root/.acme.sh/acme.sh" ]]; then
+            ACME_BIN="/root/.acme.sh/acme.sh"
+          fi
+
+          [[ -n "${ACME_BIN}" ]] || { echo "Missing required tool: acme.sh"; exit 1; }
+
+          ACME_DIR="$(dirname "${ACME_BIN}")"
+          echo "PATH=${ACME_DIR}:${PATH}" >> "${GITHUB_ENV}"
+          echo "Resolved acme.sh at ${ACME_BIN}"
+
+      # Fail early when required secrets are missing instead of reaching the
+      # deployment script with empty values and producing a less clear error.
+      - name: Validate required secrets
+        run: |
+          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || { echo "Missing required secret: CLOUDFLARE_API_TOKEN"; exit 1; }
+          [[ -n "${MIKROTIK_SSH_USERNAME}" ]] || { echo "Missing required secret: MIKROTIK_USERNAME"; exit 1; }
+
+      # Verify the public Cloudflare API and the private MikroTik SSH endpoints
+      # are reachable from the self-hosted runner before renewal work starts.
+      - name: Preflight network access
+        run: |
+          nc -zvw5 api.cloudflare.com 443 || { echo "Cannot reach Cloudflare API on port 443"; exit 1; }
+          nc -zvw5 10.1.100.1 22 || { echo "Cannot reach MikroTik GW SSH on port 22"; exit 1; }
+          nc -zvw5 10.1.100.2 22 || { echo "Cannot reach MikroTik Switch 1PP SSH on port 22"; exit 1; }
+          nc -zvw5 10.1.100.3 22 || { echo "Cannot reach MikroTik Switch 1NP SSH on port 22"; exit 1; }
+
+      # Check out the repository so the workflow can use the committed inventory,
+      # script, and documentation together.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Materialize the SSH key from repository secrets so the shell script can
+      # use strict host verification without embedding secrets in the repo.
+      - name: Prepare SSH materials
+        run: |
+          mkdir -p .tmp/mikrotik-acme/ssh
+          printf '%s\n' "${{ secrets.MIKROTIK_SSH_PRIVATE_KEY }}" > .tmp/mikrotik-acme/ssh/id_ed25519
+          printf '%s\n' "${{ secrets.MIKROTIK_SSH_KNOWN_HOSTS }}" > .tmp/mikrotik-acme/ssh/known_hosts
+          chmod 600 .tmp/mikrotik-acme/ssh/id_ed25519
+
+      # Renew or reuse certificates as needed, then install them on each RouterOS
+      # device declared in the committed inventory file.
+      - name: Renew and deploy certificates
+        run: ./scripts/mikrotik-renew-letsencrypt.sh
