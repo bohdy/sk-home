@@ -49,6 +49,25 @@ jobs:
         working-directory: ${{ matrix.stack }}
 
     steps:
+      # Fail fast on self-hosted runners that are missing basic tooling required
+      # by JavaScript-based GitHub Actions and Terraform setup.
+      - name: Preflight runner tools
+        run: |
+          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
+          command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
+          command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
+          command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Verify that the runner can reach the external systems Terraform depends
+      # on before downloading providers or talking to remote state.
+      - name: Preflight network access
+        run: |
+          nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
+          nc -zvw5 10.1.100.1 8729 || { echo "Cannot reach MikroTik GW on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.2 8729 || { echo "Cannot reach MikroTik Switch 1PP on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.3 8729 || { echo "Cannot reach MikroTik Switch 1NP on port 8729"; exit 1; }
+
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
