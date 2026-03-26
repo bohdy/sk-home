@@ -31,8 +31,6 @@ jobs:
       # so provider configuration stays free of hardcoded secrets.
       TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
       TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      TFSTATE_BUCKET: ${{ secrets.TFSTATE_BUCKET }}
     strategy:
       fail-fast: false
       matrix:
@@ -65,21 +63,10 @@ jobs:
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
-      # Build the small external backend fragment at runtime so only the bucket
-      # and account-specific R2 values stay out of version control.
-      - name: Generate backend config
-        run: |
-          cat > backend.r2.hcl <<EOF
-          bucket = "${TFSTATE_BUCKET}"
-          endpoints = {
-            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          }
-          EOF
-
       # Install providers, initialize the R2 backend, and validate each stack
       # against the same remote-state backend used outside CI.
       - name: Terraform init
-        run: terraform init -reconfigure -backend-config=backend.r2.hcl
+        run: terraform init -reconfigure
 
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate

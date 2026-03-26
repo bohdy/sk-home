@@ -28,10 +28,9 @@ Each stack is its own Terraform root module with separate state, variables, and 
 3. Copy `.env.example` to `.env` and fill in local credentials and defaults.
 4. Load the environment variables from `.env` into your shell.
 5. Copy that stack's `terraform.tfvars.example` to a local `.tfvars` file if you want local overrides.
-6. Copy that stack's `backend.r2.hcl.example` to `backend.r2.hcl` and replace the R2 bucket and account placeholders, or derive those values from your `.env` settings.
-7. Fill in environment-specific values without committing secrets.
-8. Run `terraform init -reconfigure -backend-config=backend.r2.hcl` inside the selected stack directory.
-9. Run `terraform plan` inside the selected stack directory.
+6. Fill in environment-specific values without committing secrets.
+7. Run `terraform init -reconfigure` inside the selected stack directory.
+8. Run `terraform plan` inside the selected stack directory.
 
 ## Notes
 
@@ -41,6 +40,6 @@ Each stack is its own Terraform root module with separate state, variables, and 
 - Keep physical networking, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `apis://...:8729` endpoints, and variable-based credentials.
 - GitHub Actions supports automatic and manual Terraform validation runs, expects `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets for MikroTik-backed stacks, and tracks the latest verified Terraform and action versions.
-- All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only the bucket name, account ID, and credentials external.
-- GitHub Actions remote-state initialization expects repository secrets `CLOUDFLARE_ACCOUNT_ID`, `TFSTATE_BUCKET`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
+- All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
+- GitHub Actions remote-state initialization expects repository secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 - Update this README whenever the Terraform workflow or structure changes.
