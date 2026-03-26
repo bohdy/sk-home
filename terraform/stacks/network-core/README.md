@@ -49,6 +49,8 @@ Example non-sensitive endpoint values:
 
 ## Notes
 
+- DHCP in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
+- Define DHCP scopes through the `dhcp_scopes` variable so pools, server bindings, and per-network options stay synchronized.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.
 - Update this README when the RouterOS connection model or managed inventory changes.
