@@ -19,7 +19,7 @@ on:
 jobs:
   validate:
     name: Validate ${{ matrix.stack }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
       # future remote-state operations in CI.
