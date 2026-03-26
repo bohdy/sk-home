@@ -67,6 +67,16 @@ build_ssh_options() {
     "-o" "UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
 }
 
+build_scp_options() {
+  printf '%s\n' \
+    "-i" "${SSH_KEY_FILE}" \
+    "-P" "${SSH_PORT}" \
+    "-o" "BatchMode=yes" \
+    "-o" "IdentitiesOnly=yes" \
+    "-o" "StrictHostKeyChecking=yes" \
+    "-o" "UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+}
+
 acme_issue_or_renew() {
   local fqdn="$1"
   local acme_args=(
@@ -112,6 +122,7 @@ install_routeros_certificate() {
   local bundle_basename
   local previous_certificate_name
   local ssh_options=()
+  local scp_options=()
   local remote_script
 
   bundle_basename="$(basename "${bundle_file}")"
@@ -121,7 +132,11 @@ install_routeros_certificate() {
     ssh_options+=("${option}")
   done < <(build_ssh_options)
 
-  scp "${ssh_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}"
+  while IFS= read -r option; do
+    scp_options+=("${option}")
+  done < <(build_scp_options)
+
+  scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}"
 
   # Keep one rollback copy of the previous RouterOS service certificate while
   # assigning a stable local certificate name to the newly imported bundle.
