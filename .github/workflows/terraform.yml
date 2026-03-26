@@ -1,0 +1,92 @@
+name: Terraform
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "terraform/**"
+  push:
+    branches:
+      - main
+      - "chore/**"
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - ".github/workflows/terraform.yml"
+      - "terraform/**"
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.stack }}
+    runs-on: self-hosted
+    env:
+      # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
+      # future remote-state operations in CI.
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: auto
+
+      # Expose MikroTik credentials to Terraform through standard TF_VAR names
+      # so provider configuration stays free of hardcoded secrets.
+      TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
+      TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stack: terraform/stacks/network-core
+            stack_name: network-core
+          - stack: terraform/stacks/wifi
+            stack_name: wifi
+          - stack: terraform/stacks/identity-edge
+            stack_name: identity-edge
+          - stack: terraform/stacks/overlay
+            stack_name: overlay
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+
+    steps:
+      # Fail fast on self-hosted runners that are missing basic tooling required
+      # by JavaScript-based GitHub Actions and Terraform setup.
+      - name: Preflight runner tools
+        run: |
+          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
+          command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
+          command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
+          command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Verify that the runner can reach the external systems Terraform depends
+      # on before downloading providers or talking to remote state.
+      - name: Preflight network access
+        run: |
+          nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
+          nc -zvw5 10.1.100.1 8729 || { echo "Cannot reach MikroTik GW on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.2 8729 || { echo "Cannot reach MikroTik Switch 1PP on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.3 8729 || { echo "Cannot reach MikroTik Switch 1NP on port 8729"; exit 1; }
+
+      # Check out the repository so Terraform commands can run against the stack.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Install a pinned Terraform version so local and CI behavior stay aligned.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.8
+
+      # Keep formatting enforcement simple and consistent across all stacks.
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      # Install providers, initialize the R2 backend, and validate each stack
+      # against the same remote-state backend used outside CI.
+      - name: Terraform init
+        run: terraform init -reconfigure
+
+      # Validate the selected stack structure and provider configuration.
+      - name: Terraform validate
+        run: terraform validate
