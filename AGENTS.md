@@ -33,6 +33,9 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer variables, configuration, or environment-based values instead of embedding changeable values directly in code.
 - Secrets MUST never be hardcoded in source files.
 - When secrets or configurable values are needed, use the repository's existing variable, configuration, or secret-management mechanisms whenever possible.
+- Non-secret infrastructure settings that define desired state should usually be committed as normal repository configuration.
+- Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
+- Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
 
 ## Documentation Standards
 

@@ -80,7 +80,8 @@ inventory.
 
 ## Local Configuration
 
-Copy `terraform.tfvars.example` to a local `.tfvars` file or use `TF_VAR_...` environment variables for sensitive values.
+The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`.
+Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -100,6 +101,7 @@ Example non-sensitive endpoint values:
 
 - DHCP in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
 - Define DHCP scopes through the `dhcp_scopes` variable so pools, server bindings, and per-network options stay synchronized.
+- Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.
 - Update this README when the RouterOS connection model or managed inventory changes.

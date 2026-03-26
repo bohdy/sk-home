@@ -37,12 +37,16 @@ jobs:
         include:
           - stack: terraform/stacks/network-core
             stack_name: network-core
+            enable_plan: true
           - stack: terraform/stacks/wifi
             stack_name: wifi
+            enable_plan: false
           - stack: terraform/stacks/identity-edge
             stack_name: identity-edge
+            enable_plan: false
           - stack: terraform/stacks/overlay
             stack_name: overlay
+            enable_plan: false
 
     defaults:
       run:
@@ -90,3 +94,23 @@ jobs:
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate
         run: terraform validate
+
+      # Produce a real plan only for stacks with committed non-secret source of
+      # truth so PRs can show intended infrastructure changes safely.
+      - name: Terraform plan
+        if: matrix.enable_plan
+        run: terraform plan -no-color -out=tfplan
+
+      # Convert the binary plan to plain text so it can be reviewed from the PR
+      # workflow without rerunning Terraform locally.
+      - name: Render Terraform plan
+        if: matrix.enable_plan
+        run: terraform show -no-color tfplan > tfplan.txt
+
+      # Publish the plan text as a workflow artifact for PR review.
+      - name: Upload Terraform plan artifact
+        if: matrix.enable_plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.stack_name }}
+          path: ${{ matrix.stack }}/tfplan.txt
