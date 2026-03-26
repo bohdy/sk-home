@@ -92,7 +92,34 @@ jobs:
           command -v ssh >/dev/null 2>&1 || { echo "Missing required tool: ssh"; exit 1; }
           command -v scp >/dev/null 2>&1 || { echo "Missing required tool: scp"; exit 1; }
           command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
-          command -v acme.sh >/dev/null 2>&1 || { echo "Missing required tool: acme.sh"; exit 1; }
+
+      # Resolve acme.sh from the runner user's common install locations because
+      # service-managed GitHub runners often start with a minimal PATH that does
+      # not include user shell initialization files.
+      - name: Resolve acme.sh
+        run: |
+          ACME_BIN=""
+
+          if command -v acme.sh >/dev/null 2>&1; then
+            ACME_BIN="$(command -v acme.sh)"
+          elif [[ -x "${HOME}/.acme.sh/acme.sh" ]]; then
+            ACME_BIN="${HOME}/.acme.sh/acme.sh"
+          elif [[ -x "/root/.acme.sh/acme.sh" ]]; then
+            ACME_BIN="/root/.acme.sh/acme.sh"
+          fi
+
+          [[ -n "${ACME_BIN}" ]] || { echo "Missing required tool: acme.sh"; exit 1; }
+
+          ACME_DIR="$(dirname "${ACME_BIN}")"
+          echo "PATH=${ACME_DIR}:${PATH}" >> "${GITHUB_ENV}"
+          echo "Resolved acme.sh at ${ACME_BIN}"
+
+      # Fail early when required secrets are missing instead of reaching the
+      # deployment script with empty values and producing a less clear error.
+      - name: Validate required secrets
+        run: |
+          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || { echo "Missing required secret: CLOUDFLARE_API_TOKEN"; exit 1; }
+          [[ -n "${MIKROTIK_SSH_USERNAME}" ]] || { echo "Missing required secret: MIKROTIK_SSH_USERNAME"; exit 1; }
 
       # Verify the public Cloudflare API and the private MikroTik SSH endpoints
       # are reachable from the self-hosted runner before renewal work starts.
