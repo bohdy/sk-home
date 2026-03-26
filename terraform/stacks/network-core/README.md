@@ -55,7 +55,7 @@ and the deployment script is
 Required GitHub repository secrets:
 
 - `CLOUDFLARE_API_TOKEN`: token allowed to edit DNS for the public zone
-- `MIKROTIK_SSH_USERNAME`: RouterOS automation username for SSH uploads and CLI changes
+- `MIKROTIK_USERNAME`: RouterOS automation username reused for SSH uploads and CLI changes
 - `MIKROTIK_SSH_PRIVATE_KEY`: private key for that automation account
 - `MIKROTIK_SSH_KNOWN_HOSTS`: pinned host keys for the three MikroTik devices
 
