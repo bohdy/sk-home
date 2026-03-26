@@ -112,41 +112,30 @@ create_pkcs12_bundle() {
     -name "${fqdn}"
 }
 
-install_routeros_certificate() {
+create_routeros_import_script() {
   local fqdn="$1"
-  local management_host="$2"
-  local service_name="$3"
-  local certificate_name="$4"
-  local bundle_file="$5"
-  local bundle_password="$6"
-  local bundle_basename
+  local service_name="$2"
+  local certificate_name="$3"
+  local bundle_basename="$4"
+  local bundle_password="$5"
+  local script_file="$6"
   local previous_certificate_name
-  local ssh_options=()
-  local scp_options=()
-  local remote_script
+  local script_basename
 
-  bundle_basename="$(basename "${bundle_file}")"
   previous_certificate_name="${certificate_name}-previous"
+  script_basename="$(basename "${script_file}")"
 
-  while IFS= read -r option; do
-    ssh_options+=("${option}")
-  done < <(build_ssh_options)
-
-  while IFS= read -r option; do
-    scp_options+=("${option}")
-  done < <(build_scp_options)
-
-  scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}"
-
-  # Keep one rollback copy of the previous RouterOS service certificate while
-  # assigning a stable local certificate name to the newly imported bundle.
-  remote_script="$(cat <<EOF
+  # Upload a RouterOS script file instead of sending a multi-line command over
+  # SSH because RouterOS CLI parsing is fragile when complex scripts are passed
+  # as one shell argument from OpenSSH.
+  cat > "${script_file}" <<EOF
 :local certCn "${fqdn}"
 :local serviceName "${service_name}"
 :local certName "${certificate_name}"
 :local previousCertName "${previous_certificate_name}"
 :local bundleFile "${bundle_basename}"
 :local bundlePassword "${bundle_password}"
+:local importedCertId
 
 :if ([:len [/certificate find where name=\$previousCertName]] > 0) do={
   /certificate remove [find where name=\$previousCertName]
@@ -159,18 +148,55 @@ install_routeros_certificate() {
 /certificate import file-name=\$bundleFile passphrase=\$bundlePassword
 :delay 2s
 
-:local importedCertId [/certificate find where name=\$certCn]
+:set importedCertId [/certificate find where common-name=\$certCn and private-key=yes]
 :if ([:len \$importedCertId] = 0) do={
-  :error ("Unable to find imported certificate named " . \$certCn)
+  :error ("Unable to find imported certificate for common name " . \$certCn)
 }
 
 /certificate set \$importedCertId trusted=yes name=\$certName
 /ip service set [find where name=\$serviceName] certificate=\$certName disabled=no
 /file remove \$bundleFile
+/file remove "${script_basename}"
 EOF
-)"
+}
 
-  ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "${remote_script}"
+install_routeros_certificate() {
+  local fqdn="$1"
+  local management_host="$2"
+  local service_name="$3"
+  local certificate_name="$4"
+  local bundle_file="$5"
+  local bundle_password="$6"
+  local bundle_basename
+  local script_file
+  local script_basename
+  local previous_certificate_name
+  local ssh_options=()
+  local scp_options=()
+
+  bundle_basename="$(basename "${bundle_file}")"
+  script_file="${STATE_DIR}/${fqdn//./-}.rsc"
+  script_basename="$(basename "${script_file}")"
+  previous_certificate_name="${certificate_name}-previous"
+
+  while IFS= read -r option; do
+    ssh_options+=("${option}")
+  done < <(build_ssh_options)
+
+  while IFS= read -r option; do
+    scp_options+=("${option}")
+  done < <(build_scp_options)
+
+  create_routeros_import_script "${fqdn}" "${service_name}" "${certificate_name}" "${bundle_basename}" "${bundle_password}" "${script_file}"
+
+  scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}"
+  scp "${scp_options[@]}" "${script_file}" "${SSH_USERNAME}@${management_host}:${script_basename}"
+
+  ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "/import file-name=${script_basename}"
+
+  # Remove the temporary RouterOS script after a successful import so command
+  # payloads do not accumulate on the automation runner.
+  rm -f "${script_file}"
 }
 
 process_inventory_entry() {
