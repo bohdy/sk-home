@@ -29,6 +29,46 @@ Before Terraform can manage these devices:
 4. Restrict management access to your trusted admin subnet.
 5. Avoid using the main admin account for automation.
 
+## Let's Encrypt Automation
+
+The repository also includes GitHub Actions automation to issue and renew public
+Let's Encrypt certificates for the RouterOS `www-ssl` service on these devices.
+
+Key points for this setup:
+
+- keep the public authoritative `bohdal.name` zone in Cloudflare so DNS-01 TXT
+  records can be created automatically
+- keep the host A records split-horizon or internal-only if you do not want the
+  device management IPs published on the public internet
+- run the workflow on the internal self-hosted runner so certificate deployment
+  can reach `10.1.100.1`, `10.1.100.2`, and `10.1.100.3` over SSH
+- provide an SSH-capable RouterOS automation account that can import
+  certificates and update `/ip service www-ssl`
+
+The committed inventory for certificate targets lives in
+[`mikrotik-letsencrypt-targets.csv`](/Users/bohdy/git/sk-home/config/mikrotik-letsencrypt-targets.csv).
+The automation workflow is
+[`mikrotik-certificates.yml`](/Users/bohdy/git/sk-home/.github/workflows/mikrotik-certificates.yml),
+and the deployment script is
+[`mikrotik-renew-letsencrypt.sh`](/Users/bohdy/git/sk-home/scripts/mikrotik-renew-letsencrypt.sh).
+
+Required GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`: token allowed to edit DNS for the public zone
+- `MIKROTIK_SSH_USERNAME`: RouterOS automation username for SSH uploads and CLI changes
+- `MIKROTIK_SSH_PRIVATE_KEY`: private key for that automation account
+- `MIKROTIK_SSH_KNOWN_HOSTS`: pinned host keys for the three MikroTik devices
+
+Suggested Cloudflare token scope:
+
+- `Zone:DNS:Edit` for the `bohdal.name` zone only
+
+Suggested RouterOS permissions:
+
+- access to `ssh`
+- access to `/certificate`
+- access to `/ip service`
+
 ## Local Configuration
 
 Copy `terraform.tfvars.example` to a local `.tfvars` file or use `TF_VAR_...` environment variables for sensitive values.
