@@ -8,9 +8,10 @@ This repository contains home network and lab automation. Agents working here mu
 
 Before starting any new logical task:
 
-1. Return to `main`.
-2. Create a fresh descriptive branch from `main`.
-3. Use `/compact` to reduce context usage when the environment supports it.
+1. Verify local `main` is up to date with `origin/main`.
+2. Return to `main`.
+3. Create a fresh descriptive branch from `main`.
+4. Use `/compact` to reduce context usage when the environment supports it.
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
 
@@ -18,6 +19,7 @@ If `/compact` is not supported in the current environment, reduce context load m
 
 - All git commits in this repository MUST be signed.
 - Agents should verify commit signing is enabled before creating commits.
+- Agents should verify local `main` matches `origin/main` before branching for a new logical task.
 - Every new logical task MUST begin from a new branch based on `main`.
 - Branch names should be short, descriptive, and reflect the task being performed.
 

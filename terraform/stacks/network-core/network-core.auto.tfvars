@@ -11,10 +11,11 @@ additional_tags = {
   owner = "home-lab"
 }
 
-# Point Terraform at the RouterOS API-SSL endpoints for each MikroTik device.
-mikrotik_gw_hosturl         = "apis://10.1.100.1:8729"
-mikrotik_switch_1pp_hosturl = "apis://10.1.100.2:8729"
-mikrotik_switch_1np_hosturl = "apis://10.1.100.3:8729"
+# Point Terraform at the RouterOS HTTPS endpoints backed by `www-ssl`
+# certificates so the provider can use the TLS-secured REST/API transport.
+mikrotik_gw_hosturl         = "https://10.1.100.1"
+mikrotik_switch_1pp_hosturl = "https://10.1.100.2"
+mikrotik_switch_1np_hosturl = "https://10.1.100.3"
 
 # Use the dedicated automation user for RouterOS management.
 mikrotik_username = "terraform"

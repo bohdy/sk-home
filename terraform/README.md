@@ -38,7 +38,7 @@ Each stack is its own Terraform root module with separate state, variables, and 
 - Store local credentials in `.env`, not in committed Terraform files.
 - Prefer variables over hardcoded values when adding providers, modules, or resources.
 - Keep physical networking, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
-- The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `apis://...:8729` endpoints, and variable-based credentials.
+- The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
 - GitHub Actions supports automatic and manual Terraform validation runs, expects `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets for MikroTik-backed stacks, and tracks the latest verified Terraform and action versions.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
 - GitHub Actions remote-state initialization expects repository secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.

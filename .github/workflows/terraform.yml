@@ -68,9 +68,9 @@ jobs:
       - name: Preflight network access
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
-          nc -zvw5 10.1.100.1 8729 || { echo "Cannot reach MikroTik GW on port 8729"; exit 1; }
-          nc -zvw5 10.1.100.2 8729 || { echo "Cannot reach MikroTik Switch 1PP on port 8729"; exit 1; }
-          nc -zvw5 10.1.100.3 8729 || { echo "Cannot reach MikroTik Switch 1NP on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+          nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+          nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
 
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
