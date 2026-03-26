@@ -21,18 +21,30 @@ jobs:
     name: Validate ${{ matrix.stack }}
     runs-on: ubuntu-latest
     env:
+      # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
+      # future remote-state operations in CI.
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: auto
+
       # Expose MikroTik credentials to Terraform through standard TF_VAR names
       # so provider configuration stays free of hardcoded secrets.
       TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
       TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TFSTATE_BUCKET: ${{ secrets.TFSTATE_BUCKET }}
     strategy:
       fail-fast: false
       matrix:
-        stack:
-          - terraform/stacks/network-core
-          - terraform/stacks/wifi
-          - terraform/stacks/identity-edge
-          - terraform/stacks/overlay
+        include:
+          - stack: terraform/stacks/network-core
+            stack_name: network-core
+          - stack: terraform/stacks/wifi
+            stack_name: wifi
+          - stack: terraform/stacks/identity-edge
+            stack_name: identity-edge
+          - stack: terraform/stacks/overlay
+            stack_name: overlay
 
     defaults:
       run:
@@ -53,9 +65,21 @@ jobs:
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
-      # Install providers and modules for the selected stack before validation.
+      # Build the small external backend fragment at runtime so only the bucket
+      # and account-specific R2 values stay out of version control.
+      - name: Generate backend config
+        run: |
+          cat > backend.r2.hcl <<EOF
+          bucket = "${TFSTATE_BUCKET}"
+          endpoints = {
+            s3 = "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          }
+          EOF
+
+      # Install providers, initialize the R2 backend, and validate each stack
+      # against the same remote-state backend used outside CI.
       - name: Terraform init
-        run: terraform init -backend=false
+        run: terraform init -reconfigure -backend-config=backend.r2.hcl
 
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate

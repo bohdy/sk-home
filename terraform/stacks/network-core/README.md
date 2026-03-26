@@ -32,6 +32,7 @@ Before Terraform can manage these devices:
 ## Local Configuration
 
 Copy `terraform.tfvars.example` to a local `.tfvars` file or use `TF_VAR_...` environment variables for sensitive values.
+Copy `backend.r2.hcl.example` to `backend.r2.hcl` and fill in your R2 bucket and Cloudflare account ID before running `terraform init -reconfigure -backend-config=backend.r2.hcl`.
 
 Recommended sensitive input handling:
 
@@ -39,6 +40,7 @@ Recommended sensitive input handling:
 - use `TF_VAR_mikrotik_password` for local runs when practical
 - set `mikrotik_insecure = false` once certificate trust is configured
 - in GitHub Actions, provide `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets
+- provide Cloudflare R2 credentials through `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION=auto` instead of hardcoding them in backend files
 
 Example non-sensitive endpoint values:
 

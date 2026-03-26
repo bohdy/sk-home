@@ -35,3 +35,11 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Keep local backend configuration out of version control because it may contain
+# account-specific bucket details or temporarily include credentials.
+backend.r2.hcl
+
+# Keep local environment files out of version control because they contain
+# credentials and machine-specific overrides.
+.env

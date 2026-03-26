@@ -1,0 +1,7 @@
+# Provide the external R2 bucket name for this repository's Terraform state.
+bucket = "<YOUR_R2_BUCKET_NAME>"
+
+# Point the backend at your account-scoped R2 S3 endpoint.
+endpoints = {
+  s3 = "https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com"
+}
