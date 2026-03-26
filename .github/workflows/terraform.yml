@@ -1,6 +1,7 @@
 name: Terraform
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - ".github/workflows/terraform.yml"
@@ -19,6 +20,11 @@ jobs:
   validate:
     name: Validate ${{ matrix.stack }}
     runs-on: ubuntu-latest
+    env:
+      # Expose MikroTik credentials to Terraform through standard TF_VAR names
+      # so provider configuration stays free of hardcoded secrets.
+      TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
+      TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,13 +41,13 @@ jobs:
     steps:
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v3.1.2
         with:
-          terraform_version: 1.14.2
+          terraform_version: 1.14.3
 
       # Keep formatting enforcement simple and consistent across all stacks.
       - name: Check Terraform formatting

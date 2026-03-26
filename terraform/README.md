@@ -36,4 +36,5 @@ Each stack is its own Terraform root module with separate state, variables, and 
 - Prefer variables over hardcoded values when adding providers, modules, or resources.
 - Keep physical networking, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `apis://...:8729` endpoints, and variable-based credentials.
+- GitHub Actions supports automatic and manual Terraform validation runs and expects `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets for MikroTik-backed stacks.
 - Update this README whenever the Terraform workflow or structure changes.

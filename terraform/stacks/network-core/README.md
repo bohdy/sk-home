@@ -38,6 +38,7 @@ Recommended sensitive input handling:
 - keep `mikrotik_password` out of committed files
 - use `TF_VAR_mikrotik_password` for local runs when practical
 - set `mikrotik_insecure = false` once certificate trust is configured
+- in GitHub Actions, provide `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets
 
 Example non-sensitive endpoint values:
 
