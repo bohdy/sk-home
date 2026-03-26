@@ -24,6 +24,9 @@ uses the committed inventory in
 and installs certificates onto RouterOS over SSH from the internal self-hosted
 runner.
 
+Manual workflow runs can target Let's Encrypt staging for safe end-to-end
+testing, while scheduled runs and `main` branch runs stay on production.
+
 ## Terraform
 
 The repository includes a Terraform bootstrap in [`terraform`](terraform).

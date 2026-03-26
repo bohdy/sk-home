@@ -3,6 +3,14 @@ name: MikroTik Certificates
 on:
   workflow_dispatch:
     inputs:
+      acme_environment:
+        description: ACME environment to use for manual runs.
+        required: false
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
       force_renewal:
         description: Force a certificate reissue instead of letting acme.sh renew only when needed.
         required: false
@@ -78,6 +86,10 @@ jobs:
       # Reuse the existing MikroTik automation username secret so the SSH-based
       # certificate workflow stays aligned with the Terraform workflow.
       MIKROTIK_SSH_USERNAME: ${{ secrets.MIKROTIK_USERNAME }}
+
+      # Keep scheduled and main-branch runs on production while allowing manual
+      # test runs to target Let's Encrypt staging and avoid production rate limits.
+      ACME_SERVER: ${{ github.event_name == 'workflow_dispatch' && inputs.acme_environment == 'staging' && 'letsencrypt_test' || 'letsencrypt' }}
 
       # Allow manual runs to bypass normal renewal timing checks when needed.
       FORCE_RENEWAL: ${{ inputs.force_renewal || 'false' }}

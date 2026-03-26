@@ -69,6 +69,10 @@ Suggested RouterOS permissions:
 - access to `/certificate`
 - access to `/ip service`
 
+Manual `workflow_dispatch` runs can use the workflow's `acme_environment`
+selector to target Let's Encrypt staging while validating the RouterOS upload
+and import path. Scheduled runs and `main` branch runs remain on production.
+
 ## Local Configuration
 
 Copy `terraform.tfvars.example` to a local `.tfvars` file or use `TF_VAR_...` environment variables for sensitive values.
