@@ -145,12 +145,16 @@ create_routeros_import_script() {
   /certificate set [find where name=\$certName] name=\$previousCertName
 }
 
+:if ([:len [/certificate find where name=\$certCn and private-key=yes]] > 0) do={
+  /certificate remove [find where name=\$certCn and private-key=yes]
+}
+
 /certificate import file-name=\$bundleFile passphrase=\$bundlePassword
 :delay 2s
 
-:set importedCertId [/certificate find where common-name=\$certCn and private-key=yes]
+:set importedCertId [/certificate find where name=\$certCn and private-key=yes]
 :if ([:len \$importedCertId] = 0) do={
-  :error ("Unable to find imported certificate for common name " . \$certCn)
+  :error ("Unable to find imported certificate named " . \$certCn)
 }
 
 /certificate set \$importedCertId trusted=yes name=\$certName
