@@ -67,3 +67,23 @@ variable "mikrotik_insecure" {
   type        = bool
   default     = true
 }
+
+# Define DHCP scopes in data form so network intent stays centralized and new
+# scopes can be added without duplicating resource blocks.
+variable "dhcp_scopes" {
+  description = "DHCP scope definitions managed on the MikroTik gateway."
+  type = map(object({
+    comment     = optional(string)
+    interface   = string
+    pool_name   = string
+    range_start = string
+    range_end   = string
+    subnet      = string
+    gateway     = string
+    dns_servers = optional(list(string), [])
+    domain      = optional(string)
+    lease_time  = optional(string, "30m")
+    add_arp     = optional(bool, false)
+  }))
+  default = {}
+}
