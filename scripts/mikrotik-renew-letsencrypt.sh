@@ -93,7 +93,9 @@ wait_for_routeros_file() {
   # Verify that each uploaded file is visible in RouterOS before any import is
   # attempted, because SCP completion and `/file` visibility are not atomic.
   for wait_attempt in 1 2 3 4 5; do
-    if ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" ":if ([:len [/file find where name=\"${remote_name}\"]] > 0) do={ :put ready }" </dev/null | grep -qx "ready"; then
+    # RouterOS CLI output commonly uses CRLF line endings over SSH, so normalize
+    # carriage returns before testing the sentinel string from the remote probe.
+    if ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" ":if ([:len [/file find where name=\"${remote_name}\"]] > 0) do={ :put ready }" </dev/null | tr -d '\r' | grep -qx "ready"; then
       return 0
     fi
 
