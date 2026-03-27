@@ -203,8 +203,15 @@ create_routeros_import_script() {
 
 /certificate set \$importedCertId trusted=yes name=\$certName
 /ip service set [find where name=\$serviceName] certificate=\$certName disabled=no
-/file remove \$bundleFile
-/file remove "${script_basename}"
+:if ([:len [/file find where name=\$bundleFile]] > 0) do={
+  /file remove \$bundleFile
+}
+
+# Keep cleanup best-effort so a missing transient file does not turn a
+# successful certificate import and service update into a failed workflow run.
+:if ([:len [/file find where name="${script_basename}"]] > 0) do={
+  /file remove "${script_basename}"
+}
 EOF
 }
 
