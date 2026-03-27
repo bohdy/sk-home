@@ -11,6 +11,16 @@ on:
         options:
           - staging
           - production
+      target_device:
+        description: Inventory target to process during a manual run.
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - gw.bohdal.name
+          - sw-1pp.bohdal.name
+          - sw-1np.bohdal.name
       force_renewal:
         description: Force a certificate reissue instead of letting acme.sh renew only when needed.
         required: false
@@ -94,6 +104,10 @@ jobs:
       # Allow manual runs to bypass normal renewal timing checks when needed.
       FORCE_RENEWAL: ${{ inputs.force_renewal || 'false' }}
 
+      # Let manual runs scope work to one committed inventory entry while
+      # leaving scheduled and main-branch runs on the full desired-state set.
+      TARGET_FQDN: ${{ github.event_name == 'workflow_dispatch' && inputs.target_device || 'all' }}
+
     steps:
       # Confirm the runner can reach the external dependencies needed for DNS-01
       # issuance and the internal RouterOS management endpoints.
@@ -138,9 +152,26 @@ jobs:
       - name: Preflight network access
         run: |
           nc -zvw5 api.cloudflare.com 443 || { echo "Cannot reach Cloudflare API on port 443"; exit 1; }
-          nc -zvw5 10.1.100.1 22 || { echo "Cannot reach MikroTik GW SSH on port 22"; exit 1; }
-          nc -zvw5 10.1.100.2 22 || { echo "Cannot reach MikroTik Switch 1PP SSH on port 22"; exit 1; }
-          nc -zvw5 10.1.100.3 22 || { echo "Cannot reach MikroTik Switch 1NP SSH on port 22"; exit 1; }
+          case "${TARGET_FQDN}" in
+            all)
+              nc -zvw5 10.1.100.1 22 || { echo "Cannot reach MikroTik GW SSH on port 22"; exit 1; }
+              nc -zvw5 10.1.100.2 22 || { echo "Cannot reach MikroTik Switch 1PP SSH on port 22"; exit 1; }
+              nc -zvw5 10.1.100.3 22 || { echo "Cannot reach MikroTik Switch 1NP SSH on port 22"; exit 1; }
+              ;;
+            gw.bohdal.name)
+              nc -zvw5 10.1.100.1 22 || { echo "Cannot reach MikroTik GW SSH on port 22"; exit 1; }
+              ;;
+            sw-1pp.bohdal.name)
+              nc -zvw5 10.1.100.2 22 || { echo "Cannot reach MikroTik Switch 1PP SSH on port 22"; exit 1; }
+              ;;
+            sw-1np.bohdal.name)
+              nc -zvw5 10.1.100.3 22 || { echo "Cannot reach MikroTik Switch 1NP SSH on port 22"; exit 1; }
+              ;;
+            *)
+              echo "Unsupported TARGET_FQDN value: ${TARGET_FQDN}"
+              exit 1
+              ;;
+          esac
 
       # Check out the repository so the workflow can use the committed inventory,
       # script, and documentation together.
