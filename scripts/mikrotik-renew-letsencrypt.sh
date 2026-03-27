@@ -194,6 +194,7 @@ install_routeros_certificate() {
   local previous_certificate_name
   local ssh_options=()
   local scp_options=()
+  local wait_attempt
 
   bundle_basename="$(basename "${bundle_file}")"
   script_file="${STATE_DIR}/${fqdn//./-}.rsc"
@@ -214,6 +215,21 @@ install_routeros_certificate() {
   # the remaining CSV rows from the shell loop's standard input stream.
   scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}" </dev/null
   scp "${scp_options[@]}" "${script_file}" "${SSH_USERNAME}@${management_host}:${script_basename}" </dev/null
+
+  # RouterOS can briefly lag between SCP completion and the uploaded file
+  # becoming visible to `/import`, so wait a few short attempts before failing.
+  for wait_attempt in 1 2 3 4 5; do
+    if ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" ":if ([:len [/file find where name=\"${script_basename}\"]] > 0) do={ :put ready }" </dev/null | grep -qx "ready"; then
+      break
+    fi
+
+    sleep 1
+  done
+
+  if [[ "${wait_attempt}" -eq 5 ]]; then
+    echo "Uploaded RouterOS script ${script_basename} was not visible on ${management_host} before import." >&2
+    exit 1
+  fi
 
   # Disconnect SSH from the inventory reader for the same reason as SCP.
   ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "/import file-name=${script_basename}" </dev/null
