@@ -79,6 +79,31 @@ build_scp_options() {
     "-o" "UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
 }
 
+wait_for_routeros_file() {
+  local management_host="$1"
+  local remote_name="$2"
+  local ssh_options=()
+  local option
+  local wait_attempt
+
+  while IFS= read -r option; do
+    ssh_options+=("${option}")
+  done < <(build_ssh_options)
+
+  # Verify that each uploaded file is visible in RouterOS before any import is
+  # attempted, because SCP completion and `/file` visibility are not atomic.
+  for wait_attempt in 1 2 3 4 5; do
+    if ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" ":if ([:len [/file find where name=\"${remote_name}\"]] > 0) do={ :put ready }" </dev/null | grep -qx "ready"; then
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  echo "Uploaded RouterOS file ${remote_name} was not visible on ${management_host} after verification retries." >&2
+  return 1
+}
+
 acme_issue_or_renew() {
   local fqdn="$1"
   local acme_args=(
@@ -194,7 +219,6 @@ install_routeros_certificate() {
   local previous_certificate_name
   local ssh_options=()
   local scp_options=()
-  local wait_attempt
 
   bundle_basename="$(basename "${bundle_file}")"
   script_file="${STATE_DIR}/${fqdn//./-}.rsc"
@@ -216,20 +240,10 @@ install_routeros_certificate() {
   scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}" </dev/null
   scp "${scp_options[@]}" "${script_file}" "${SSH_USERNAME}@${management_host}:${script_basename}" </dev/null
 
-  # RouterOS can briefly lag between SCP completion and the uploaded file
-  # becoming visible to `/import`, so wait a few short attempts before failing.
-  for wait_attempt in 1 2 3 4 5; do
-    if ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" ":if ([:len [/file find where name=\"${script_basename}\"]] > 0) do={ :put ready }" </dev/null | grep -qx "ready"; then
-      break
-    fi
-
-    sleep 1
-  done
-
-  if [[ "${wait_attempt}" -eq 5 ]]; then
-    echo "Uploaded RouterOS script ${script_basename} was not visible on ${management_host} before import." >&2
-    exit 1
-  fi
+  # Confirm that both uploaded files are visible in RouterOS before running the
+  # import command so the workflow fails on the actual upload gap if one exists.
+  wait_for_routeros_file "${management_host}" "${bundle_basename}"
+  wait_for_routeros_file "${management_host}" "${script_basename}"
 
   # Disconnect SSH from the inventory reader for the same reason as SCP.
   ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "/import file-name=${script_basename}" </dev/null
