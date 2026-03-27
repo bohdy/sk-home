@@ -95,7 +95,17 @@ acme_issue_or_renew() {
     acme_args+=(--force)
   fi
 
-  acme.sh "${acme_args[@]}"
+  # Keep ACME progress output visible in CI while stripping PEM certificate
+  # bodies so public certificate material does not spam pipeline logs.
+  acme.sh "${acme_args[@]}" 2>&1 | strip_pem_blocks_from_output
+}
+
+strip_pem_blocks_from_output() {
+  awk '
+    /-----BEGIN CERTIFICATE-----/ { suppress = 1; next }
+    /-----END CERTIFICATE-----/   { suppress = 0; next }
+    !suppress                     { print }
+  '
 }
 
 create_pkcs12_bundle() {
