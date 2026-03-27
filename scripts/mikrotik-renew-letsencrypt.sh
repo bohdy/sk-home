@@ -21,6 +21,7 @@ SSH_KEY_FILE="${MIKROTIK_SSH_PRIVATE_KEY_FILE:-${SSH_DIR}/id_ed25519}"
 SSH_PORT="${MIKROTIK_SSH_PORT:-22}"
 SSH_USERNAME="${MIKROTIK_SSH_USERNAME:?Set MIKROTIK_SSH_USERNAME in the workflow or shell environment.}"
 ACME_SERVER="${ACME_SERVER:-letsencrypt}"
+TARGET_FQDN="${TARGET_FQDN:-all}"
 
 # Use Cloudflare API tokens through the variable names that acme.sh expects.
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -z "${CF_Token:-}" ]]; then
@@ -209,10 +210,13 @@ install_routeros_certificate() {
 
   create_routeros_import_script "${fqdn}" "${service_name}" "${certificate_name}" "${bundle_basename}" "${bundle_password}" "${script_file}"
 
-  scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}"
-  scp "${scp_options[@]}" "${script_file}" "${SSH_USERNAME}@${management_host}:${script_basename}"
+  # Disconnect SCP from the inventory reader so file transfers cannot consume
+  # the remaining CSV rows from the shell loop's standard input stream.
+  scp "${scp_options[@]}" "${bundle_file}" "${SSH_USERNAME}@${management_host}:${bundle_basename}" </dev/null
+  scp "${scp_options[@]}" "${script_file}" "${SSH_USERNAME}@${management_host}:${script_basename}" </dev/null
 
-  ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "/import file-name=${script_basename}"
+  # Disconnect SSH from the inventory reader for the same reason as SCP.
+  ssh "${ssh_options[@]}" "${SSH_USERNAME}@${management_host}" "/import file-name=${script_basename}" </dev/null
 
   # Remove the temporary RouterOS script after a successful import so command
   # payloads do not accumulate on the automation runner.
@@ -250,6 +254,7 @@ main() {
   local management_host
   local service_name
   local certificate_name
+  local processed_count=0
 
   require_command acme.sh
   require_command openssl
@@ -274,7 +279,11 @@ main() {
   prepare_state_directories
   prepare_ssh_key
 
-  while IFS= read -r line || [[ -n "${line}" ]]; do
+  # Read the inventory from a dedicated file descriptor so commands inside the
+  # loop cannot accidentally consume the remaining target rows from stdin.
+  exec 3< "${INVENTORY_FILE}"
+
+  while IFS= read -r line <&3 || [[ -n "${line}" ]]; do
     # Skip comments and blank lines so the inventory remains readable.
     [[ -z "${line}" || "${line}" == \#* ]] && continue
 
@@ -288,8 +297,22 @@ main() {
     service_name="${service_name:-www-ssl}"
     certificate_name="${certificate_name:-letsencrypt-www-ssl}"
 
+    # Allow manual runs to target one inventory entry without changing the
+    # committed desired-state file that scheduled and main-branch runs use.
+    if [[ "${TARGET_FQDN}" != "all" && "${TARGET_FQDN}" != "${fqdn}" ]]; then
+      continue
+    fi
+
     process_inventory_entry "${fqdn}" "${management_host}" "${service_name}" "${certificate_name}"
-  done < "${INVENTORY_FILE}"
+    processed_count=$((processed_count + 1))
+  done
+
+  exec 3<&-
+
+  if [[ "${processed_count}" -eq 0 ]]; then
+    echo "No inventory entries matched TARGET_FQDN=${TARGET_FQDN}" >&2
+    exit 1
+  fi
 }
 
 main "$@"

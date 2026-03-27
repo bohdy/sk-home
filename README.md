@@ -25,7 +25,9 @@ and installs certificates onto RouterOS over SSH from the internal self-hosted
 runner.
 
 Manual workflow runs can target Let's Encrypt staging for safe end-to-end
-testing, while scheduled runs and `main` branch runs stay on production.
+testing, and they can now scope deployment to `all` inventory entries or one
+specific hostname. Scheduled runs and `main` branch runs stay on production and
+process the full committed inventory.
 
 ## Terraform
 

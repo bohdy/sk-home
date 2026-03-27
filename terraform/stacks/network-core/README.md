@@ -71,7 +71,10 @@ Suggested RouterOS permissions:
 
 Manual `workflow_dispatch` runs can use the workflow's `acme_environment`
 selector to target Let's Encrypt staging while validating the RouterOS upload
-and import path. Scheduled runs and `main` branch runs remain on production.
+and import path. Manual runs can also use the `target_device` selector to
+process either all inventory entries or one specific MikroTik hostname.
+Scheduled runs and `main` branch runs remain on production and process the full
+inventory.
 
 ## Local Configuration
 
