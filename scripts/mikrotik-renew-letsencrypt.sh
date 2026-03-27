@@ -95,7 +95,17 @@ acme_issue_or_renew() {
     acme_args+=(--force)
   fi
 
-  acme.sh "${acme_args[@]}"
+  # Keep ACME progress output visible in CI while stripping PEM certificate
+  # bodies so public certificate material does not spam pipeline logs.
+  acme.sh "${acme_args[@]}" 2>&1 | strip_pem_blocks_from_output
+}
+
+strip_pem_blocks_from_output() {
+  awk '
+    /-----BEGIN CERTIFICATE-----/ { suppress = 1; next }
+    /-----END CERTIFICATE-----/   { suppress = 0; next }
+    !suppress                     { print }
+  '
 }
 
 create_pkcs12_bundle() {
@@ -129,6 +139,11 @@ create_routeros_import_script() {
   # Upload a RouterOS script file instead of sending a multi-line command over
   # SSH because RouterOS CLI parsing is fragile when complex scripts are passed
   # as one shell argument from OpenSSH.
+  #
+  # RouterOS may assign imported certificate names that do not match the PKCS#12
+  # friendly name exactly, so the script removes any non-stable matching leaf
+  # certificates before import and then selects the new leaf by common name and
+  # private-key presence instead of depending on the imported object name.
   cat > "${script_file}" <<EOF
 :local certCn "${fqdn}"
 :local serviceName "${service_name}"
@@ -146,16 +161,16 @@ create_routeros_import_script() {
   /certificate set [find where name=\$certName] name=\$previousCertName
 }
 
-:if ([:len [/certificate find where name=\$certCn and private-key=yes]] > 0) do={
-  /certificate remove [find where name=\$certCn and private-key=yes]
+:if ([:len [/certificate find where common-name=\$certCn and private-key=yes and name!=\$certName and name!=\$previousCertName]] > 0) do={
+  /certificate remove [find where common-name=\$certCn and private-key=yes and name!=\$certName and name!=\$previousCertName]
 }
 
 /certificate import file-name=\$bundleFile passphrase=\$bundlePassword
 :delay 2s
 
-:set importedCertId [/certificate find where name=\$certCn and private-key=yes]
+:set importedCertId [/certificate find where common-name=\$certCn and private-key=yes and name!=\$certName and name!=\$previousCertName]
 :if ([:len \$importedCertId] = 0) do={
-  :error ("Unable to find imported certificate named " . \$certCn)
+  :error ("Unable to find imported certificate for " . \$certCn)
 }
 
 /certificate set \$importedCertId trusted=yes name=\$certName
