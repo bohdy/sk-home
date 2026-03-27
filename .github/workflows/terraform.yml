@@ -37,12 +37,16 @@ jobs:
         include:
           - stack: terraform/stacks/network-core
             stack_name: network-core
+            enable_plan: true
           - stack: terraform/stacks/wifi
             stack_name: wifi
+            enable_plan: false
           - stack: terraform/stacks/identity-edge
             stack_name: identity-edge
+            enable_plan: false
           - stack: terraform/stacks/overlay
             stack_name: overlay
+            enable_plan: false
 
     defaults:
       run:
@@ -64,9 +68,9 @@ jobs:
       - name: Preflight network access
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
-          nc -zvw5 10.1.100.1 8729 || { echo "Cannot reach MikroTik GW on port 8729"; exit 1; }
-          nc -zvw5 10.1.100.2 8729 || { echo "Cannot reach MikroTik Switch 1PP on port 8729"; exit 1; }
-          nc -zvw5 10.1.100.3 8729 || { echo "Cannot reach MikroTik Switch 1NP on port 8729"; exit 1; }
+          nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+          nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+          nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
 
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
@@ -90,3 +94,23 @@ jobs:
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate
         run: terraform validate
+
+      # Produce a real plan only for stacks with committed non-secret source of
+      # truth so PRs can show intended infrastructure changes safely.
+      - name: Terraform plan
+        if: matrix.enable_plan
+        run: terraform plan -no-color -out=tfplan
+
+      # Convert the binary plan to plain text so it can be reviewed from the PR
+      # workflow without rerunning Terraform locally.
+      - name: Render Terraform plan
+        if: matrix.enable_plan
+        run: terraform show -no-color tfplan > tfplan.txt
+
+      # Publish the plan text as a workflow artifact for PR review.
+      - name: Upload Terraform plan artifact
+        if: matrix.enable_plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.stack_name }}
+          path: ${{ matrix.stack }}/tfplan.txt

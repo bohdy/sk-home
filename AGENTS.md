@@ -8,9 +8,10 @@ This repository contains home network and lab automation. Agents working here mu
 
 Before starting any new logical task:
 
-1. Return to `main`.
-2. Create a fresh descriptive branch from `main`.
-3. Use `/compact` to reduce context usage when the environment supports it.
+1. Verify local `main` is up to date with `origin/main`.
+2. Return to `main`.
+3. Create a fresh descriptive branch from `main`.
+4. Use `/compact` to reduce context usage when the environment supports it.
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
 
@@ -18,6 +19,7 @@ If `/compact` is not supported in the current environment, reduce context load m
 
 - All git commits in this repository MUST be signed.
 - Agents should verify commit signing is enabled before creating commits.
+- Agents should verify local `main` matches `origin/main` before branching for a new logical task.
 - Every new logical task MUST begin from a new branch based on `main`.
 - Branch names should be short, descriptive, and reflect the task being performed.
 
@@ -33,6 +35,9 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer variables, configuration, or environment-based values instead of embedding changeable values directly in code.
 - Secrets MUST never be hardcoded in source files.
 - When secrets or configurable values are needed, use the repository's existing variable, configuration, or secret-management mechanisms whenever possible.
+- Non-secret infrastructure settings that define desired state should usually be committed as normal repository configuration.
+- Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
+- Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
 
 ## Documentation Standards
 

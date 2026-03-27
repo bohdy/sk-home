@@ -17,17 +17,18 @@ This stack uses the official `terraform-routeros/routeros` provider with three a
 - `routeros.switch_1np`
 
 Each alias points to a separate MikroTik device so future resources can target the correct router or switch explicitly.
-The configured endpoint format for this repo is `apis://<host>:8729`.
+The configured endpoint format for this repo is `https://<host>` backed by RouterOS `www-ssl`.
 
 ## RouterOS Prerequisites
 
 Before Terraform can manage these devices:
 
-1. Enable `api-ssl` on each device.
-2. Restrict `api-ssl` to your trusted admin subnet.
-3. Create a dedicated automation user for Terraform.
-4. Restrict management access to your trusted admin subnet.
-5. Avoid using the main admin account for automation.
+1. Create or import a server certificate on each device.
+2. Enable `www-ssl` on each device and assign that certificate.
+3. Restrict `www-ssl` to your trusted admin subnet.
+4. Create a dedicated automation user for Terraform.
+5. Restrict management access to your trusted admin subnet.
+6. Avoid using the main admin account for automation.
 
 ## Let's Encrypt Automation
 
@@ -81,7 +82,8 @@ inventory.
 
 ## Local Configuration
 
-Copy `terraform.tfvars.example` to a local `.tfvars` file or use `TF_VAR_...` environment variables for sensitive values.
+The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`.
+Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -93,14 +95,15 @@ Recommended sensitive input handling:
 
 Example non-sensitive endpoint values:
 
-- `mikrotik_gw_hosturl = "apis://10.1.100.1:8729"`
-- `mikrotik_switch_1pp_hosturl = "apis://10.1.100.2:8729"`
-- `mikrotik_switch_1np_hosturl = "apis://10.1.100.3:8729"`
+- `mikrotik_gw_hosturl = "https://10.1.100.1"`
+- `mikrotik_switch_1pp_hosturl = "https://10.1.100.2"`
+- `mikrotik_switch_1np_hosturl = "https://10.1.100.3"`
 
 ## Notes
 
 - DHCP in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
 - Define DHCP scopes through the `dhcp_scopes` variable so pools, server bindings, and per-network options stay synchronized.
+- Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.
 - Update this README when the RouterOS connection model or managed inventory changes.
