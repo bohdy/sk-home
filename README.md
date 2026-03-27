@@ -24,7 +24,9 @@ uses the committed inventory in
 and installs certificates onto RouterOS over SSH from the internal self-hosted
 runner. Before each RouterOS import, the deployment script verifies that the
 uploaded PKCS#12 bundle and temporary import script are both visible on the
-target device.
+target device. Temporary RouterOS file cleanup is best-effort so a successful
+certificate install does not fail only because a transient upload file is
+already gone by the time cleanup runs.
 
 Manual workflow runs can target Let's Encrypt staging for safe end-to-end
 testing, and they can now scope deployment to `all` inventory entries or one

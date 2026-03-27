@@ -52,7 +52,8 @@ The automation workflow is
 and the deployment script is
 [`mikrotik-renew-letsencrypt.sh`](/Users/bohdy/git/sk-home/scripts/mikrotik-renew-letsencrypt.sh).
 The deployment script verifies that the uploaded PKCS#12 bundle and temporary
-RouterOS import script are both visible in `/file` before it runs `/import`.
+RouterOS import script are both visible in `/file` before it runs `/import`,
+and RouterOS temp-file cleanup is best-effort after a successful import.
 
 Required GitHub repository secrets:
 
