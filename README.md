@@ -22,7 +22,9 @@ The automation is defined in
 uses the committed inventory in
 [`config/mikrotik-letsencrypt-targets.csv`](config/mikrotik-letsencrypt-targets.csv),
 and installs certificates onto RouterOS over SSH from the internal self-hosted
-runner.
+runner. Before each RouterOS import, the deployment script verifies that the
+uploaded PKCS#12 bundle and temporary import script are both visible on the
+target device.
 
 Manual workflow runs can target Let's Encrypt staging for safe end-to-end
 testing, and they can now scope deployment to `all` inventory entries or one

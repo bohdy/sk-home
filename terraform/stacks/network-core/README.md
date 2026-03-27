@@ -51,6 +51,8 @@ The automation workflow is
 [`mikrotik-certificates.yml`](/Users/bohdy/git/sk-home/.github/workflows/mikrotik-certificates.yml),
 and the deployment script is
 [`mikrotik-renew-letsencrypt.sh`](/Users/bohdy/git/sk-home/scripts/mikrotik-renew-letsencrypt.sh).
+The deployment script verifies that the uploaded PKCS#12 bundle and temporary
+RouterOS import script are both visible in `/file` before it runs `/import`.
 
 Required GitHub repository secrets:
 
