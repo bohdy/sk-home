@@ -63,12 +63,13 @@ resource "routeros_ip_dhcp_server" "dhcp_scope" {
 
   for_each = local.dhcp_scopes
 
-  name         = each.value.name
-  interface    = each.value.interface
-  address_pool = routeros_ip_pool.dhcp_scope[each.key].name
-  lease_time   = each.value.lease_time
-  add_arp      = each.value.add_arp
-  comment      = try(each.value.comment, null)
+  name                      = each.value.name
+  interface                 = each.value.interface
+  address_pool              = routeros_ip_pool.dhcp_scope[each.key].name
+  lease_time                = each.value.lease_time
+  add_arp                   = each.value.add_arp
+  dynamic_lease_identifiers = "client-mac,client-id"
+  comment                   = try(each.value.comment, null)
 }
 
 # Attach per-subnet gateway, DNS, and domain settings for each DHCP scope.
