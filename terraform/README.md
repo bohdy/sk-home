@@ -86,7 +86,7 @@ Keep `terraform validate` and provider/backend-sensitive checks in GitHub Action
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.
 - Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs and are explicitly marked CI-ready in the workflow. Today that includes `network-core`, `network-core/interfaces/gw`, `network-core/interfaces/switch-1pp`, `network-core/interfaces/switch-1np`, `network-core/dhcp`, and `network-core/routing`.
 - Manual workflow runs expose `action` and `stack` inputs so operators can choose validate-only runs or apply CI-ready stacks explicitly.
-- A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, uploads the plain-text plan when drift is found, and fails the run so the drift is visible in Actions.
+- A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, keeps the Terraform CLI wrapper disabled so exit code `2` remains visible to the shell, uploads the plain-text plan when drift is found, and fails the run so the drift is visible in Actions.
 - When splitting existing resources into a new stack root, migrate or import the existing state before the first apply so the old root does not try to delete objects that moved into the new root.
 - Self-hosted GitHub runners must provide `bws` and `BWS_ACCESS_TOKEN` so the workflows can load Bitwarden secrets at runtime.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.

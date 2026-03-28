@@ -90,10 +90,14 @@ jobs:
           esac
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
+      # Disable the setup action wrapper here because the drift workflow relies
+      # on Terraform's native detailed exit codes to distinguish clean runs
+      # from real drift, and the wrapper can mask that signal.
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: 1.14.8
+          terraform_wrapper: false
 
       # Reinitialize the backend so the drift check uses the same remote state
       # configuration as interactive Terraform runs.
