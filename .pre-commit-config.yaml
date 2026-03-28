@@ -2,6 +2,14 @@
 repos:
   - repo: local
     hooks:
+      # Keep Markdown prose and list items on one physical line so docs diff
+      # cleanly and follow the repository writing standard.
+      - id: markdown-normalize
+        name: normalize markdown
+        entry: python3 scripts/normalize_markdown.py --write
+        language: system
+        files: ^.*\.md$
+
       # Enforce canonical Terraform formatting before code reaches CI.
       - id: terraform-fmt
         name: terraform fmt

@@ -2,8 +2,7 @@
 
 ## Purpose
 
-This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits.
-This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
+This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -48,6 +47,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Documentation MUST be kept up to date whenever code, behavior, setup, usage, or repository structure changes.
 - `README.md` files are important documentation and MUST be maintained.
 - `AGENTS.md` is important repository policy and MUST be updated whenever workflow, standards, tooling expectations, or agent instructions change.
+- In Markdown prose and list items, keep one physical line per paragraph or list item instead of manual hard-wraps. Preserve multi-line layout only where Markdown syntax requires it, such as code blocks, tables, or other structured content.
 - If a change affects setup, usage, configuration, deployment, or repository layout, update the relevant `README.md` in the same task.
 - If a change affects repository workflow, documentation policy, secret handling, automation conventions, or agent expectations, update `AGENTS.md` in the same task.
 - Do not leave documentation updates as implied follow-up work when the change has already been made.
@@ -56,10 +56,12 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 
 - Inspect the repository before making changes.
 - Keep edits focused on the current task.
+- Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
 - For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
+- For Terraform-managed infrastructure, prefer per-device stack roots when the operational blast radius maps cleanly to one live device.
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
 - Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
 

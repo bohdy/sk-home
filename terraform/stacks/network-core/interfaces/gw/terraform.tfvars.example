@@ -1,0 +1,8 @@
+# The live non-secret gateway interface configuration is committed in
+# `interfaces.auto.tfvars`.
+#
+# Use this example file only for local-only overrides or temporary values that
+# should not become shared desired state.
+
+# Keep the RouterOS password out of committed files.
+# mikrotik_password = "replace-me"

@@ -16,6 +16,11 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 !terraform/stacks/network-core/network-core.auto.tfvars
+!terraform/stacks/network-core/dhcp/dhcp.auto.tfvars
+!terraform/stacks/network-core/routing/routing.auto.tfvars
+!terraform/stacks/network-core/interfaces/gw/interfaces.auto.tfvars
+!terraform/stacks/network-core/interfaces/switch-1pp/interfaces.auto.tfvars
+!terraform/stacks/network-core/interfaces/switch-1np/interfaces.auto.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in

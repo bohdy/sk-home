@@ -19,7 +19,8 @@ jobs:
       matrix:
         include:
           # Keep the hourly drift workflow limited to stacks that have
-          # committed non-secret inputs and are safe to run unattended in CI.
+          # committed non-secret inputs, completed state onboarding, and are
+          # safe to run unattended in CI.
           - stack: terraform/stacks/network-core
             stack_name: network-core
           - stack: terraform/stacks/network-core/dhcp
