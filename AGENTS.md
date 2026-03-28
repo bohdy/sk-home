@@ -2,8 +2,7 @@
 
 ## Purpose
 
-This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits.
-This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
+This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -48,6 +47,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Documentation MUST be kept up to date whenever code, behavior, setup, usage, or repository structure changes.
 - `README.md` files are important documentation and MUST be maintained.
 - `AGENTS.md` is important repository policy and MUST be updated whenever workflow, standards, tooling expectations, or agent instructions change.
+- In Markdown prose and list items, keep one physical line per paragraph or list item instead of manual hard-wraps. Preserve multi-line layout only where Markdown syntax requires it, such as code blocks, tables, or other structured content.
 - If a change affects setup, usage, configuration, deployment, or repository layout, update the relevant `README.md` in the same task.
 - If a change affects repository workflow, documentation policy, secret handling, automation conventions, or agent expectations, update `AGENTS.md` in the same task.
 - Do not leave documentation updates as implied follow-up work when the change has already been made.

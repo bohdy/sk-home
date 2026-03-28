@@ -1,17 +1,6 @@
 # Network Core
 
-This stack manages the MikroTik router and switches that define the physical network core.
-Interface topology now lives in the nested per-device roots under
-[`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
-stack so bridge, VLAN, tunnel, and interface-description changes can evolve with
-their own Terraform state and lifecycle.
-Gateway DHCP now lives in the nested
-[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
-stack so DHCP can evolve with its own Terraform state and lifecycle. Gateway
-routing now lives in the nested
-[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
-stack so static routes and future BGP policy can evolve with their own Terraform
-state and lifecycle.
+This stack manages the MikroTik router and switches that define the physical network core. Interface topology now lives in the nested per-device roots under [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) stack so bridge, VLAN, tunnel, and interface-description changes can evolve with their own Terraform state and lifecycle. Gateway DHCP now lives in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) stack so DHCP can evolve with its own Terraform state and lifecycle. Gateway routing now lives in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) stack so static routes and future BGP policy can evolve with their own Terraform state and lifecycle.
 
 ## Managed Devices
 
@@ -21,25 +10,13 @@ state and lifecycle.
 
 ## Terraform Connection Model
 
-This parent root keeps the committed MikroTik device inventory and shared
-foundation metadata for the physical network core.
+This parent root keeps the committed MikroTik device inventory and shared foundation metadata for the physical network core.
 
-The configured endpoint format for this repo remains `https://<host>` backed by
-RouterOS `www-ssl`, but live interface configuration now lives in the nested
-[`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
-directory as separate `gw`, `switch-1pp`, and `switch-1np` roots. Live DHCP
-provider configuration now lives in the nested
-[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
-root and live routing configuration now lives in the nested
-[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
-root. The parent root temporarily retains legacy RouterOS provider inputs so
-Terraform can still read and remove DHCP objects from the old state during the
-migration window while nested GW-only roots share one credential shape.
+The configured endpoint format for this repo remains `https://<host>` backed by RouterOS `www-ssl`, but live interface configuration now lives in the nested [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) directory as separate `gw`, `switch-1pp`, and `switch-1np` roots. Live DHCP provider configuration now lives in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) root and live routing configuration now lives in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) root. The parent root temporarily retains legacy RouterOS provider inputs so Terraform can still read and remove DHCP objects from the old state during the migration window while nested GW-only roots share one credential shape.
 
 ## RouterOS Prerequisites
 
-Before Terraform can manage these devices through the nested DHCP root or any
-future RouterOS-backed resources:
+Before Terraform can manage these devices through the nested DHCP root or any future RouterOS-backed resources:
 
 1. Create or import a server certificate on each device.
 2. Enable `www-ssl` on each device and assign that certificate.
@@ -50,29 +27,16 @@ future RouterOS-backed resources:
 
 ## Let's Encrypt Automation
 
-The repository also includes GitHub Actions automation to issue and renew public
-Let's Encrypt certificates for the RouterOS `www-ssl` service on these devices.
+The repository also includes GitHub Actions automation to issue and renew public Let's Encrypt certificates for the RouterOS `www-ssl` service on these devices.
 
 Key points for this setup:
 
-- keep the public authoritative `bohdal.name` zone in Cloudflare so DNS-01 TXT
-  records can be created automatically
-- keep the host A records split-horizon or internal-only if you do not want the
-  device management IPs published on the public internet
-- run the workflow on the internal self-hosted runner so certificate deployment
-  can reach `10.1.100.1`, `10.1.100.2`, and `10.1.100.3` over SSH
-- provide an SSH-capable RouterOS automation account that can import
-  certificates and update `/ip service www-ssl`
+- keep the public authoritative `bohdal.name` zone in Cloudflare so DNS-01 TXT records can be created automatically
+- keep the host A records split-horizon or internal-only if you do not want the device management IPs published on the public internet
+- run the workflow on the internal self-hosted runner so certificate deployment can reach `10.1.100.1`, `10.1.100.2`, and `10.1.100.3` over SSH
+- provide an SSH-capable RouterOS automation account that can import certificates and update `/ip service www-ssl`
 
-The committed inventory for certificate targets lives in
-[`mikrotik-letsencrypt-targets.csv`](/Users/bohdy/git/sk-home/config/mikrotik-letsencrypt-targets.csv).
-The automation workflow is
-[`mikrotik-certificates.yml`](/Users/bohdy/git/sk-home/.github/workflows/mikrotik-certificates.yml),
-and the deployment script is
-[`mikrotik-renew-letsencrypt.sh`](/Users/bohdy/git/sk-home/scripts/mikrotik-renew-letsencrypt.sh).
-The deployment script verifies that the uploaded PKCS#12 bundle and temporary
-RouterOS import script are both visible in `/file` before it runs `/import`,
-and RouterOS temp-file cleanup is best-effort after a successful import.
+The committed inventory for certificate targets lives in [`mikrotik-letsencrypt-targets.csv`](/Users/bohdy/git/sk-home/config/mikrotik-letsencrypt-targets.csv). The automation workflow is [`mikrotik-certificates.yml`](/Users/bohdy/git/sk-home/.github/workflows/mikrotik-certificates.yml), and the deployment script is [`mikrotik-renew-letsencrypt.sh`](/Users/bohdy/git/sk-home/scripts/mikrotik-renew-letsencrypt.sh). The deployment script verifies that the uploaded PKCS#12 bundle and temporary RouterOS import script are both visible in `/file` before it runs `/import`, and RouterOS temp-file cleanup is best-effort after a successful import.
 
 Required Bitwarden secrets:
 
@@ -81,9 +45,7 @@ Required Bitwarden secrets:
 - `MIKROTIK_SSH_PRIVATE_KEY`: private key for that automation account
 - `MIKROTIK_SSH_KNOWN_HOSTS`: pinned host keys for the three MikroTik devices
 
-The self-hosted GitHub runner and local operators should load these values
-through [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh)
-with a `BWS_ACCESS_TOKEN` that stays outside the repository.
+The self-hosted GitHub runner and local operators should load these values through [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh) with a `BWS_ACCESS_TOKEN` that stays outside the repository.
 
 Suggested Cloudflare token scope:
 
@@ -95,34 +57,21 @@ Suggested RouterOS permissions:
 - access to `/certificate`
 - access to `/ip service`
 
-Manual `workflow_dispatch` runs can use the workflow's `acme_environment`
-selector to target Let's Encrypt staging while validating the RouterOS upload
-and import path. Manual runs can also use the `target_device` selector to
-process either all inventory entries or one specific MikroTik hostname.
-Scheduled runs and `main` branch runs remain on production and process the full
-inventory.
+Manual `workflow_dispatch` runs can use the workflow's `acme_environment` selector to target Let's Encrypt staging while validating the RouterOS upload and import path. Manual runs can also use the `target_device` selector to process either all inventory entries or one specific MikroTik hostname. Scheduled runs and `main` branch runs remain on production and process the full inventory.
 
 ## Local Configuration
 
-The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`.
-Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
+The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`. Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
-Recommended sensitive input handling for nested MikroTik-backed roots such as
-[`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md),
-[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
-and
-[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md):
+Recommended sensitive input handling for nested MikroTik-backed roots such as [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md), [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) and [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md):
 
 - keep `mikrotik_password` out of committed files
-- use `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` for local runs
-  so `TF_VAR_mikrotik_password` and related values come from Bitwarden
+- use `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` for local runs so `TF_VAR_mikrotik_password` and related values come from Bitwarden
 - set `mikrotik_insecure = false` once certificate trust is configured
-- on self-hosted GitHub runners, provide `bws` and `BWS_ACCESS_TOKEN` so
-  workflows can load `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` from Bitwarden
+- on self-hosted GitHub runners, provide `bws` and `BWS_ACCESS_TOKEN` so workflows can load `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` from Bitwarden
 - provide Cloudflare R2 credentials through `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION=auto`
 
-The parent root keeps the same credential shape only as a temporary migration
-bridge while old DHCP objects still exist in its remote state.
+The parent root keeps the same credential shape only as a temporary migration bridge while old DHCP objects still exist in its remote state.
 
 Example non-sensitive endpoint values:
 
@@ -132,20 +81,10 @@ Example non-sensitive endpoint values:
 
 ## Notes
 
-- Interface descriptions, gateway bridge/VLAN topology, switch bridge/VLAN
-  topology, and the `sit1` tunnel in this repo are managed in the nested
-  [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
-  per-device roots rather than in this parent root.
-- DHCP in this repo is modeled only on the `GW` device and is managed in the nested
-  [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
-  stack rather than in this parent root.
-- Static routing in this repo is modeled only on the `GW` device and is managed
-  in the nested
-  [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
-  stack rather than in this parent root.
-- Keep the legacy RouterOS provider wiring in this parent root until the old
-  DHCP state has been migrated or cleaned up. Removing it too early breaks
-  Terraform plan because the old state still references that provider.
+- Interface descriptions, gateway bridge/VLAN topology, switch bridge/VLAN topology, and the `sit1` tunnel in this repo are managed in the nested [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) per-device roots rather than in this parent root.
+- DHCP in this repo is modeled only on the `GW` device and is managed in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) stack rather than in this parent root.
+- Static routing in this repo is modeled only on the `GW` device and is managed in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) stack rather than in this parent root.
+- Keep the legacy RouterOS provider wiring in this parent root until the old DHCP state has been migrated or cleaned up. Removing it too early breaks Terraform plan because the old state still references that provider.
 - Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.

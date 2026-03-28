@@ -3,9 +3,7 @@ Automation of home network / lab
 
 ## MikroTik Certificates
 
-The repository includes GitHub Actions automation for issuing Let's Encrypt
-certificates for MikroTik devices through the DNS-01 challenge against the
-public `bohdal.name` Cloudflare zone.
+The repository includes GitHub Actions automation for issuing Let's Encrypt certificates for MikroTik devices through the DNS-01 challenge against the public `bohdal.name` Cloudflare zone.
 
 The device hostnames can remain split-horizon or internal-only A records:
 
@@ -13,44 +11,12 @@ The device hostnames can remain split-horizon or internal-only A records:
 - `sw-1pp.bohdal.name` -> `10.1.100.2`
 - `sw-1np.bohdal.name` -> `10.1.100.3`
 
-That model works because Let's Encrypt only needs the temporary public
-`_acme-challenge` TXT records for validation. The host A records themselves do
-not need to exist publicly when DNS-01 is used.
+That model works because Let's Encrypt only needs the temporary public `_acme-challenge` TXT records for validation. The host A records themselves do not need to exist publicly when DNS-01 is used.
 
-The automation is defined in
-[`mikrotik-certificates.yml`](.github/workflows/mikrotik-certificates.yml),
-uses the committed inventory in
-[`config/mikrotik-letsencrypt-targets.csv`](config/mikrotik-letsencrypt-targets.csv),
-and installs certificates onto RouterOS over SSH from the internal self-hosted
-runner. The runner now loads Cloudflare and MikroTik credentials from
-Bitwarden Secrets Manager through the shared
-[`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh) helper instead
-of GitHub repository secrets. Before each RouterOS import, the deployment script verifies that the
-uploaded PKCS#12 bundle and temporary import script are both visible on the
-target device. Temporary RouterOS file cleanup is best-effort so a successful
-certificate install does not fail only because a transient upload file is
-already gone by the time cleanup runs. Before renewing, the script checks the
-certificate currently served by each device on `www-ssl` and only renews when
-that live certificate will expire within 4 days by default. You can override
-that threshold with `MIKROTIK_CERTIFICATE_RENEWAL_WINDOW_DAYS` when a different
-renewal window is needed.
+The automation is defined in [`mikrotik-certificates.yml`](.github/workflows/mikrotik-certificates.yml), uses the committed inventory in [`config/mikrotik-letsencrypt-targets.csv`](config/mikrotik-letsencrypt-targets.csv), and installs certificates onto RouterOS over SSH from the internal self-hosted runner. The runner now loads Cloudflare and MikroTik credentials from Bitwarden Secrets Manager through the shared [`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh) helper instead of GitHub repository secrets. Before each RouterOS import, the deployment script verifies that the uploaded PKCS#12 bundle and temporary import script are both visible on the target device. Temporary RouterOS file cleanup is best-effort so a successful certificate install does not fail only because a transient upload file is already gone by the time cleanup runs. Before renewing, the script checks the certificate currently served by each device on `www-ssl` and only renews when that live certificate will expire within 4 days by default. You can override that threshold with `MIKROTIK_CERTIFICATE_RENEWAL_WINDOW_DAYS` when a different renewal window is needed.
 
-Manual workflow runs can target Let's Encrypt staging for safe end-to-end
-testing, and they can now scope deployment to `all` inventory entries or one
-specific hostname. Scheduled runs and `main` branch runs stay on production and
-process the full committed inventory.
+Manual workflow runs can target Let's Encrypt staging for safe end-to-end testing, and they can now scope deployment to `all` inventory entries or one specific hostname. Scheduled runs and `main` branch runs stay on production and process the full committed inventory.
 
 ## Terraform
 
-The repository includes a Terraform bootstrap in [`terraform`](terraform).
-Use the stack directories under [`terraform/stacks`](terraform/stacks) as separate Terraform root modules and keep the Terraform README updated as the workflow evolves.
-Local commit-time Terraform checks are managed through a committed
-[`pre-commit`](https://pre-commit.com/) configuration that runs `terraform fmt`
-and `tflint` before changes are committed. Install `pre-commit` and `tflint`
-locally, run `pre-commit install` once per clone, and use
-`pre-commit run --all-files` after changing Terraform tooling or lint rules.
-Local Terraform and certificate runs now share Bitwarden Secrets Manager as the
-recommended secret source through
-[`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh).
-GitHub Actions now validates only changed Terraform stacks automatically, and pushes to `main` apply changed stacks that are CI-ready for safe unattended deployment.
-An hourly Terraform drift workflow also checks CI-ready stacks and publishes a drift plan artifact when live infrastructure diverges from the committed desired state.
+The repository includes a Terraform bootstrap in [`terraform`](terraform). Use the stack directories under [`terraform/stacks`](terraform/stacks) as separate Terraform root modules and keep the Terraform README updated as the workflow evolves. Local commit-time Terraform checks are managed through a committed [`pre-commit`](https://pre-commit.com/) configuration that runs `terraform fmt` and `tflint` before changes are committed. Install `pre-commit` and `tflint` locally, run `pre-commit install` once per clone, and use `pre-commit run --all-files` after changing Terraform tooling or lint rules. The same pre-commit configuration also normalizes Markdown so repo docs keep one physical line per paragraph or list item. Local Terraform and certificate runs now share Bitwarden Secrets Manager as the recommended secret source through [`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh). GitHub Actions now validates only changed Terraform stacks automatically, and pushes to `main` apply changed stacks that are CI-ready for safe unattended deployment. An hourly Terraform drift workflow also checks CI-ready stacks and publishes a drift plan artifact when live infrastructure diverges from the committed desired state.
