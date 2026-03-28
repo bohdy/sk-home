@@ -22,6 +22,8 @@ SSH_PORT="${MIKROTIK_SSH_PORT:-22}"
 SSH_USERNAME="${MIKROTIK_SSH_USERNAME:?Set MIKROTIK_SSH_USERNAME in the workflow or shell environment.}"
 ACME_SERVER="${ACME_SERVER:-letsencrypt}"
 TARGET_FQDN="${TARGET_FQDN:-all}"
+RENEWAL_WINDOW_DAYS="${MIKROTIK_CERTIFICATE_RENEWAL_WINDOW_DAYS:-4}"
+MIKROTIK_HTTPS_PORT="${MIKROTIK_HTTPS_PORT:-443}"
 
 # Use Cloudflare API tokens through the variable names that acme.sh expects.
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -z "${CF_Token:-}" ]]; then
@@ -57,6 +59,22 @@ prepare_ssh_key() {
   fi
 
   chmod 600 "${SSH_KEY_FILE}"
+}
+
+validate_configuration() {
+  # Keep the renewal threshold configurable without accepting values that would
+  # make the expiry gate ambiguous or silently broken.
+  if ! [[ "${RENEWAL_WINDOW_DAYS}" =~ ^[0-9]+$ ]]; then
+    echo "MIKROTIK_CERTIFICATE_RENEWAL_WINDOW_DAYS must be a non-negative integer: ${RENEWAL_WINDOW_DAYS}" >&2
+    exit 1
+  fi
+
+  # Restrict the HTTPS probe port to valid TCP port numbers because the value
+  # is interpolated directly into the OpenSSL connection target string.
+  if ! [[ "${MIKROTIK_HTTPS_PORT}" =~ ^[0-9]+$ ]] || (( MIKROTIK_HTTPS_PORT < 1 || MIKROTIK_HTTPS_PORT > 65535 )); then
+    echo "MIKROTIK_HTTPS_PORT must be an integer between 1 and 65535: ${MIKROTIK_HTTPS_PORT}" >&2
+    exit 1
+  fi
 }
 
 build_ssh_options() {
@@ -134,6 +152,54 @@ strip_pem_blocks_from_output() {
     /-----END CERTIFICATE-----/   { suppress = 0; next }
     !suppress                     { print }
   '
+}
+
+fetch_current_certificate() {
+  local fqdn="$1"
+  local management_host="$2"
+
+  # Probe the live RouterOS HTTPS service directly so the renewal decision uses
+  # the certificate the device is currently serving instead of local ACME state.
+  openssl s_client \
+    -connect "${management_host}:${MIKROTIK_HTTPS_PORT}" \
+    -servername "${fqdn}" \
+    -verify_quiet \
+    </dev/null 2>/dev/null |
+    openssl x509
+}
+
+should_renew_current_certificate() {
+  local fqdn="$1"
+  local management_host="$2"
+  local renewal_window_seconds
+  local current_certificate
+  local current_expiration
+
+  if [[ "${FORCE_RENEWAL}" == "true" ]]; then
+    echo "Forced renewal requested for ${fqdn}; skipping current certificate expiry check."
+    return 0
+  fi
+
+  renewal_window_seconds=$((RENEWAL_WINDOW_DAYS * 24 * 60 * 60))
+
+  if ! current_certificate="$(fetch_current_certificate "${fqdn}" "${management_host}")"; then
+    echo "Could not read the current certificate from ${management_host}:${MIKROTIK_HTTPS_PORT}; renewing ${fqdn} to avoid leaving the device stale."
+    return 0
+  fi
+
+  current_expiration="$(printf '%s\n' "${current_certificate}" | openssl x509 -noout -enddate | sed 's/^notAfter=//')"
+  echo "Current certificate for ${fqdn} expires at ${current_expiration}."
+
+  # Renew only when the live certificate will expire inside the configured
+  # window. A probe that returns an unexpected certificate format renews as a
+  # safe fallback rather than skipping a device that might soon expire.
+  if printf '%s\n' "${current_certificate}" | openssl x509 -checkend "${renewal_window_seconds}" -noout >/dev/null 2>&1; then
+    echo "Skipping ${fqdn}; current certificate is valid for at least ${RENEWAL_WINDOW_DAYS} more day(s)."
+    return 1
+  fi
+
+  echo "Renewing ${fqdn}; current certificate expires within ${RENEWAL_WINDOW_DAYS} day(s)."
+  return 0
 }
 
 create_pkcs12_bundle() {
@@ -273,6 +339,10 @@ process_inventory_entry() {
 
   echo "Processing ${fqdn} on ${management_host}"
 
+  if ! should_renew_current_certificate "${fqdn}" "${management_host}"; then
+    return 0
+  fi
+
   acme_issue_or_renew "${fqdn}"
 
   safe_name="${fqdn//./-}"
@@ -299,6 +369,7 @@ main() {
   require_command openssl
   require_command ssh
   require_command scp
+  validate_configuration
 
   if [[ -z "${CF_Token:-}" ]]; then
     echo "Set CLOUDFLARE_API_TOKEN or CF_Token for the Cloudflare DNS-01 challenge." >&2
