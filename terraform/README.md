@@ -16,7 +16,10 @@ The bootstrap is intentionally minimal. It provides:
 
 - `modules/`: reusable Terraform modules shared across stacks
 - `stacks/network-core/`: MikroTik router and switch foundations
-- `stacks/network-core/interfaces/`: MikroTik gateway interface topology and switch/gateway interface descriptions
+- `stacks/network-core/interfaces/`: container directory for per-device MikroTik interface roots
+- `stacks/network-core/interfaces/gw/`: MikroTik gateway bridge, VLAN, tunnel, and physical interface configuration
+- `stacks/network-core/interfaces/switch-1pp/`: MikroTik Switch 1PP bridge, VLAN, and physical interface configuration
+- `stacks/network-core/interfaces/switch-1np/`: MikroTik Switch 1NP bridge, VLAN, and physical interface configuration
 - `stacks/network-core/dhcp/`: MikroTik gateway DHCP scopes, reservations, and DHCP options
 - `stacks/network-core/routing/`: MikroTik gateway static routing and future BGP configuration
 - `stacks/wifi/`: UniFi wireless configuration
@@ -91,7 +94,7 @@ infrastructure credentials.
 - Prefer variables over hardcoded values when adding providers, modules, or resources.
 - Keep physical networking, DHCP, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
-- The nested `network-core/interfaces` stack manages gateway bridge/VLAN/tunnel resources and switch/gateway interface descriptions so interface lifecycle changes can evolve independently from the parent root.
+- The nested `network-core/interfaces` directory now contains per-device roots for the gateway and both switches so interface lifecycle changes can evolve independently with smaller failure domains.
 - The nested `network-core/dhcp` stack manages only gateway DHCP resources so that scopes, reservations, and DHCP options can change independently from the rest of `network-core`.
 - The nested `network-core/routing` stack manages only gateway routing resources so that static routes and future BGP configuration can change independently from the rest of `network-core`.
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.

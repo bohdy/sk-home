@@ -3,8 +3,8 @@
 terraform {
   required_version = "~> 1.14.8"
 
-  # Pin the provider source and version so interface resources stay aligned
-  # with the rest of the MikroTik-managed stacks.
+  # Pin the provider source and version so switch interface resources stay
+  # aligned with the rest of the MikroTik-managed stacks.
   required_providers {
     routeros = {
       source  = "terraform-routeros/routeros"

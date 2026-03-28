@@ -1,9 +1,9 @@
-# Commit the full non-secret backend shape for the nested interfaces stack and
+# Commit the full non-secret backend shape for the gateway interface root and
 # keep only R2 credentials external to the repository.
 terraform {
   backend "s3" {
     bucket = "sk-home"
-    key    = "sk-home/home/network-core/interfaces/terraform.tfstate"
+    key    = "sk-home/home/network-core/interfaces/gw/terraform.tfstate"
     region = "auto"
 
     use_lockfile = true

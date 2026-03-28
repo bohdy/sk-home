@@ -1,7 +1,7 @@
 # Network Core
 
 This stack manages the MikroTik router and switches that define the physical network core.
-Gateway interface topology now lives in the nested
+Interface topology now lives in the nested per-device roots under
 [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
 stack so bridge, VLAN, tunnel, and interface-description changes can evolve with
 their own Terraform state and lifecycle.
@@ -27,7 +27,8 @@ foundation metadata for the physical network core.
 The configured endpoint format for this repo remains `https://<host>` backed by
 RouterOS `www-ssl`, but live interface configuration now lives in the nested
 [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
-root, live DHCP provider configuration now lives in the nested
+directory as separate `gw`, `switch-1pp`, and `switch-1np` roots. Live DHCP
+provider configuration now lives in the nested
 [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
 root and live routing configuration now lives in the nested
 [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
@@ -131,10 +132,10 @@ Example non-sensitive endpoint values:
 
 ## Notes
 
-- Interface descriptions, gateway bridge/VLAN topology, and the `sit1` tunnel
-  in this repo are managed in the nested
+- Interface descriptions, gateway bridge/VLAN topology, switch bridge/VLAN
+  topology, and the `sit1` tunnel in this repo are managed in the nested
   [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md)
-  stack rather than in this parent root.
+  per-device roots rather than in this parent root.
 - DHCP in this repo is modeled only on the `GW` device and is managed in the nested
   [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
   stack rather than in this parent root.

@@ -1,4 +1,4 @@
-# The live non-secret interfaces configuration is committed in
+# The live non-secret Switch 1NP interface configuration is committed in
 # `interfaces.auto.tfvars`.
 #
 # Use this example file only for local-only overrides or temporary values that

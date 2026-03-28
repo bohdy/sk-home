@@ -1,4 +1,5 @@
-# tflint-ignore: terraform_unused_declarations
+# tflint-ignore-file: terraform_unused_declarations
+
 # Keep the legacy RouterOS gateway provider available in the parent root until
 # DHCP resources have been migrated out of the old state.
 provider "routeros" {
@@ -9,7 +10,6 @@ provider "routeros" {
   insecure = var.mikrotik_insecure
 }
 
-# tflint-ignore: terraform_unused_declarations
 # Keep the legacy Switch 1PP provider available in the parent root until
 # existing state no longer requires the original provider wiring.
 provider "routeros" {
@@ -20,7 +20,6 @@ provider "routeros" {
   insecure = var.mikrotik_insecure
 }
 
-# tflint-ignore: terraform_unused_declarations
 # Keep the legacy Switch 1NP provider available in the parent root until
 # existing state no longer requires the original provider wiring.
 provider "routeros" {

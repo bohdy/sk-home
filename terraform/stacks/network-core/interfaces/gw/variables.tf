@@ -13,7 +13,7 @@ variable "environment" {
 
 # Capture site-level identity for physical network resources.
 variable "site_name" {
-  description = "Logical site name used by the interfaces stack."
+  description = "Logical site name used by the gateway interfaces stack."
   type        = string
   default     = "primary"
 }
@@ -27,27 +27,13 @@ variable "additional_tags" {
 
 # Keep the gateway management endpoint configurable instead of embedding it in
 # provider configuration.
-variable "mikrotik_gw_hosturl" {
+variable "mikrotik_hosturl" {
   description = "RouterOS provider URL for the MikroTik gateway device."
   type        = string
 }
 
-# Keep the first switch management endpoint configurable instead of embedding it
-# in provider configuration.
-variable "mikrotik_switch_1pp_hosturl" {
-  description = "RouterOS provider URL for the MikroTik Switch 1PP device."
-  type        = string
-}
-
-# Keep the second switch management endpoint configurable instead of embedding
-# it in provider configuration.
-variable "mikrotik_switch_1np_hosturl" {
-  description = "RouterOS provider URL for the MikroTik Switch 1NP device."
-  type        = string
-}
-
-# Use one dedicated automation account shape across the three devices until
-# device-specific credentials are intentionally introduced.
+# Reuse the shared RouterOS automation account until device-specific
+# credentials are intentionally introduced.
 variable "mikrotik_username" {
   description = "Username for the RouterOS automation account used by Terraform."
   type        = string
@@ -68,28 +54,20 @@ variable "mikrotik_insecure" {
   default     = true
 }
 
-# Describe physical Ethernet or SFP interfaces by device and factory interface
-# name so reviewable comments stay committed in one shared inventory.
+# Describe physical Ethernet or SFP interfaces by RouterOS factory interface
+# name so reviewable comments stay committed in one gateway inventory.
 variable "ethernet_interfaces" {
-  description = "Physical Ethernet interface settings managed on the MikroTik devices."
-  type = map(map(object({
+  description = "Physical Ethernet interface settings managed on the gateway."
+  type = map(object({
     comment  = optional(string)
     disabled = optional(bool, false)
-  })))
+  }))
   default = {}
-
-  validation {
-    condition = alltrue([
-      for device_name in keys(var.ethernet_interfaces) :
-      contains(["gw", "switch_1pp", "switch_1np"], device_name)
-    ])
-    error_message = "ethernet_interfaces supports only the device keys gw, switch_1pp, and switch_1np."
-  }
 }
 
 # Keep the main gateway bridge configurable in data form so VLAN filtering and
 # bridge naming can evolve without editing resource logic.
-variable "gw_bridge" {
+variable "bridge" {
   description = "Single bridge definition managed on the gateway."
   type = object({
     name           = string
@@ -97,11 +75,12 @@ variable "gw_bridge" {
     vlan_filtering = optional(bool, true)
     disabled       = optional(bool, false)
   })
+  default = null
 }
 
 # Model bridge ports separately so access, trunk, and hybrid behavior remains
 # explicit and reviewable per gateway interface.
-variable "gw_bridge_ports" {
+variable "bridge_ports" {
   description = "Gateway bridge-port membership and ingress behavior keyed by physical interface name."
   type = map(object({
     comment           = optional(string)
@@ -115,7 +94,7 @@ variable "gw_bridge_ports" {
 
 # Track bridge VLAN table entries separately from per-port settings so tagged
 # and untagged membership remains easy to audit.
-variable "gw_bridge_vlans" {
+variable "bridge_vlans" {
   description = "Gateway bridge VLAN table entries keyed by logical VLAN record name."
   type = map(object({
     comment  = optional(string)
@@ -129,7 +108,7 @@ variable "gw_bridge_vlans" {
 
 # Define VLAN interfaces explicitly so the gateway bridge carries a committed
 # L3-facing interface inventory alongside its L2 VLAN table.
-variable "gw_vlan_interfaces" {
+variable "vlan_interfaces" {
   description = "Gateway VLAN interfaces keyed by RouterOS interface name."
   type = map(object({
     comment   = optional(string)
@@ -143,7 +122,7 @@ variable "gw_vlan_interfaces" {
 
 # Define 6to4 tunnel interfaces explicitly so tunnel parameters live in the
 # same stack as the rest of the gateway interface topology.
-variable "gw_6to4_interfaces" {
+variable "six_to_four_interfaces" {
   description = "Gateway 6to4 tunnel interfaces keyed by RouterOS interface name."
   type = map(object({
     comment        = optional(string)

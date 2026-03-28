@@ -56,6 +56,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 
 - Inspect the repository before making changes.
 - Keep edits focused on the current task.
+- Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
