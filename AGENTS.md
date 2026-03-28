@@ -54,6 +54,9 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
+- For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
+- Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
+- Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
 
 ## Verification
 

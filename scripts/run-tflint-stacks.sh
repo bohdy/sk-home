@@ -10,11 +10,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
 # Discover Terraform stack roots dynamically so the script does not need a
-# hardcoded stack list whenever a new root module is added.
+# hardcoded stack list whenever a new root module is added. Nested stack roots
+# are allowed when a subdomain needs separate Terraform state.
 all_stacks=()
 while IFS= read -r stack_dir; do
   all_stacks+=("${stack_dir}")
-done < <(find "${repo_root}/terraform/stacks" -mindepth 1 -maxdepth 1 -type d | sort)
+done < <(find "${repo_root}/terraform/stacks" -type f -name backend.tf -print | sed 's#/backend.tf$##' | sort)
 
 if [[ "${#all_stacks[@]}" -eq 0 ]]; then
   echo "No Terraform stacks were found under terraform/stacks."
@@ -39,6 +40,40 @@ normalize_path() {
   fi
 
   printf '%s\n' "${candidate#./}"
+}
+
+# Treat a directory as a Terraform stack root only when it carries the core
+# files expected from a standalone root module.
+is_stack_root() {
+  local candidate="$1"
+
+  [[ -f "${candidate}/backend.tf" ]] && [[ -f "${candidate}/versions.tf" ]]
+}
+
+# Resolve a changed path to the nearest Terraform stack root so nested roots are
+# linted independently from their parent directories.
+resolve_stack_root() {
+  local path="$1"
+  local search_dir="${repo_root}/${path}"
+
+  if [[ ! -d "${search_dir}" ]]; then
+    search_dir="$(dirname "${search_dir}")"
+  fi
+
+  while [[ "${search_dir}" == "${repo_root}/terraform/stacks"* ]]; do
+    if is_stack_root "${search_dir}"; then
+      printf '%s\n' "${search_dir}"
+      return 0
+    fi
+
+    if [[ "${search_dir}" == "${repo_root}/terraform/stacks" ]]; then
+      break
+    fi
+
+    search_dir="$(dirname "${search_dir}")"
+  done
+
+  return 1
 }
 
 # Decide whether the changed file means linting should fan out to every stack.
@@ -69,9 +104,8 @@ else
       break
     fi
 
-    if [[ "${path}" =~ ^terraform/stacks/([^/]+)/ ]]; then
-      stack_name="${BASH_REMATCH[1]}"
-      selected_stack_candidates+=("${repo_root}/terraform/stacks/${stack_name}")
+    if stack_dir="$(resolve_stack_root "${path}")"; then
+      selected_stack_candidates+=("${stack_dir}")
     fi
   done
 fi
@@ -94,7 +128,7 @@ fi
 for stack_dir in "${stack_targets[@]}"; do
   # Lint each stack root separately so provider blocks, variables, and root
   # module structure are evaluated in the correct Terraform context.
-  stack_name="${stack_dir##*/}"
+  stack_name="${stack_dir#"${repo_root}/terraform/stacks/"}"
   echo "Running tflint in terraform/stacks/${stack_name}"
   (
     cd "${stack_dir}"

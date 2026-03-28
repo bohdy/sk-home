@@ -1,6 +1,9 @@
 # Network Core
 
 This stack manages the MikroTik router and switches that define the physical network core.
+Gateway DHCP now lives in the nested
+[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+stack so DHCP can evolve with its own Terraform state and lifecycle.
 
 ## Managed Devices
 
@@ -10,18 +13,18 @@ This stack manages the MikroTik router and switches that define the physical net
 
 ## Terraform Connection Model
 
-This stack uses the official `terraform-routeros/routeros` provider with three aliased provider configurations:
+This parent root keeps the committed MikroTik device inventory and foundation
+metadata for the physical network core.
 
-- `routeros.gw`
-- `routeros.switch_1pp`
-- `routeros.switch_1np`
-
-Each alias points to a separate MikroTik device so future resources can target the correct router or switch explicitly.
-The configured endpoint format for this repo is `https://<host>` backed by RouterOS `www-ssl`.
+The configured endpoint format for this repo remains `https://<host>` backed by
+RouterOS `www-ssl`, but live DHCP provider configuration now lives in the nested
+[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+root.
 
 ## RouterOS Prerequisites
 
-Before Terraform can manage these devices:
+Before Terraform can manage these devices through the nested DHCP root or any
+future RouterOS-backed resources:
 
 1. Create or import a server certificate on each device.
 2. Enable `www-ssl` on each device and assign that certificate.
@@ -85,7 +88,8 @@ inventory.
 The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`.
 Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
-Recommended sensitive input handling:
+Recommended sensitive input handling for nested MikroTik-backed roots such as
+[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md):
 
 - keep `mikrotik_password` out of committed files
 - use `TF_VAR_mikrotik_password` for local runs when practical
@@ -101,9 +105,10 @@ Example non-sensitive endpoint values:
 
 ## Notes
 
-- DHCP in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
-- Define DHCP scopes through the `dhcp_scopes` variable so pools, server bindings, and per-network options stay synchronized.
+- DHCP in this repo is modeled only on the `GW` device and is managed in the nested
+  [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+  stack rather than in this parent root.
 - Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.
-- Update this README when the RouterOS connection model or managed inventory changes.
+- Update this README when the RouterOS connection model or the split between parent and nested network-core roots changes.
