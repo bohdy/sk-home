@@ -98,6 +98,103 @@ variable "ipv6_static_routes" {
   }
 }
 
+# Track BGP instances separately so shared RouterOS routing identity stays
+# reviewable and can be referenced by templates and connections by name.
+variable "bgp_instances" {
+  description = "BGP instance definitions managed on the MikroTik gateway."
+  type = map(object({
+    as            = string
+    comment       = optional(string)
+    disabled      = optional(bool, false)
+    router_id     = optional(string)
+    routing_table = optional(string, "main")
+    vrf           = optional(string, "main")
+  }))
+  default = {}
+}
+
+# Keep reusable BGP template settings in data form so peer groups can inherit
+# shared intent without repeating the same provider attributes per connection.
+variable "bgp_templates" {
+  description = "BGP template definitions managed on the MikroTik gateway."
+  type = map(object({
+    as               = string
+    comment          = optional(string)
+    disabled         = optional(bool, false)
+    multihop         = optional(bool)
+    routing_table    = optional(string, "main")
+    templates        = optional(set(string), [])
+    address_families = optional(string)
+    add_path_out     = optional(string)
+    keepalive_time   = optional(string)
+    hold_time        = optional(string)
+    nexthop_choice   = optional(string)
+    save_to          = optional(string)
+    use_bfd          = optional(bool)
+    vrf              = optional(string, "main")
+  }))
+  default = {}
+}
+
+# Model live BGP connections with explicit nested local, remote, and output
+# attributes so imported sessions can converge without hidden defaults.
+variable "bgp_connections" {
+  description = "BGP connection definitions managed on the MikroTik gateway."
+  type = map(object({
+    as               = string
+    comment          = optional(string)
+    disabled         = optional(bool, false)
+    instance         = optional(string)
+    routing_table    = optional(string, "main")
+    vrf              = optional(string, "main")
+    address_families = optional(string)
+    connect          = optional(bool)
+    multihop         = optional(bool)
+    templates        = optional(set(string), [])
+    local = object({
+      role    = string
+      address = optional(string)
+      port    = optional(number)
+      ttl     = optional(number)
+    })
+    remote = object({
+      address    = string
+      as         = optional(string)
+      allowed_as = optional(string)
+      port       = optional(number)
+      ttl        = optional(number)
+    })
+    output = optional(object({
+      affinity                       = optional(string)
+      as_override                    = optional(bool, false)
+      default_originate              = optional(string)
+      default_prepend                = optional(number, 0)
+      filter_chain                   = optional(string)
+      filter_select                  = optional(string)
+      keep_sent_attributes           = optional(bool, false)
+      network                        = optional(string)
+      no_client_to_client_reflection = optional(bool, false)
+      no_early_cut                   = optional(bool, false)
+      redistribute                   = optional(string)
+      remove_private_as              = optional(bool, false)
+    }))
+  }))
+  default = {}
+}
+
+# Keep routing filter rules committed in order-addressable data so BGP export
+# policy remains reviewable even though RouterOS rules themselves are unnamed.
+variable "routing_filter_rules" {
+  description = "Routing filter rules managed on the MikroTik gateway."
+  type = map(object({
+    chain    = string
+    comment  = optional(string)
+    disabled = optional(bool, false)
+    rule     = string
+  }))
+  default = {}
+}
+
 # Keep the provider-compatibility gateway value configurable because RouterOS
 # blackhole routes do not use a next hop, but the provider still requires a
 # gateway argument in the schema.

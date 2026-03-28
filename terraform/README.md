@@ -21,7 +21,7 @@ The bootstrap is intentionally minimal. It provides:
 - `stacks/network-core/interfaces/switch-1pp/`: MikroTik Switch 1PP bridge, VLAN, and physical interface configuration
 - `stacks/network-core/interfaces/switch-1np/`: MikroTik Switch 1NP bridge, VLAN, and physical interface configuration
 - `stacks/network-core/dhcp/`: MikroTik gateway DHCP scopes, reservations, and DHCP options
-- `stacks/network-core/routing/`: MikroTik gateway static routing and future BGP configuration
+- `stacks/network-core/routing/`: MikroTik gateway static routing and BGP configuration
 - `stacks/wifi/`: UniFi wireless configuration
 - `stacks/identity-edge/`: Cloudflare ZTNA and edge access controls
 - `stacks/overlay/`: Tailscale tailnet and overlay-network settings
@@ -82,7 +82,7 @@ Keep `terraform validate` and provider/backend-sensitive checks in GitHub Action
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
 - The nested `network-core/interfaces` directory now contains per-device roots for the gateway and both switches so interface lifecycle changes can evolve independently with smaller failure domains.
 - The nested `network-core/dhcp` stack manages only gateway DHCP resources so that scopes, reservations, and DHCP options can change independently from the rest of `network-core`.
-- The nested `network-core/routing` stack manages only gateway routing resources so that static routes and future BGP configuration can change independently from the rest of `network-core`.
+- The nested `network-core/routing` stack manages only gateway routing resources so that static routes and BGP configuration can change independently from the rest of `network-core`.
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.
 - Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs and are explicitly marked CI-ready in the workflow. Today that includes `network-core`, `network-core/interfaces/gw`, `network-core/interfaces/switch-1pp`, `network-core/interfaces/switch-1np`, `network-core/dhcp`, and `network-core/routing`.
 - Manual workflow runs expose `action` and `stack` inputs so operators can choose validate-only runs or apply CI-ready stacks explicitly.
