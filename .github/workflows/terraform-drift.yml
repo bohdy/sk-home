@@ -49,7 +49,7 @@ jobs:
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform >> "${GITHUB_ENV}"
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Verify that the runner can reach the remote state backend and the
       # RouterOS control plane before Terraform tries to read live state.

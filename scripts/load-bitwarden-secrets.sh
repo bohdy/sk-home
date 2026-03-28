@@ -33,6 +33,7 @@ format="export"
 profile=""
 project_id="${BITWARDEN_PROJECT_ID:-}"
 ssh_dir=""
+github_env_file="${GITHUB_ENV:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -91,6 +92,20 @@ require_secret() {
   fi
 }
 
+emit_mask() {
+  local value="$1"
+  local mask_line
+
+  [[ -n "${value}" ]] || return 0
+
+  # Register every non-empty line so GitHub masks both single-line values and
+  # multiline material such as private keys when they accidentally appear.
+  while IFS= read -r mask_line || [[ -n "${mask_line}" ]]; do
+    [[ -n "${mask_line}" ]] || continue
+    printf '::add-mask::%s\n' "${mask_line}"
+  done <<< "${value}"
+}
+
 emit_value() {
   local key="$1"
   local value="$2"
@@ -101,9 +116,16 @@ emit_value() {
       printf 'export %s=%q\n' "${key}" "${value}"
       ;;
     github-env)
+      [[ -n "${github_env_file}" ]] || {
+        echo "GITHUB_ENV must be set when using --format github-env." >&2
+        exit 1
+      }
+
+      emit_mask "${value}"
+
       # Use heredoc syntax so multiline secrets such as SSH materials survive
       # without truncation when appended to GITHUB_ENV.
-      printf '%s<<__BITWARDEN_EOF__\n%s\n__BITWARDEN_EOF__\n' "${key}" "${value}"
+      printf '%s<<__BITWARDEN_EOF__\n%s\n__BITWARDEN_EOF__\n' "${key}" "${value}" >> "${github_env_file}"
       ;;
   esac
 }

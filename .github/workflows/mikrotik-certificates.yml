@@ -137,7 +137,7 @@ jobs:
       # Load Cloudflare and MikroTik credentials from Bitwarden and materialize
       # SSH files into the paths consumed by the renewal script.
       - name: Load Bitwarden secrets
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env mikrotik-certificates >> "${GITHUB_ENV}"
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env mikrotik-certificates
 
       # Verify the public Cloudflare API and the private MikroTik SSH endpoints
       # are reachable from the self-hosted runner before renewal work starts.
