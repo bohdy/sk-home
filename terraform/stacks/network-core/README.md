@@ -3,7 +3,11 @@
 This stack manages the MikroTik router and switches that define the physical network core.
 Gateway DHCP now lives in the nested
 [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
-stack so DHCP can evolve with its own Terraform state and lifecycle.
+stack so DHCP can evolve with its own Terraform state and lifecycle. Gateway
+routing now lives in the nested
+[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
+stack so static routes and future BGP policy can evolve with their own Terraform
+state and lifecycle.
 
 ## Managed Devices
 
@@ -19,9 +23,11 @@ metadata for the physical network core.
 The configured endpoint format for this repo remains `https://<host>` backed by
 RouterOS `www-ssl`, but live DHCP provider configuration now lives in the nested
 [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+root and live routing configuration now lives in the nested
+[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
 root. The parent root temporarily retains legacy RouterOS provider inputs so
 Terraform can still read and remove DHCP objects from the old state during the
-migration window.
+migration window while nested GW-only roots share one credential shape.
 
 ## RouterOS Prerequisites
 
@@ -95,7 +101,9 @@ The shared non-secret `network-core` configuration is committed in `network-core
 Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling for nested MikroTik-backed roots such as
-[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md):
+[`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+and
+[`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md):
 
 - keep `mikrotik_password` out of committed files
 - use `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` for local runs
@@ -118,6 +126,10 @@ Example non-sensitive endpoint values:
 
 - DHCP in this repo is modeled only on the `GW` device and is managed in the nested
   [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md)
+  stack rather than in this parent root.
+- Static routing in this repo is modeled only on the `GW` device and is managed
+  in the nested
+  [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md)
   stack rather than in this parent root.
 - Keep the legacy RouterOS provider wiring in this parent root until the old
   DHCP state has been migrated or cleaned up. Removing it too early breaks
