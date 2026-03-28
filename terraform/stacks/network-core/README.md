@@ -61,12 +61,16 @@ The deployment script verifies that the uploaded PKCS#12 bundle and temporary
 RouterOS import script are both visible in `/file` before it runs `/import`,
 and RouterOS temp-file cleanup is best-effort after a successful import.
 
-Required GitHub repository secrets:
+Required Bitwarden secrets:
 
 - `CLOUDFLARE_API_TOKEN`: token allowed to edit DNS for the public zone
 - `MIKROTIK_USERNAME`: RouterOS automation username reused for SSH uploads and CLI changes
 - `MIKROTIK_SSH_PRIVATE_KEY`: private key for that automation account
 - `MIKROTIK_SSH_KNOWN_HOSTS`: pinned host keys for the three MikroTik devices
+
+The self-hosted GitHub runner and local operators should load these values
+through [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh)
+with a `BWS_ACCESS_TOKEN` that stays outside the repository.
 
 Suggested Cloudflare token scope:
 
@@ -94,9 +98,11 @@ Recommended sensitive input handling for nested MikroTik-backed roots such as
 [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md):
 
 - keep `mikrotik_password` out of committed files
-- use `TF_VAR_mikrotik_password` for local runs when practical
+- use `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` for local runs
+  so `TF_VAR_mikrotik_password` and related values come from Bitwarden
 - set `mikrotik_insecure = false` once certificate trust is configured
-- in GitHub Actions, provide `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets
+- on self-hosted GitHub runners, provide `bws` and `BWS_ACCESS_TOKEN` so
+  workflows can load `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` from Bitwarden
 - provide Cloudflare R2 credentials through `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION=auto`
 
 The parent root keeps the same credential shape only as a temporary migration

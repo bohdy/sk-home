@@ -22,7 +22,10 @@ The automation is defined in
 uses the committed inventory in
 [`config/mikrotik-letsencrypt-targets.csv`](config/mikrotik-letsencrypt-targets.csv),
 and installs certificates onto RouterOS over SSH from the internal self-hosted
-runner. Before each RouterOS import, the deployment script verifies that the
+runner. The runner now loads Cloudflare and MikroTik credentials from
+Bitwarden Secrets Manager through the shared
+[`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh) helper instead
+of GitHub repository secrets. Before each RouterOS import, the deployment script verifies that the
 uploaded PKCS#12 bundle and temporary import script are both visible on the
 target device. Temporary RouterOS file cleanup is best-effort so a successful
 certificate install does not fail only because a transient upload file is
@@ -46,5 +49,8 @@ Local commit-time Terraform checks are managed through a committed
 and `tflint` before changes are committed. Install `pre-commit` and `tflint`
 locally, run `pre-commit install` once per clone, and use
 `pre-commit run --all-files` after changing Terraform tooling or lint rules.
+Local Terraform and certificate runs now share Bitwarden Secrets Manager as the
+recommended secret source through
+[`load-bitwarden-secrets.sh`](scripts/load-bitwarden-secrets.sh).
 GitHub Actions now validates only changed Terraform stacks automatically, and pushes to `main` apply changed stacks that are CI-ready for safe unattended deployment.
 An hourly Terraform drift workflow also checks CI-ready stacks and publishes a drift plan artifact when live infrastructure diverges from the committed desired state.

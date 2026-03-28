@@ -10,6 +10,7 @@ The bootstrap is intentionally minimal. It provides:
 - a place for reusable modules shared across stacks
 - documented input variables for environment-specific values
 - example `.tfvars` files for local configuration without committing secrets
+- a shared Bitwarden loader for CI and local credential injection
 
 ## Layout
 
@@ -30,12 +31,33 @@ deserves separate state while still belonging to a broader domain such as `netwo
 2. Install `pre-commit` and `tflint` for local commit-time Terraform checks.
 3. Run `pre-commit install` from the repository root once per clone.
 4. Choose the stack you want to work on under `stacks/`.
-5. Copy `.env.example` to `.env` and fill in local credentials and defaults.
+5. Copy `.env.example` to `.env` and fill in local non-secret defaults.
 6. Load the environment variables from `.env` into your shell.
-7. Copy that stack's `terraform.tfvars.example` to a local `.tfvars` file if you want local overrides.
-8. Fill in environment-specific values without committing secrets.
-9. Run `terraform init -reconfigure` inside the selected stack directory.
-10. Run `terraform plan` inside the selected stack directory.
+7. Install the Bitwarden Secrets Manager CLI (`bws`) and set `BWS_ACCESS_TOKEN`.
+8. Load Terraform credentials from Bitwarden with `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"`.
+9. Copy that stack's `terraform.tfvars.example` to a local `.tfvars` file if you want local overrides.
+10. Fill in environment-specific values without committing secrets.
+11. Run `terraform init -reconfigure` inside the selected stack directory.
+12. Run `terraform plan` inside the selected stack directory.
+
+## Bitwarden Secrets
+
+Bitwarden Secrets Manager is the source of truth for shared secret values in
+both GitHub Actions and local runs.
+
+- Install `bws` on local machines and self-hosted GitHub runners.
+- Set `BWS_ACCESS_TOKEN` outside the repository on any machine that needs to
+  load secrets.
+- Optionally set `BITWARDEN_PROJECT_ID` when the machine account can access
+  more than one Bitwarden project and this repo should load only one scope.
+- Use [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh)
+  to emit the exact environment variables expected by Terraform and the
+  certificate automation.
+
+Useful local commands:
+
+- `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"`
+- `eval "$(./scripts/load-bitwarden-secrets.sh mikrotik-certificates)"`
 
 ## Local Pre-Commit Checks
 
@@ -62,7 +84,8 @@ infrastructure credentials.
 ## Notes
 
 - Keep secrets out of committed files.
-- Store local credentials in `.env`, not in committed Terraform files.
+- Keep `BWS_ACCESS_TOKEN` outside the repository and load live credentials from
+  Bitwarden instead of duplicating them in `.env`.
 - Prefer variables over hardcoded values when adding providers, modules, or resources.
 - Keep physical networking, DHCP, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
@@ -74,7 +97,10 @@ infrastructure credentials.
 - When splitting existing resources into a new stack root, migrate or import the
   existing state before the first apply so the old root does not try to delete
   objects that moved into the new root.
-- GitHub Actions expects `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets for MikroTik-backed stacks and tracks the latest verified Terraform and action versions.
+- Self-hosted GitHub runners must provide `bws` and `BWS_ACCESS_TOKEN` so the
+  workflows can load Bitwarden secrets at runtime.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
-- GitHub Actions remote-state initialization expects repository secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+- Bitwarden should store `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  `MIKROTIK_USERNAME`, `MIKROTIK_PASSWORD`, `CLOUDFLARE_API_TOKEN`,
+  `MIKROTIK_SSH_PRIVATE_KEY`, and `MIKROTIK_SSH_KNOWN_HOSTS` for this repo.
 - Update this README whenever the Terraform workflow or structure changes.
