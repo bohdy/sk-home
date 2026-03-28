@@ -276,11 +276,12 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # Produce a real plan only for stacks with committed non-secret source of
-      # truth so CI can show intended infrastructure changes safely.
+      # Produce a real read-only plan only for stacks with committed non-secret
+      # source of truth so CI can show intended infrastructure changes without
+      # competing for the backend lock used by applies and manual state work.
       - name: Terraform plan
         if: matrix.enable_plan
-        run: terraform plan -no-color -out=tfplan
+        run: terraform plan -lock=false -no-color -out=tfplan
 
       # Convert the binary plan to plain text so it can be reviewed from CI
       # without rerunning Terraform locally.

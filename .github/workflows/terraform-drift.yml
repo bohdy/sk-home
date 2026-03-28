@@ -82,12 +82,14 @@ jobs:
 
       # Use Terraform's detailed exit codes so the workflow can distinguish
       # between a clean state, detected drift, and a real execution failure.
+      # Drift checks are read-only, so skip backend locking to avoid blocking
+      # on concurrent applies or manual maintenance operations.
       - name: Terraform drift plan
         id: drift_plan
         shell: bash
         run: |
           set +e
-          terraform plan -detailed-exitcode -no-color -out=tfplan
+          terraform plan -lock=false -detailed-exitcode -no-color -out=tfplan
           terraform_exit_code=$?
           set -e
 
