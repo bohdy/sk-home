@@ -26,7 +26,11 @@ runner. Before each RouterOS import, the deployment script verifies that the
 uploaded PKCS#12 bundle and temporary import script are both visible on the
 target device. Temporary RouterOS file cleanup is best-effort so a successful
 certificate install does not fail only because a transient upload file is
-already gone by the time cleanup runs.
+already gone by the time cleanup runs. Before renewing, the script checks the
+certificate currently served by each device on `www-ssl` and only renews when
+that live certificate will expire within 4 days by default. You can override
+that threshold with `MIKROTIK_CERTIFICATE_RENEWAL_WINDOW_DAYS` when a different
+renewal window is needed.
 
 Manual workflow runs can target Let's Encrypt staging for safe end-to-end
 testing, and they can now scope deployment to `all` inventory entries or one
