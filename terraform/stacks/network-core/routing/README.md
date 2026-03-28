@@ -12,7 +12,7 @@ This root owns gateway routing concerns that deserve their own Terraform state:
 
 - static IPv4 routes
 - static IPv6 routes
-- future BGP routing configuration
+- BGP instances, templates, sessions, and routing filters
 
 The parent [`network-core`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/README.md) stack remains focused on router and switch foundations.
 
@@ -39,12 +39,17 @@ Recommended sensitive input handling:
 
 - Define IPv4 static routes through `ipv4_static_routes` so committed destination prefixes, route state, and comments stay reviewable.
 - Define IPv6 static routes through `ipv6_static_routes` because the RouterOS provider manages IPv6 routes through a dedicated Terraform resource.
+- Define BGP instances through `bgp_instances` so shared RouterOS BGP identity stays committed independently from peer sessions.
+- Define reusable peer defaults through `bgp_templates` so connection groups can inherit shared settings without repeating them per session.
+- Define live BGP sessions through `bgp_connections`, including explicit `local`, `remote`, and `output` blocks so imported RouterOS state can converge without hidden provider defaults.
+- Define BGP routing policy through `routing_filter_rules` so export filters remain reviewable even though RouterOS filter rules are not named objects.
 - Blackhole routes currently use the committed `blackhole_gateway_placeholder` compatibility value because the provider still requires a gateway attribute even though RouterOS blackhole routes do not use a next hop.
-- Keep this stack as the future home for BGP routing work, but add BGP resources only when there is committed BGP intent to manage.
+- Import pre-existing live BGP objects into this stack before the first apply that manages them so Terraform does not attempt to recreate active gateway routing state from scratch.
 
 ## Notes
 
 - Routing in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
 - Treat `routing.auto.tfvars` as committed source-of-truth configuration for non-secret live routing values.
+- The current BGP scope in this stack is the live GW RouterOS BGP instance, templates, connections, and routing filter rules present at import time.
 - Validate one IPv4 and one IPv6 blackhole route against the current provider behavior before treating the blackhole compatibility placeholder as proven safe for unattended rollout.
 - Update this README when the routing data model, BGP scope, or nested stack layout changes.

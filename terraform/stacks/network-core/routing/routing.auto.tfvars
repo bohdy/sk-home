@@ -61,3 +61,186 @@ ipv6_static_routes = {
     comment     = "Blackhole routed IPv6 prefix 2a02:768:e915:a28e::/64"
   }
 }
+
+# Keep the live GW BGP instance inventory committed so RouterOS routing identity
+# stays reviewable and importable from one source of truth.
+bgp_instances = {
+  "bgp-instance" = {
+    as            = "65001"
+    router_id     = "10.1.20.1"
+    routing_table = "main"
+    vrf           = "main"
+  }
+}
+
+# Keep reusable BGP templates committed separately so session groups can inherit
+# shared behavior without repeating all template fields per connection.
+bgp_templates = {
+  default = {
+    as       = "65001"
+    disabled = false
+  }
+  "k8s-cluster" = {
+    as            = "65001"
+    disabled      = false
+    multihop      = false
+    routing_table = "main"
+  }
+}
+
+# Mirror the live GW BGP connection set exactly so imported session state can
+# converge before any later cleanup or policy redesign.
+bgp_connections = {
+  "bgp-sh-v4" = {
+    as               = "65001"
+    disabled         = false
+    instance         = "bgp-instance"
+    routing_table    = "main"
+    vrf              = "main"
+    address_families = "ip,ipv6"
+    local = {
+      role = "ebgp"
+    }
+    output = {
+      as_override                    = false
+      default_prepend                = 0
+      filter_chain                   = "SH_Out_v4"
+      keep_sent_attributes           = false
+      no_client_to_client_reflection = false
+      no_early_cut                   = false
+      redistribute                   = "connected,static"
+      remove_private_as              = false
+    }
+    remote = {
+      address = "169.254.0.2"
+      as      = "65002"
+    }
+  }
+  "bgp-sh-v6" = {
+    as               = "65001"
+    disabled         = true
+    instance         = "bgp-instance"
+    routing_table    = "main"
+    vrf              = "main"
+    address_families = "ipv6"
+    local = {
+      role    = "ebgp"
+      address = "fd00:12::1"
+    }
+    output = {
+      as_override                    = false
+      default_prepend                = 0
+      filter_chain                   = "SH_Out_v6"
+      keep_sent_attributes           = false
+      no_client_to_client_reflection = false
+      no_early_cut                   = false
+      redistribute                   = "connected"
+      remove_private_as              = false
+    }
+    remote = {
+      address = "fd00:12::2"
+      as      = "65002"
+    }
+  }
+  "bgp-sk-k3s-master01" = {
+    as            = "65001"
+    disabled      = false
+    instance      = "bgp-instance"
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role = "ibgp"
+    }
+    remote = {
+      address = "10.1.20.101"
+      as      = "65001"
+    }
+  }
+  "bgp-sk-k3s-worker01" = {
+    as            = "65001"
+    comment       = "k3s-connection"
+    connect       = true
+    disabled      = false
+    instance      = "bgp-instance"
+    multihop      = false
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role    = "ibgp"
+      address = "10.1.20.1"
+    }
+    output = {
+      as_override                    = false
+      default_originate              = "always"
+      default_prepend                = 0
+      keep_sent_attributes           = false
+      no_client_to_client_reflection = false
+      no_early_cut                   = false
+      remove_private_as              = false
+    }
+    remote = {
+      address = "10.1.20.102"
+      as      = "65001"
+    }
+  }
+  "bgp-sk-k3s-worker02" = {
+    as            = "65001"
+    disabled      = false
+    instance      = "bgp-instance"
+    multihop      = false
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role = "ibgp"
+    }
+    remote = {
+      address = "10.1.20.103"
+      as      = "65001"
+    }
+  }
+}
+
+# Keep the live GW routing export filters committed as explicit policy rules so
+# BGP advertisements remain reviewable in version control.
+routing_filter_rules = {
+  "sh-out-010-accept-home-v4" = {
+    chain    = "SH_Out"
+    disabled = false
+    rule     = "if (dst in 10.1.0.0/16) { accept; }"
+  }
+  "sh-out-020-accept-home-v6" = {
+    chain    = "SH_Out"
+    disabled = false
+    rule     = "if (dst in 2001:470:59cf::/48 && dst-len in 48-64) {accept;}"
+  }
+  "sh-out-999-reject" = {
+    chain    = "SH_Out"
+    disabled = false
+    rule     = "reject;"
+  }
+  "sh-out-v4-010-accept-home-v4" = {
+    chain    = "SH_Out_v4"
+    disabled = false
+    rule     = "if (dst in 10.1.0.0/16) { accept; }"
+  }
+  "sh-out-v4-999-reject" = {
+    chain    = "SH_Out_v4"
+    disabled = false
+    rule     = "reject"
+  }
+  "sh-out-v6-010-accept-home-v6" = {
+    chain    = "SH_Out_v6"
+    disabled = false
+    rule     = <<-EOT
+      if (dst in 2001:470:59cf::/48 && dst-len in 48-64) {accept;}
+    EOT
+  }
+  "sh-out-v6-999-reject" = {
+    chain    = "SH_Out_v6"
+    disabled = false
+    rule     = "reject;"
+  }
+}
