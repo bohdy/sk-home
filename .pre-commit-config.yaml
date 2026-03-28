@@ -1,0 +1,19 @@
+# Keep local commit-time checks aligned around fast Terraform feedback.
+repos:
+  - repo: local
+    hooks:
+      # Enforce canonical Terraform formatting before code reaches CI.
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: terraform fmt -recursive
+        language: system
+        files: ^terraform/.*\.tf$
+        pass_filenames: false
+
+      # Run Terraform linting only against the stack roots affected by the
+      # current change set so the hook stays fast as the repo grows.
+      - id: terraform-tflint
+        name: tflint
+        entry: ./scripts/run-tflint-stacks.sh
+        language: system
+        files: ^terraform/.*\.(tf|tfvars)$
