@@ -1,5 +1,6 @@
-# Connect Terraform to the MikroTik gateway using a dedicated provider alias so
-# router resources can target the correct device explicitly.
+# tflint-ignore: terraform_unused_declarations
+# Keep the legacy RouterOS gateway provider available in the parent root until
+# DHCP resources have been migrated out of the old state.
 provider "routeros" {
   alias    = "gw"
   hosturl  = var.mikrotik_gw_hosturl
@@ -8,8 +9,9 @@ provider "routeros" {
   insecure = var.mikrotik_insecure
 }
 
-# Connect Terraform to the MikroTik Switch 1PP with its own provider alias so
-# switch resources stay isolated from the gateway configuration.
+# tflint-ignore: terraform_unused_declarations
+# Keep the legacy Switch 1PP provider available in the parent root until
+# existing state no longer requires the original provider wiring.
 provider "routeros" {
   alias    = "switch_1pp"
   hosturl  = var.mikrotik_switch_1pp_hosturl
@@ -18,8 +20,9 @@ provider "routeros" {
   insecure = var.mikrotik_insecure
 }
 
-# Connect Terraform to the MikroTik Switch 1NP with its own provider alias so
-# future resources can be bound to that device directly.
+# tflint-ignore: terraform_unused_declarations
+# Keep the legacy Switch 1NP provider available in the parent root until
+# existing state no longer requires the original provider wiring.
 provider "routeros" {
   alias    = "switch_1np"
   hosturl  = var.mikrotik_switch_1np_hosturl

@@ -46,44 +46,25 @@ variable "mikrotik_switch_1np_hosturl" {
   type        = string
 }
 
-# Use a dedicated automation account for Terraform rather than the main admin
-# account.
+# Keep the transitional RouterOS automation account input available in the
+# parent root until DHCP resources have been migrated into the nested state.
 variable "mikrotik_username" {
-  description = "Username for the RouterOS automation account used by Terraform."
+  description = "Username for the RouterOS automation account retained for transitional state operations."
   type        = string
 }
 
-# Keep the RouterOS password out of version control and Terraform plan output.
+# Keep the transitional RouterOS password input available in the parent root
+# until DHCP resources have been migrated into the nested state.
 variable "mikrotik_password" {
-  description = "Password for the RouterOS automation account used by Terraform."
+  description = "Password for the RouterOS automation account retained for transitional state operations."
   type        = string
   sensitive   = true
 }
 
-# Allow secure TLS by default while still supporting self-signed certificates
-# during initial lab bootstrap.
+# Keep the transitional RouterOS TLS toggle available in the parent root until
+# DHCP resources have been migrated into the nested state.
 variable "mikrotik_insecure" {
-  description = "Whether the RouterOS provider should skip TLS certificate verification."
+  description = "Whether the parent root should skip TLS verification during transitional RouterOS state operations."
   type        = bool
   default     = true
-}
-
-# Define DHCP scopes in data form so network intent stays centralized and new
-# scopes can be added without duplicating resource blocks.
-variable "dhcp_scopes" {
-  description = "DHCP scope definitions managed on the MikroTik gateway."
-  type = map(object({
-    comment     = optional(string)
-    interface   = string
-    pool_name   = string
-    range_start = string
-    range_end   = string
-    subnet      = string
-    gateway     = string
-    dns_servers = optional(list(string), [])
-    domain      = optional(string)
-    lease_time  = optional(string, "30m")
-    add_arp     = optional(bool, false)
-  }))
-  default = {}
 }

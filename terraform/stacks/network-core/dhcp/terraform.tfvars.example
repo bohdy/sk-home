@@ -1,0 +1,7 @@
+# The live non-secret DHCP configuration is committed in `dhcp.auto.tfvars`.
+#
+# Use this example file only for local overrides or temporary experiments that
+# should not become part of the shared infrastructure source of truth.
+#
+# Typical local-only inputs:
+# mikrotik_password = "replace-me"

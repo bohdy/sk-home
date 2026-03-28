@@ -19,6 +19,7 @@ on:
         options:
           - all
           - network-core
+          - network-core-dhcp
           - wifi
           - identity-edge
           - overlay
@@ -63,6 +64,7 @@ jobs:
 
           declare -a STACK_DEFINITIONS=(
             "network-core:terraform/stacks/network-core:true:true"
+            "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "wifi:terraform/stacks/wifi:false:false"
             "identity-edge:terraform/stacks/identity-edge:false:false"
             "overlay:terraform/stacks/overlay:false:false"
@@ -73,6 +75,25 @@ jobs:
           selected_stack="${{ github.event.inputs.stack || 'all' }}"
           selected_action="${{ github.event.inputs.action || 'validate' }}"
           ref_name="${GITHUB_REF_NAME:-}"
+
+          resolve_stack_name_for_path() {
+            local path="$1"
+            local best_name=""
+            local best_match_length=0
+
+            for stack_definition in "${STACK_DEFINITIONS[@]}"; do
+              IFS=":" read -r candidate_name candidate_path _ _ <<<"${stack_definition}"
+
+              if [[ "${path}" == "${candidate_path}" || "${path}" == "${candidate_path}/"* ]]; then
+                if (( ${#candidate_path} > best_match_length )); then
+                  best_name="${candidate_name}"
+                  best_match_length=${#candidate_path}
+                fi
+              fi
+            done
+
+            [[ -n "${best_name}" ]] && printf '%s\n' "${best_name}"
+          }
 
           changed_files=""
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
@@ -106,6 +127,18 @@ jobs:
           apply_include=""
           validate_count=0
           apply_count=0
+          declare -A changed_stack_names=()
+
+          if [[ "${workflow_changed}" != "true" && "${modules_changed}" != "true" && "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+            while IFS= read -r changed_file; do
+              [[ -n "${changed_file}" ]] || continue
+
+              stack_name="$(resolve_stack_name_for_path "${changed_file}")"
+              if [[ -n "${stack_name}" ]]; then
+                changed_stack_names["${stack_name}"]=1
+              fi
+            done <<<"${changed_files}"
+          fi
 
           for stack_definition in "${STACK_DEFINITIONS[@]}"; do
             IFS=":" read -r stack_name stack_path enable_plan enable_apply <<<"${stack_definition}"
@@ -118,7 +151,7 @@ jobs:
               fi
             elif [[ "${workflow_changed}" == "true" || "${modules_changed}" == "true" ]]; then
               stack_selected="true"
-            elif grep -q "^${stack_path}/" <<<"${changed_files}"; then
+            elif [[ -n "${changed_stack_names[${stack_name}]+x}" ]]; then
               stack_selected="true"
             fi
 
@@ -209,11 +242,16 @@ jobs:
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
 
-          if [[ "${{ matrix.stack_name }}" == "network-core" ]]; then
-            nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
-            nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
-            nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
-          fi
+          case "${{ matrix.stack_name }}" in
+            network-core)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
+            network-core-dhcp)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+          esac
 
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
@@ -238,11 +276,12 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # Produce a real plan only for stacks with committed non-secret source of
-      # truth so CI can show intended infrastructure changes safely.
+      # Produce a real read-only plan only for stacks with committed non-secret
+      # source of truth so CI can show intended infrastructure changes without
+      # competing for the backend lock used by applies and manual state work.
       - name: Terraform plan
         if: matrix.enable_plan
-        run: terraform plan -no-color -out=tfplan
+        run: terraform plan -lock=false -no-color -out=tfplan
 
       # Convert the binary plan to plain text so it can be reviewed from CI
       # without rerunning Terraform locally.
@@ -302,11 +341,16 @@ jobs:
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
 
-          if [[ "${{ matrix.stack_name }}" == "network-core" ]]; then
-            nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
-            nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
-            nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
-          fi
+          case "${{ matrix.stack_name }}" in
+            network-core)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
+            network-core-dhcp)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+          esac
 
       # Check out the repository so the apply uses the exact committed stack
       # source that passed validation.

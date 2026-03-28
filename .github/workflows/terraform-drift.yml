@@ -29,6 +29,8 @@ jobs:
           # committed non-secret inputs and are safe to run unattended in CI.
           - stack: terraform/stacks/network-core
             stack_name: network-core
+          - stack: terraform/stacks/network-core/dhcp
+            stack_name: network-core-dhcp
 
     defaults:
       run:
@@ -51,9 +53,16 @@ jobs:
         shell: bash
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
-          nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
-          nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
-          nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+          case "${{ matrix.stack_name }}" in
+            network-core)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
+            network-core-dhcp)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+          esac
 
       # Check out the repository so Terraform reads the committed desired state
       # that drift detection should compare against live infrastructure.
@@ -73,12 +82,14 @@ jobs:
 
       # Use Terraform's detailed exit codes so the workflow can distinguish
       # between a clean state, detected drift, and a real execution failure.
+      # Drift checks are read-only, so skip backend locking to avoid blocking
+      # on concurrent applies or manual maintenance operations.
       - name: Terraform drift plan
         id: drift_plan
         shell: bash
         run: |
           set +e
-          terraform plan -detailed-exitcode -no-color -out=tfplan
+          terraform plan -lock=false -detailed-exitcode -no-color -out=tfplan
           terraform_exit_code=$?
           set -e
 
