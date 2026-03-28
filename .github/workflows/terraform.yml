@@ -100,7 +100,14 @@ jobs:
               fi
             done
 
-            [[ -n "${best_name}" ]] && printf '%s\n' "${best_name}"
+            # Return success even when a changed path does not belong to any
+            # Terraform stack so non-stack docs and helper changes do not abort
+            # the detection job under `set -e`.
+            if [[ -n "${best_name}" ]]; then
+              printf '%s\n' "${best_name}"
+            fi
+
+            return 0
           }
 
           changed_files=""
