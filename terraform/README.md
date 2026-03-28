@@ -24,13 +24,37 @@ Each stack is its own Terraform root module with separate state, variables, and 
 ## Getting Started
 
 1. Install Terraform.
-2. Choose the stack you want to work on under `stacks/`.
-3. Copy `.env.example` to `.env` and fill in local credentials and defaults.
-4. Load the environment variables from `.env` into your shell.
-5. Copy that stack's `terraform.tfvars.example` to a local `.tfvars` file if you want local overrides.
-6. Fill in environment-specific values without committing secrets.
-7. Run `terraform init -reconfigure` inside the selected stack directory.
-8. Run `terraform plan` inside the selected stack directory.
+2. Install `pre-commit` and `tflint` for local commit-time Terraform checks.
+3. Run `pre-commit install` from the repository root once per clone.
+4. Choose the stack you want to work on under `stacks/`.
+5. Copy `.env.example` to `.env` and fill in local credentials and defaults.
+6. Load the environment variables from `.env` into your shell.
+7. Copy that stack's `terraform.tfvars.example` to a local `.tfvars` file if you want local overrides.
+8. Fill in environment-specific values without committing secrets.
+9. Run `terraform init -reconfigure` inside the selected stack directory.
+10. Run `terraform plan` inside the selected stack directory.
+
+## Local Pre-Commit Checks
+
+The repository commits its Terraform pre-commit policy so every clone can run
+the same fast local checks before code reaches CI.
+
+- `terraform fmt` runs across tracked Terraform files to keep formatting stable.
+- `tflint` runs only against the Terraform stack roots affected by the current
+  change set so commit-time linting stays fast.
+- Changes under `terraform/modules`, [`.tflint.hcl`](/Users/bohdy/git/sk-home/.tflint.hcl),
+  or [`.pre-commit-config.yaml`](/Users/bohdy/git/sk-home/.pre-commit-config.yaml)
+  fan linting out to every stack because shared Terraform behavior may change.
+
+Useful local commands:
+
+- `pre-commit run --all-files`
+- `./scripts/run-tflint-stacks.sh`
+
+Keep `terraform validate` and provider/backend-sensitive checks in GitHub
+Actions. Local pre-commit hooks intentionally stop at formatting and linting so
+commits do not depend on remote backend access, provider downloads, or live
+infrastructure credentials.
 
 ## Notes
 
