@@ -56,7 +56,7 @@ resource "routeros_ip_pool" "dhcp_scope" {
 }
 
 # Create one DHCP server per declared scope on the gateway and bind it to the
-# intended interface, address pool, and optional DHCP option set.
+# intended interface and address pool.
 resource "routeros_ip_dhcp_server" "dhcp_scope" {
   provider = routeros.gw
 
@@ -68,21 +68,22 @@ resource "routeros_ip_dhcp_server" "dhcp_scope" {
   lease_time                = each.value.lease_time
   add_arp                   = each.value.add_arp
   dynamic_lease_identifiers = "client-mac,client-id"
-  option_set                = try(routeros_ip_dhcp_server_option_sets.dhcp_option_set[each.value.option_set].name, null)
   comment                   = try(each.value.comment, null)
 }
 
-# Attach per-subnet gateway, DNS, and domain settings for each DHCP scope.
+# Attach per-subnet gateway, DNS, domain, and optional DHCP option-set
+# settings for each scope.
 resource "routeros_ip_dhcp_server_network" "dhcp_scope" {
   provider = routeros.gw
 
   for_each = local.dhcp_scopes
 
-  address    = each.value.subnet
-  gateway    = each.value.gateway
-  dns_server = each.value.dns_servers
-  domain     = try(each.value.domain, null)
-  comment    = try(each.value.comment, null)
+  address         = each.value.subnet
+  gateway         = each.value.gateway
+  dns_server      = each.value.dns_servers
+  domain          = try(each.value.domain, null)
+  dhcp_option_set = try(routeros_ip_dhcp_server_option_sets.dhcp_option_set[each.value.option_set].name, null)
+  comment         = try(each.value.comment, null)
 }
 
 # Manage one static lease per declared reservation so address ownership remains

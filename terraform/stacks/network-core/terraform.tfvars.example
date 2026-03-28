@@ -4,5 +4,8 @@
 # Use this example file only for local overrides or temporary experiments that
 # should not become part of the shared infrastructure source of truth.
 #
-# The parent network-core root does not currently require local-only secret
-# inputs. Add examples here only when the parent root regains sensitive inputs.
+# The parent network-core root keeps legacy RouterOS credentials only while the
+# nested DHCP stack migration is in progress.
+#
+# Typical local-only inputs during the migration window:
+# mikrotik_password = "replace-me"

@@ -45,3 +45,26 @@ variable "mikrotik_switch_1np_hosturl" {
   description = "RouterOS provider URL for the MikroTik Switch 1NP device."
   type        = string
 }
+
+# Keep the transitional RouterOS automation account input available in the
+# parent root until DHCP resources have been migrated into the nested state.
+variable "mikrotik_username" {
+  description = "Username for the RouterOS automation account retained for transitional state operations."
+  type        = string
+}
+
+# Keep the transitional RouterOS password input available in the parent root
+# until DHCP resources have been migrated into the nested state.
+variable "mikrotik_password" {
+  description = "Password for the RouterOS automation account retained for transitional state operations."
+  type        = string
+  sensitive   = true
+}
+
+# Keep the transitional RouterOS TLS toggle available in the parent root until
+# DHCP resources have been migrated into the nested state.
+variable "mikrotik_insecure" {
+  description = "Whether the parent root should skip TLS verification during transitional RouterOS state operations."
+  type        = bool
+  default     = true
+}
