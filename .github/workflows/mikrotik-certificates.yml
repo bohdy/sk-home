@@ -85,14 +85,6 @@ jobs:
     needs: validate
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.ref == 'refs/heads/main'
     env:
-      # Keep the Cloudflare token outside version control while exposing the
-      # names expected by the renewal script and acme.sh.
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      # Reuse the existing MikroTik automation username secret so the SSH-based
-      # certificate workflow stays aligned with the Terraform workflow.
-      MIKROTIK_SSH_USERNAME: ${{ secrets.MIKROTIK_USERNAME }}
-
       # Keep scheduled and main-branch runs on production while allowing manual
       # test runs to target Let's Encrypt staging and avoid production rate limits.
       ACME_SERVER: ${{ github.event_name == 'workflow_dispatch' && inputs.acme_environment == 'staging' && 'letsencrypt_test' || 'letsencrypt' }}
@@ -110,6 +102,7 @@ jobs:
       - name: Preflight runner tools
         run: |
           command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
           command -v openssl >/dev/null 2>&1 || { echo "Missing required tool: openssl"; exit 1; }
           command -v ssh >/dev/null 2>&1 || { echo "Missing required tool: ssh"; exit 1; }
           command -v scp >/dev/null 2>&1 || { echo "Missing required tool: scp"; exit 1; }
@@ -136,12 +129,15 @@ jobs:
           echo "PATH=${ACME_DIR}:${PATH}" >> "${GITHUB_ENV}"
           echo "Resolved acme.sh at ${ACME_BIN}"
 
-      # Fail early when required secrets are missing instead of reaching the
-      # deployment script with empty values and producing a less clear error.
-      - name: Validate required secrets
-        run: |
-          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || { echo "Missing required secret: CLOUDFLARE_API_TOKEN"; exit 1; }
-          [[ -n "${MIKROTIK_SSH_USERNAME}" ]] || { echo "Missing required secret: MIKROTIK_USERNAME"; exit 1; }
+      # Check out the repository so the workflow can use the committed inventory,
+      # script, and documentation together.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Load Cloudflare and MikroTik credentials from Bitwarden and materialize
+      # SSH files into the paths consumed by the renewal script.
+      - name: Load Bitwarden secrets
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env mikrotik-certificates
 
       # Verify the public Cloudflare API and the private MikroTik SSH endpoints
       # are reachable from the self-hosted runner before renewal work starts.
@@ -168,20 +164,6 @@ jobs:
               exit 1
               ;;
           esac
-
-      # Check out the repository so the workflow can use the committed inventory,
-      # script, and documentation together.
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.2
-
-      # Materialize the SSH key from repository secrets so the shell script can
-      # use strict host verification without embedding secrets in the repo.
-      - name: Prepare SSH materials
-        run: |
-          mkdir -p .tmp/mikrotik-acme/ssh
-          printf '%s\n' "${{ secrets.MIKROTIK_SSH_PRIVATE_KEY }}" > .tmp/mikrotik-acme/ssh/id_ed25519
-          printf '%s\n' "${{ secrets.MIKROTIK_SSH_KNOWN_HOSTS }}" > .tmp/mikrotik-acme/ssh/known_hosts
-          chmod 600 .tmp/mikrotik-acme/ssh/id_ed25519
 
       # Renew or reuse certificates as needed, then install them on each RouterOS
       # device declared in the committed inventory file.

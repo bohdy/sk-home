@@ -40,9 +40,11 @@ inputs that should not become shared desired state.
 Recommended sensitive input handling:
 
 - keep `mikrotik_password` out of committed files
-- use `TF_VAR_mikrotik_password` for local runs when practical
+- use `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` for local runs
+  so `TF_VAR_mikrotik_password` and related values come from Bitwarden
 - set `mikrotik_insecure = false` once certificate trust is configured
-- in GitHub Actions, provide `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets
+- on self-hosted GitHub runners, provide `bws` and `BWS_ACCESS_TOKEN` so
+  workflows can load `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` from Bitwarden
 
 ## Data Model
 

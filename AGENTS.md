@@ -35,6 +35,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer variables, configuration, or environment-based values instead of embedding changeable values directly in code.
 - Secrets MUST never be hardcoded in source files.
 - When secrets or configurable values are needed, use the repository's existing variable, configuration, or secret-management mechanisms whenever possible.
+- Bitwarden Secrets Manager is the shared source of truth for repository secrets in both local runs and GitHub Actions unless a newer documented mechanism replaces it.
 - Non-secret infrastructure settings that define desired state should usually be committed as normal repository configuration.
 - Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
@@ -43,8 +44,9 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 
 - Documentation MUST be kept up to date whenever code, behavior, setup, usage, or repository structure changes.
 - `README.md` files are important documentation and MUST be maintained.
-- Updating `AGENTS.md` itself is welcomed when the repository workflow, standards, or expectations need to be adjusted.
+- `AGENTS.md` is important repository policy and MUST be updated whenever workflow, standards, tooling expectations, or agent instructions change.
 - If a change affects setup, usage, configuration, deployment, or repository layout, update the relevant `README.md` in the same task.
+- If a change affects repository workflow, documentation policy, secret handling, automation conventions, or agent expectations, update `AGENTS.md` in the same task.
 - Do not leave documentation updates as implied follow-up work when the change has already been made.
 
 ## Working Rules

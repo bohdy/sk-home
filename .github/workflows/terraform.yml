@@ -206,16 +206,9 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.has_validate_changes == 'true'
     env:
-      # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
-      # future remote-state operations in CI.
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # Keep the stable backend region in workflow config because it is a
+      # non-secret compatibility value rather than credential material.
       AWS_REGION: auto
-
-      # Expose MikroTik credentials to Terraform through standard TF_VAR names
-      # so provider configuration stays free of hardcoded secrets.
-      TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
-      TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.validate_matrix) }}
@@ -230,10 +223,21 @@ jobs:
       - name: Preflight runner tools
         run: |
           command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
           command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
           command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
           command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
           command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Check out the repository before loading secrets so the shared helper can
+      # be reused by local runs and all CI workflows without duplication.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Load the exact Terraform env vars expected by provider and backend
+      # configuration from Bitwarden instead of GitHub repository secrets.
+      - name: Load Bitwarden secrets
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Verify that the runner can reach the remote state backend for every
       # stack and the RouterOS control plane when the network-core stack runs.
@@ -252,10 +256,6 @@ jobs:
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
           esac
-
-      # Check out the repository so Terraform commands can run against the stack.
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.2
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
@@ -305,16 +305,9 @@ jobs:
       - validate
     if: needs.detect-changes.outputs.has_apply_changes == 'true'
     env:
-      # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
-      # future remote-state operations in CI.
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # Keep the stable backend region in workflow config because it is a
+      # non-secret compatibility value rather than credential material.
       AWS_REGION: auto
-
-      # Expose MikroTik credentials to Terraform through standard TF_VAR names
-      # so provider configuration stays free of hardcoded secrets.
-      TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
-      TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.apply_matrix) }}
@@ -329,10 +322,21 @@ jobs:
       - name: Preflight runner tools
         run: |
           command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
           command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
           command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
           command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
           command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Check out the repository before loading secrets so the shared helper can
+      # be reused by local runs and all CI workflows without duplication.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Load the exact Terraform env vars expected by provider and backend
+      # configuration from Bitwarden instead of GitHub repository secrets.
+      - name: Load Bitwarden secrets
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Verify network reachability again in the deployment job so apply fails
       # fast before touching remote state or device APIs.
@@ -351,11 +355,6 @@ jobs:
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
           esac
-
-      # Check out the repository so the apply uses the exact committed stack
-      # source that passed validation.
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.2
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
