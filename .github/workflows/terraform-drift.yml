@@ -23,6 +23,12 @@ jobs:
           # safe to run unattended in CI.
           - stack: terraform/stacks/network-core
             stack_name: network-core
+          - stack: terraform/stacks/network-core/interfaces/gw
+            stack_name: network-core-interfaces-gw
+          - stack: terraform/stacks/network-core/interfaces/switch-1pp
+            stack_name: network-core-interfaces-switch-1pp
+          - stack: terraform/stacks/network-core/interfaces/switch-1np
+            stack_name: network-core-interfaces-switch-1np
           - stack: terraform/stacks/network-core/dhcp
             stack_name: network-core-dhcp
           - stack: terraform/stacks/network-core/routing
@@ -64,6 +70,15 @@ jobs:
             network-core)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
+            network-core-interfaces-gw)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+            network-core-interfaces-switch-1pp)
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              ;;
+            network-core-interfaces-switch-1np)
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)

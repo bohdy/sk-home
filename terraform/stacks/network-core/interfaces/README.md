@@ -37,6 +37,7 @@ Recommended sensitive input handling:
 ## Rollout Notes
 
 - The current `gw`, `switch-1pp`, and `switch-1np` roots were imported from the live devices before review so Terraform state already matches the existing bridge, bridge port, bridge VLAN, VLAN interface, tunnel, and physical interface objects tracked by this repo.
+- The per-device roots are now CI-ready for validate, apply, and scheduled drift checks because their existing live objects have already been imported into the matching remote states.
 - If future work adds pre-existing live RouterOS objects that are not yet in state, import them into the matching per-device root before the first apply that manages them.
 - The per-device split is intentionally more import-friendly than the old shared interfaces root because each state now mirrors one actual device.
 - Treat each root's `interfaces.auto.tfvars` file as committed source-of-truth configuration for non-secret live interface values.
