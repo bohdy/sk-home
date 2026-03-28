@@ -42,6 +42,7 @@ Each stack is its own Terraform root module with separate state, variables, and 
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.
 - Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs. Today that means `network-core`; the other stacks remain validate-only until they gain committed CI-ready inputs.
 - Manual workflow runs expose `action` and `stack` inputs so operators can choose validate-only runs or apply CI-ready stacks explicitly.
+- A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, uploads the plain-text plan when drift is found, and fails the run so the drift is visible in Actions.
 - GitHub Actions expects `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` repository secrets for MikroTik-backed stacks and tracks the latest verified Terraform and action versions.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
 - GitHub Actions remote-state initialization expects repository secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
