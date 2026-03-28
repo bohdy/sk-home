@@ -68,9 +68,9 @@ jobs:
 
           declare -a STACK_DEFINITIONS=(
             "network-core:terraform/stacks/network-core:true:true"
-            "network-core-interfaces-gw:terraform/stacks/network-core/interfaces/gw:true:false"
-            "network-core-interfaces-switch-1pp:terraform/stacks/network-core/interfaces/switch-1pp:true:false"
-            "network-core-interfaces-switch-1np:terraform/stacks/network-core/interfaces/switch-1np:true:false"
+            "network-core-interfaces-gw:terraform/stacks/network-core/interfaces/gw:true:true"
+            "network-core-interfaces-switch-1pp:terraform/stacks/network-core/interfaces/switch-1pp:true:true"
+            "network-core-interfaces-switch-1np:terraform/stacks/network-core/interfaces/switch-1np:true:true"
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
             "wifi:terraform/stacks/wifi:false:false"
