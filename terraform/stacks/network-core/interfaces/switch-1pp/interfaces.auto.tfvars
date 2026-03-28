@@ -181,7 +181,7 @@ bridge_vlans = {
     comment  = "VLAN10 - LAN"
     vlan_ids = ["10"]
     tagged   = ["bridge", "ether4", "sfp-sfpplus2"]
-    untagged = []
+    untagged = ["ether1"]
   }
   vlan101 = {
     comment  = "Cameras"
@@ -192,7 +192,7 @@ bridge_vlans = {
   vlan102 = {
     comment  = "VLAN102"
     vlan_ids = ["102"]
-    tagged   = ["sfp-sfpplus2"]
+    tagged   = ["bridge", "sfp-sfpplus2"]
     untagged = ["ether4"]
   }
 }
