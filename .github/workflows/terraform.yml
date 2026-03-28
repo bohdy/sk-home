@@ -2,6 +2,26 @@ name: Terraform
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: Choose whether the manual run should stop after validation or continue into apply for CI-ready stacks.
+        required: false
+        default: validate
+        type: choice
+        options:
+          - validate
+          - apply
+      stack:
+        description: Choose which stack the manual run should target.
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - network-core
+          - wifi
+          - identity-edge
+          - overlay
   pull_request:
     paths:
       - ".github/workflows/terraform.yml"
@@ -17,9 +37,141 @@ on:
       - "terraform/**"
 
 jobs:
+  detect-changes:
+    name: Detect changed Terraform stacks
+    runs-on: self-hosted
+    outputs:
+      validate_matrix: ${{ steps.detect.outputs.validate_matrix }}
+      apply_matrix: ${{ steps.detect.outputs.apply_matrix }}
+      has_validate_changes: ${{ steps.detect.outputs.has_validate_changes }}
+      has_apply_changes: ${{ steps.detect.outputs.has_apply_changes }}
+    steps:
+      # Check out the repository with full history so the workflow can compare
+      # the current revision against the correct pull request or push base.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Resolve the exact stack set once so validation and apply jobs stay
+      # aligned and skip unrelated Terraform roots cleanly.
+      - name: Detect changed stacks
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          declare -a STACK_DEFINITIONS=(
+            "network-core:terraform/stacks/network-core:true:true"
+            "wifi:terraform/stacks/wifi:false:false"
+            "identity-edge:terraform/stacks/identity-edge:false:false"
+            "overlay:terraform/stacks/overlay:false:false"
+          )
+
+          workflow_changed="false"
+          modules_changed="false"
+          selected_stack="${{ github.event.inputs.stack || 'all' }}"
+          selected_action="${{ github.event.inputs.action || 'validate' }}"
+          ref_name="${GITHUB_REF_NAME:-}"
+
+          changed_files=""
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            changed_files=""
+          elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+            changed_files="$(git diff --name-only "${base_sha}" "${head_sha}")"
+          else
+            before_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+
+            # Fall back to the current commit diff when GitHub cannot provide a
+            # meaningful "before" SHA, such as the first push on a new branch.
+            if [[ -z "${before_sha}" || "${before_sha}" == "0000000000000000000000000000000000000000" ]]; then
+              changed_files="$(git diff-tree --no-commit-id --name-only -r "${head_sha}")"
+            else
+              changed_files="$(git diff --name-only "${before_sha}" "${head_sha}")"
+            fi
+          fi
+
+          if grep -qxF ".github/workflows/terraform.yml" <<<"${changed_files}"; then
+            workflow_changed="true"
+          fi
+
+          if grep -q '^terraform/modules/' <<<"${changed_files}"; then
+            modules_changed="true"
+          fi
+
+          validate_include=""
+          apply_include=""
+          validate_count=0
+          apply_count=0
+
+          for stack_definition in "${STACK_DEFINITIONS[@]}"; do
+            IFS=":" read -r stack_name stack_path enable_plan enable_apply <<<"${stack_definition}"
+
+            stack_selected="false"
+
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+              if [[ "${selected_stack}" == "all" || "${selected_stack}" == "${stack_name}" ]]; then
+                stack_selected="true"
+              fi
+            elif [[ "${workflow_changed}" == "true" || "${modules_changed}" == "true" ]]; then
+              stack_selected="true"
+            elif grep -q "^${stack_path}/" <<<"${changed_files}"; then
+              stack_selected="true"
+            fi
+
+            if [[ "${stack_selected}" != "true" ]]; then
+              continue
+            fi
+
+            validate_entry="{\"stack\":\"${stack_path}\",\"stack_name\":\"${stack_name}\",\"enable_plan\":${enable_plan},\"enable_apply\":${enable_apply}}"
+            if [[ -z "${validate_include}" ]]; then
+              validate_include="${validate_entry}"
+            else
+              validate_include="${validate_include},${validate_entry}"
+            fi
+            validate_count=$((validate_count + 1))
+
+            if [[ "${enable_apply}" == "true" ]] && { [[ "${GITHUB_EVENT_NAME}" == "push" && "${ref_name}" == "main" ]] || [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${selected_action}" == "apply" ]]; }; then
+              if [[ -z "${apply_include}" ]]; then
+                apply_include="${validate_entry}"
+              else
+                apply_include="${apply_include},${validate_entry}"
+              fi
+              apply_count=$((apply_count + 1))
+            fi
+          done
+
+          if [[ "${validate_count}" -eq 0 ]]; then
+            validate_matrix='{"include":[]}'
+            has_validate_changes="false"
+          else
+            validate_matrix="{\"include\":[${validate_include}]}"
+            has_validate_changes="true"
+          fi
+
+          if [[ "${apply_count}" -eq 0 ]]; then
+            apply_matrix='{"include":[]}'
+            has_apply_changes="false"
+          else
+            apply_matrix="{\"include\":[${apply_include}]}"
+            has_apply_changes="true"
+          fi
+
+          {
+            echo "validate_matrix=${validate_matrix}"
+            echo "apply_matrix=${apply_matrix}"
+            echo "has_validate_changes=${has_validate_changes}"
+            echo "has_apply_changes=${has_apply_changes}"
+          } >> "${GITHUB_OUTPUT}"
+
   validate:
     name: Validate ${{ matrix.stack }}
     runs-on: self-hosted
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_validate_changes == 'true'
     env:
       # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
       # future remote-state operations in CI.
@@ -33,20 +185,7 @@ jobs:
       TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - stack: terraform/stacks/network-core
-            stack_name: network-core
-            enable_plan: true
-          - stack: terraform/stacks/wifi
-            stack_name: wifi
-            enable_plan: false
-          - stack: terraform/stacks/identity-edge
-            stack_name: identity-edge
-            enable_plan: false
-          - stack: terraform/stacks/overlay
-            stack_name: overlay
-            enable_plan: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.validate_matrix) }}
 
     defaults:
       run:
@@ -63,14 +202,18 @@ jobs:
           command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
           command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
 
-      # Verify that the runner can reach the external systems Terraform depends
-      # on before downloading providers or talking to remote state.
+      # Verify that the runner can reach the remote state backend for every
+      # stack and the RouterOS control plane when the network-core stack runs.
       - name: Preflight network access
+        shell: bash
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
-          nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
-          nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
-          nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+
+          if [[ "${{ matrix.stack_name }}" == "network-core" ]]; then
+            nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+            nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+            nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+          fi
 
       # Check out the repository so Terraform commands can run against the stack.
       - name: Checkout repository
@@ -96,21 +239,92 @@ jobs:
         run: terraform validate
 
       # Produce a real plan only for stacks with committed non-secret source of
-      # truth so PRs can show intended infrastructure changes safely.
+      # truth so CI can show intended infrastructure changes safely.
       - name: Terraform plan
         if: matrix.enable_plan
         run: terraform plan -no-color -out=tfplan
 
-      # Convert the binary plan to plain text so it can be reviewed from the PR
-      # workflow without rerunning Terraform locally.
+      # Convert the binary plan to plain text so it can be reviewed from CI
+      # without rerunning Terraform locally.
       - name: Render Terraform plan
         if: matrix.enable_plan
         run: terraform show -no-color tfplan > tfplan.txt
 
-      # Publish the plan text as a workflow artifact for PR review.
+      # Publish the plan text as a workflow artifact for later review.
       - name: Upload Terraform plan artifact
         if: matrix.enable_plan
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-${{ matrix.stack_name }}
           path: ${{ matrix.stack }}/tfplan.txt
+
+  apply:
+    name: Apply ${{ matrix.stack }}
+    runs-on: self-hosted
+    needs:
+      - detect-changes
+      - validate
+    if: needs.detect-changes.outputs.has_apply_changes == 'true'
+    env:
+      # Expose Cloudflare R2 credentials for backend-enabled Terraform jobs and
+      # future remote-state operations in CI.
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: auto
+
+      # Expose MikroTik credentials to Terraform through standard TF_VAR names
+      # so provider configuration stays free of hardcoded secrets.
+      TF_VAR_mikrotik_username: ${{ secrets.MIKROTIK_USERNAME }}
+      TF_VAR_mikrotik_password: ${{ secrets.MIKROTIK_PASSWORD }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.apply_matrix) }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+
+    steps:
+      # Fail fast on self-hosted runners that are missing the tooling required
+      # to execute Terraform applies consistently.
+      - name: Preflight runner tools
+        run: |
+          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+          command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
+          command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
+          command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
+          command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Verify network reachability again in the deployment job so apply fails
+      # fast before touching remote state or device APIs.
+      - name: Preflight network access
+        shell: bash
+        run: |
+          nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
+
+          if [[ "${{ matrix.stack_name }}" == "network-core" ]]; then
+            nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+            nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+            nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+          fi
+
+      # Check out the repository so the apply uses the exact committed stack
+      # source that passed validation.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Install a pinned Terraform version so local and CI behavior stay aligned.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.8
+
+      # Reinitialize the backend in the apply job so state operations use fresh
+      # provider and backend configuration.
+      - name: Terraform init
+        run: terraform init -reconfigure
+
+      # Apply the committed desired state for CI-ready stacks after validation
+      # succeeds on the same revision.
+      - name: Terraform apply
+        run: terraform apply -auto-approve -no-color

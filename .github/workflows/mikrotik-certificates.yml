@@ -34,8 +34,6 @@ on:
       - ".github/workflows/mikrotik-certificates.yml"
       - "config/mikrotik-letsencrypt-targets.csv"
       - "scripts/mikrotik-renew-letsencrypt.sh"
-      - "README.md"
-      - "terraform/stacks/network-core/README.md"
   push:
     branches:
       - main

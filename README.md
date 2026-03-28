@@ -37,4 +37,5 @@ process the full committed inventory.
 
 The repository includes a Terraform bootstrap in [`terraform`](terraform).
 Use the stack directories under [`terraform/stacks`](terraform/stacks) as separate Terraform root modules and keep the Terraform README updated as the workflow evolves.
-GitHub Actions validates Terraform formatting and stack configuration changes automatically.
+GitHub Actions now validates only changed Terraform stacks automatically, and pushes to `main` apply changed stacks that are CI-ready for safe unattended deployment.
+An hourly Terraform drift workflow also checks CI-ready stacks and publishes a drift plan artifact when live infrastructure diverges from the committed desired state.
