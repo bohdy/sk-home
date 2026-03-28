@@ -3,6 +3,7 @@
 ## Purpose
 
 This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits.
+This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -34,8 +35,10 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Minimize hardcoded values whenever practical.
 - Prefer variables, configuration, or environment-based values instead of embedding changeable values directly in code.
 - Secrets MUST never be hardcoded in source files.
+- Exposing secrets in logs, CI output, artifacts, comments, or other observable channels is a major failure and must be treated as a severe regression.
 - When secrets or configurable values are needed, use the repository's existing variable, configuration, or secret-management mechanisms whenever possible.
 - Bitwarden Secrets Manager is the shared source of truth for repository secrets in both local runs and GitHub Actions unless a newer documented mechanism replaces it.
+- When introducing or modifying secret-handling automation, agents must prefer designs that preserve masking, minimize plaintext exposure, and fail closed when masking or secure injection cannot be guaranteed.
 - Non-secret infrastructure settings that define desired state should usually be committed as normal repository configuration.
 - Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
@@ -63,5 +66,6 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## Verification
 
 - Verify the changed files after editing them.
+- For any change that touches credentials, authentication, CI injection, or secret-management paths, explicitly verify that secrets are not exposed in logs or other observable outputs.
 - Summarize what was validated when reporting completed work.
 - Call out any verification gaps or follow-up automation that would improve enforcement.
