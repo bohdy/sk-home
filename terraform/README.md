@@ -17,6 +17,7 @@ The bootstrap is intentionally minimal. It provides:
 - `modules/`: reusable Terraform modules shared across stacks
 - `stacks/network-core/`: MikroTik router and switch foundations
 - `stacks/network-core/dhcp/`: MikroTik gateway DHCP scopes, reservations, and DHCP options
+- `stacks/network-core/routing/`: MikroTik gateway static routing and future BGP configuration
 - `stacks/wifi/`: UniFi wireless configuration
 - `stacks/identity-edge/`: Cloudflare ZTNA and edge access controls
 - `stacks/overlay/`: Tailscale tailnet and overlay-network settings
@@ -90,8 +91,9 @@ infrastructure credentials.
 - Keep physical networking, DHCP, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
 - The nested `network-core/dhcp` stack manages only gateway DHCP resources so that scopes, reservations, and DHCP options can change independently from the rest of `network-core`.
+- The nested `network-core/routing` stack manages only gateway routing resources so that static routes and future BGP configuration can change independently from the rest of `network-core`.
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.
-- Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs. Today that means `network-core` and `network-core/dhcp`; the other stacks remain validate-only until they gain committed CI-ready inputs.
+- Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs. Today that means `network-core`, `network-core/dhcp`, and `network-core/routing`; the other stacks remain validate-only until they gain committed CI-ready inputs.
 - Manual workflow runs expose `action` and `stack` inputs so operators can choose validate-only runs or apply CI-ready stacks explicitly.
 - A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, uploads the plain-text plan when drift is found, and fails the run so the drift is visible in Actions.
 - When splitting existing resources into a new stack root, migrate or import the

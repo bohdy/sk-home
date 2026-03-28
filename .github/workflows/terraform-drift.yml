@@ -24,6 +24,8 @@ jobs:
             stack_name: network-core
           - stack: terraform/stacks/network-core/dhcp
             stack_name: network-core-dhcp
+          - stack: terraform/stacks/network-core/routing
+            stack_name: network-core-routing
 
     defaults:
       run:
@@ -64,6 +66,9 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+            network-core-routing)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
           esac

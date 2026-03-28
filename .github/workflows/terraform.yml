@@ -20,6 +20,7 @@ on:
           - all
           - network-core
           - network-core-dhcp
+          - network-core-routing
           - wifi
           - identity-edge
           - overlay
@@ -65,6 +66,7 @@ jobs:
           declare -a STACK_DEFINITIONS=(
             "network-core:terraform/stacks/network-core:true:true"
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
+            "network-core-routing:terraform/stacks/network-core/routing:true:true"
             "wifi:terraform/stacks/wifi:false:false"
             "identity-edge:terraform/stacks/identity-edge:false:false"
             "overlay:terraform/stacks/overlay:false:false"
@@ -255,6 +257,9 @@ jobs:
             network-core-dhcp)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
+            network-core-routing)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
           esac
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
@@ -352,6 +357,9 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              ;;
+            network-core-routing)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
           esac
