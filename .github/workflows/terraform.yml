@@ -19,6 +19,7 @@ on:
         options:
           - all
           - network-core
+          - network-core-interfaces
           - network-core-dhcp
           - network-core-routing
           - wifi
@@ -65,6 +66,7 @@ jobs:
 
           declare -a STACK_DEFINITIONS=(
             "network-core:terraform/stacks/network-core:true:true"
+            "network-core-interfaces:terraform/stacks/network-core/interfaces:true:false"
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
             "wifi:terraform/stacks/wifi:false:false"
@@ -254,6 +256,11 @@ jobs:
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
+            network-core-interfaces)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
             network-core-dhcp)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               ;;
@@ -352,6 +359,11 @@ jobs:
 
           case "${{ matrix.stack_name }}" in
             network-core)
+              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
+              nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
+              ;;
+            network-core-interfaces)
               nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
