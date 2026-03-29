@@ -37,6 +37,10 @@ fi
 # Let operators request an immediate reissue during manual workflow_dispatch
 # runs while leaving scheduled renewals idempotent by default.
 FORCE_RENEWAL="${FORCE_RENEWAL:-false}"
+RESULT_FILE="${MIKROTIK_CERTIFICATE_RESULT_FILE:-}"
+
+declare -a RENEWED_FQDNS=()
+declare -a SKIPPED_FQDNS=()
 
 require_command() {
   local command_name="$1"
@@ -152,6 +156,40 @@ strip_pem_blocks_from_output() {
     /-----END CERTIFICATE-----/   { suppress = 0; next }
     !suppress                     { print }
   '
+}
+
+join_by_comma() {
+  local joined_value=""
+  local item
+
+  for item in "$@"; do
+    if [[ -z "${joined_value}" ]]; then
+      joined_value="${item}"
+    else
+      joined_value="${joined_value},${item}"
+    fi
+  done
+
+  printf '%s' "${joined_value}"
+}
+
+write_result_file() {
+  local renewed_csv
+  local skipped_csv
+
+  [[ -n "${RESULT_FILE}" ]] || return 0
+
+  renewed_csv="$(join_by_comma "${RENEWED_FQDNS[@]}")"
+  skipped_csv="$(join_by_comma "${SKIPPED_FQDNS[@]}")"
+
+  # Emit a small machine-readable summary so the GitHub Actions workflow can
+  # decide whether a run renewed certificates without scraping human log lines.
+  cat > "${RESULT_FILE}" <<EOF
+renewed_count=${#RENEWED_FQDNS[@]}
+renewed_fqdns=${renewed_csv}
+skipped_count=${#SKIPPED_FQDNS[@]}
+skipped_fqdns=${skipped_csv}
+EOF
 }
 
 fetch_current_certificate() {
@@ -340,6 +378,7 @@ process_inventory_entry() {
   echo "Processing ${fqdn} on ${management_host}"
 
   if ! should_renew_current_certificate "${fqdn}" "${management_host}"; then
+    SKIPPED_FQDNS+=("${fqdn}")
     return 0
   fi
 
@@ -355,6 +394,7 @@ process_inventory_entry() {
   # Remove the temporary PKCS#12 bundle after RouterOS import so private key
   # material does not accumulate on the self-hosted runner between jobs.
   rm -f "${bundle_file}"
+  RENEWED_FQDNS+=("${fqdn}")
 }
 
 main() {
@@ -423,6 +463,8 @@ main() {
     echo "No inventory entries matched TARGET_FQDN=${TARGET_FQDN}" >&2
     exit 1
   fi
+
+  write_result_file
 }
 
 main "$@"

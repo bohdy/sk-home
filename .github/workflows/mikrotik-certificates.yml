@@ -33,7 +33,9 @@ on:
     paths:
       - ".github/workflows/mikrotik-certificates.yml"
       - "config/mikrotik-letsencrypt-targets.csv"
+      - "scripts/load-bitwarden-secrets.sh"
       - "scripts/mikrotik-renew-letsencrypt.sh"
+      - "scripts/send-telegram-message.sh"
   push:
     branches:
       - main
@@ -43,7 +45,9 @@ on:
     paths:
       - ".github/workflows/mikrotik-certificates.yml"
       - "config/mikrotik-letsencrypt-targets.csv"
+      - "scripts/load-bitwarden-secrets.sh"
       - "scripts/mikrotik-renew-letsencrypt.sh"
+      - "scripts/send-telegram-message.sh"
 
 jobs:
   validate:
@@ -65,6 +69,11 @@ jobs:
       # Catch shell syntax errors before a scheduled renewal run needs the script.
       - name: Validate renewal script syntax
         run: bash -n scripts/mikrotik-renew-letsencrypt.sh
+
+      # Keep the shared notification helper parseable before a failed renewal
+      # needs to rely on it for an outbound Telegram alert.
+      - name: Validate Telegram helper syntax
+        run: bash -n scripts/send-telegram-message.sh
 
       # Ensure the inventory keeps the expected CSV shape and does not lose the
       # required hostname or management IP columns.
@@ -96,6 +105,10 @@ jobs:
       # leaving scheduled and main-branch runs on the full desired-state set.
       TARGET_FQDN: ${{ github.event_name == 'workflow_dispatch' && inputs.target_device || 'all' }}
 
+      # Reuse one human-readable environment label in logs and notifications so
+      # outbound messages stay concise and avoid repeating GitHub expressions.
+      NOTIFICATION_ACME_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.acme_environment || 'production' }}
+
     steps:
       # Confirm the runner can reach the external dependencies needed for DNS-01
       # issuance and the internal RouterOS management endpoints.
@@ -103,10 +116,30 @@ jobs:
         run: |
           command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
           command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
+          command -v curl >/dev/null 2>&1 || { echo "Missing required tool: curl"; exit 1; }
           command -v openssl >/dev/null 2>&1 || { echo "Missing required tool: openssl"; exit 1; }
           command -v ssh >/dev/null 2>&1 || { echo "Missing required tool: ssh"; exit 1; }
           command -v scp >/dev/null 2>&1 || { echo "Missing required tool: scp"; exit 1; }
           command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+
+      # Check out the repository early so later steps can reuse committed
+      # helpers for both secret loading and Telegram notification delivery.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Load Cloudflare, MikroTik, and Telegram configuration from Bitwarden
+      # before the riskier network and certificate steps begin.
+      - name: Load Bitwarden secrets
+        id: load_bitwarden_secrets
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env mikrotik-certificates
+
+      # Fail closed when Telegram is not provisioned for this workflow so the
+      # new notification path cannot silently remain disabled in production.
+      - name: Validate Telegram notification settings
+        id: validate_telegram_settings
+        run: |
+          [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]] || { echo "Missing TELEGRAM_BOT_TOKEN in Bitwarden output."; exit 1; }
+          [[ -n "${TELEGRAM_CHAT_ID:-}" ]] || { echo "Missing TELEGRAM_CHAT_ID in Bitwarden output."; exit 1; }
 
       # Resolve acme.sh from the runner user's common install locations because
       # service-managed GitHub runners often start with a minimal PATH that does
@@ -128,16 +161,6 @@ jobs:
           ACME_DIR="$(dirname "${ACME_BIN}")"
           echo "PATH=${ACME_DIR}:${PATH}" >> "${GITHUB_ENV}"
           echo "Resolved acme.sh at ${ACME_BIN}"
-
-      # Check out the repository so the workflow can use the committed inventory,
-      # script, and documentation together.
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.2
-
-      # Load Cloudflare and MikroTik credentials from Bitwarden and materialize
-      # SSH files into the paths consumed by the renewal script.
-      - name: Load Bitwarden secrets
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env mikrotik-certificates
 
       # Verify the public Cloudflare API and the private MikroTik SSH endpoints
       # are reachable from the self-hosted runner before renewal work starts.
@@ -168,4 +191,54 @@ jobs:
       # Renew or reuse certificates as needed, then install them on each RouterOS
       # device declared in the committed inventory file.
       - name: Renew and deploy certificates
+        env:
+          MIKROTIK_CERTIFICATE_RESULT_FILE: ${{ runner.temp }}/mikrotik-certificate-results.env
         run: ./scripts/mikrotik-renew-letsencrypt.sh
+
+      # Convert the script's machine-readable result file into step outputs so
+      # later notification steps can branch without parsing human-oriented logs.
+      - name: Capture renewal results
+        id: renewal_results
+        shell: bash
+        run: |
+          set -euo pipefail
+          result_file="${RUNNER_TEMP}/mikrotik-certificate-results.env"
+
+          [[ -f "${result_file}" ]] || { echo "Missing renewal result file: ${result_file}"; exit 1; }
+          source "${result_file}"
+
+          {
+            echo "renewed_count=${renewed_count}"
+            echo "renewed_fqdns=${renewed_fqdns}"
+            echo "skipped_count=${skipped_count}"
+            echo "skipped_fqdns=${skipped_fqdns}"
+          } >> "${GITHUB_OUTPUT}"
+
+      # Notify Telegram only when the run actually renewed at least one device
+      # so the weekly schedule stays quiet on healthy no-op checks.
+      - name: Notify Telegram on renewed certificates
+        if: steps.renewal_results.outputs.renewed_count != '0'
+        env:
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat <<EOF | ./scripts/send-telegram-message.sh
+          MikroTik Certificates: renewed ${{ steps.renewal_results.outputs.renewed_count }} certificate(s)
+          Targets: ${{ steps.renewal_results.outputs.renewed_fqdns }}
+          ACME environment: ${NOTIFICATION_ACME_ENVIRONMENT}
+          Run: ${WORKFLOW_RUN_URL}
+          EOF
+
+      # Send a best-effort failure notification after secret loading succeeds so
+      # operational failures still page Telegram without hiding the root cause.
+      - name: Notify Telegram on workflow failure
+        if: failure() && steps.load_bitwarden_secrets.outcome == 'success' && steps.validate_telegram_settings.outcome == 'success'
+        continue-on-error: true
+        env:
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat <<EOF | ./scripts/send-telegram-message.sh
+          MikroTik Certificates: workflow failure
+          Target selector: ${TARGET_FQDN}
+          ACME environment: ${NOTIFICATION_ACME_ENVIRONMENT}
+          Run: ${WORKFLOW_RUN_URL}
+          EOF

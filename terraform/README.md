@@ -50,7 +50,7 @@ Bitwarden Secrets Manager is the source of truth for shared secret values in bot
 - Install `bws` on local machines and self-hosted GitHub runners.
 - Set `BWS_ACCESS_TOKEN` outside the repository on any machine that needs to load secrets.
 - Optionally set `BITWARDEN_PROJECT_ID` when the machine account can access more than one Bitwarden project and this repo should load only one scope.
-- Use [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh) to emit the exact environment variables expected by Terraform and the certificate automation.
+- Use [`load-bitwarden-secrets.sh`](/Users/bohdy/git/sk-home/scripts/load-bitwarden-secrets.sh) to emit the exact environment variables expected by Terraform, the certificate automation, and the Telegram notification workflows.
 
 Useful local commands:
 
@@ -87,9 +87,11 @@ Keep `terraform validate` and provider/backend-sensitive checks in GitHub Action
 - GitHub Actions detects changed Terraform stacks automatically, validates only the affected stacks on pull requests and branch pushes, and lets manual runs target one stack or all stacks.
 - Pushes to `main` run `terraform apply` only for changed stacks that have committed non-secret CI inputs and are explicitly marked CI-ready in the workflow. Today that includes `network-core`, `network-core/interfaces/gw`, `network-core/interfaces/switch-1pp`, `network-core/interfaces/switch-1np`, `network-core/dhcp`, and `network-core/routing`.
 - Manual workflow runs expose `action` and `stack` inputs so operators can choose validate-only runs or apply CI-ready stacks explicitly.
-- A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, keeps the Terraform CLI wrapper disabled so exit code `2` remains visible to the shell, uploads the plain-text plan when drift is found, and fails the run so the drift is visible in Actions.
+- A separate hourly `terraform-drift` workflow checks CI-ready stacks for drift with `terraform plan -detailed-exitcode`, keeps the Terraform CLI wrapper disabled so exit code `2` remains visible to the shell, uploads the plain-text plan when drift is found, sends a concise Telegram message for the affected stack, and fails the run so the drift is visible in Actions.
+- The drift workflow also sends a Telegram notification when the job fails for a non-drift reason after Bitwarden has loaded the Telegram settings.
 - When splitting existing resources into a new stack root, migrate or import the existing state before the first apply so the old root does not try to delete objects that moved into the new root.
 - Self-hosted GitHub runners must provide `bws` and `BWS_ACCESS_TOKEN` so the workflows can load Bitwarden secrets at runtime.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
-- Bitwarden should store `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `MIKROTIK_USERNAME`, `MIKROTIK_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `MIKROTIK_SSH_PRIVATE_KEY`, and `MIKROTIK_SSH_KNOWN_HOSTS` for this repo.
+- Bitwarden should store `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `MIKROTIK_USERNAME`, `MIKROTIK_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `MIKROTIK_SSH_PRIVATE_KEY`, `MIKROTIK_SSH_KNOWN_HOSTS`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` for this repo.
+- Bitwarden can also store `TELEGRAM_MESSAGE_THREAD_ID` when notifications should land in one Telegram forum topic instead of the chat root.
 - Update this README whenever the Terraform workflow or structure changes.

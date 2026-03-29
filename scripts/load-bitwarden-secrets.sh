@@ -172,6 +172,24 @@ emit_terraform_profile() {
   emit_value "AWS_SECRET_ACCESS_KEY" "${AWS_SECRET_ACCESS_KEY}"
   emit_value "TF_VAR_mikrotik_username" "${MIKROTIK_USERNAME}"
   emit_value "TF_VAR_mikrotik_password" "${MIKROTIK_PASSWORD}"
+  emit_optional_telegram_values
+}
+
+emit_optional_telegram_values() {
+  # Keep Telegram notification settings optional in the shared loader so local
+  # Terraform commands and unrelated workflows do not break before operators
+  # finish provisioning the new Bitwarden values.
+  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+    emit_value "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN}"
+  fi
+
+  if [[ -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+    emit_value "TELEGRAM_CHAT_ID" "${TELEGRAM_CHAT_ID}"
+  fi
+
+  if [[ -n "${TELEGRAM_MESSAGE_THREAD_ID:-}" ]]; then
+    emit_value "TELEGRAM_MESSAGE_THREAD_ID" "${TELEGRAM_MESSAGE_THREAD_ID}"
+  fi
 }
 
 emit_mikrotik_certificates_profile() {
@@ -200,6 +218,7 @@ emit_mikrotik_certificates_profile() {
   emit_value "MIKROTIK_SSH_USERNAME" "${MIKROTIK_USERNAME}"
   emit_value "MIKROTIK_SSH_PRIVATE_KEY_FILE" "${ssh_key_file}"
   emit_value "MIKROTIK_SSH_KNOWN_HOSTS_FILE" "${known_hosts_file}"
+  emit_optional_telegram_values
 }
 
 require_command "bws"
