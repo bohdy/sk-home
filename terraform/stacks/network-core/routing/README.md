@@ -44,6 +44,7 @@ Recommended sensitive input handling:
 - Define live BGP sessions through `bgp_connections`, including explicit `local`, `remote`, and `output` blocks so imported RouterOS state can converge without hidden provider defaults.
 - Define BGP routing policy through `routing_filter_rules` so export filters remain reviewable even though RouterOS filter rules are not named objects.
 - Blackhole routes currently use the committed `blackhole_gateway_placeholder` compatibility value because the provider still requires a gateway attribute even though RouterOS blackhole routes do not use a next hop.
+- Blackhole routes intentionally set `blackhole = false` in the resource blocks even when the desired route is a blackhole route. This is not a logic error. The RouterOS provider documents `blackhole` as a presence flag rather than a meaningful boolean, and local/CI plans showed perpetual drift when the configuration used the intuitive `blackhole = true` form.
 - Import pre-existing live BGP objects into this stack before the first apply that manages them so Terraform does not attempt to recreate active gateway routing state from scratch.
 
 ## Notes
@@ -51,5 +52,10 @@ Recommended sensitive input handling:
 - Routing in this repo is modeled only on the `GW` device unless a later change explicitly extends it elsewhere.
 - Treat `routing.auto.tfvars` as committed source-of-truth configuration for non-secret live routing values.
 - The current BGP scope in this stack is the live GW RouterOS BGP instance, templates, connections, and routing filter rules present at import time.
-- Validate one IPv4 and one IPv6 blackhole route against the current provider behavior before treating the blackhole compatibility placeholder as proven safe for unattended rollout.
+- The current blackhole workaround depends on provider behavior, not common Terraform boolean semantics:
+- RouterOS marks the route as blackhole when the `blackhole` argument is present in the request, regardless of whether the provider sends `true` or `false`.
+- The provider currently refreshes these routes back into Terraform state as `blackhole = false`.
+- Setting `blackhole = true` therefore causes repeated `false -> true` drift even after a successful apply.
+- Setting `blackhole = false` keeps the argument present in the request while matching the provider's readback value, which makes local plans and CI drift checks converge.
+- Do not simplify this back to `blackhole = true` unless the upstream `terraform-routeros/routeros` provider changes its route resource semantics and local `terraform plan` confirms the workaround is no longer needed.
 - Update this README when the routing data model, BGP scope, or nested stack layout changes.
