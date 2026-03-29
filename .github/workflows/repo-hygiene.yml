@@ -47,7 +47,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/normalize_markdown.py $(git ls-files '*README.md' 'AGENTS.md')
+          mapfile -t markdown_files < <(git ls-files '*README.md' 'AGENTS.md')
+          python3 scripts/normalize_markdown.py "${markdown_files[@]}"
 
       # Parse every tracked shell helper so syntax regressions fail before they
       # can hide inside unrelated infrastructure or documentation changes.
