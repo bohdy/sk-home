@@ -18,7 +18,7 @@ This root owns the gateway-specific interface concerns that should be planned an
 
 ## Local Configuration
 
-The shared non-secret gateway interface configuration is committed in `interfaces.auto.tfvars`, while the shared managed VLAN catalog lives in [`../../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml). Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
+The shared non-secret gateway interface configuration is committed in `interfaces.auto.tfvars`, while the shared managed VLAN catalog in [`../../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml) now owns VLAN IDs, RouterOS interface names, and canonical comments. Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -29,4 +29,4 @@ Recommended sensitive input handling:
 ## Rollout Notes
 
 - This root manages objects that already exist on the live gateway. Import the existing bridge, bridge ports, bridge VLANs, VLAN interfaces, and `sit1` before the first apply.
-- Keep gateway bridge port VLAN membership and `device_vlans` overrides synchronized in the same change whenever a port role changes.
+- Keep gateway bridge port VLAN membership and `device_vlans` interface ownership synchronized in the same change whenever a port role changes.

@@ -119,32 +119,23 @@ bridge_ports = {
 }
 
 # Keep per-device VLAN behavior explicit so bridge comments and gateway-owned
-# VLAN interfaces remain reviewable without redefining shared VLAN IDs.
+# VLAN interfaces remain reviewable without redefining shared VLAN IDs or
+# canonical comments.
 device_vlans = {
   users = {
-    bridge_vlan_comment    = "VLAN Users"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN Users"
+    create_vlan_interface = true
   }
   servers = {
-    bridge_vlan_comment    = "VLAN Servers"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN Servers"
+    create_vlan_interface = true
   }
   management = {
-    bridge_vlan_comment    = "VLAN Management"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN Management"
+    create_vlan_interface = true
   }
   cameras = {
-    bridge_vlan_comment    = "VLAN Cameras"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN Cameras"
+    create_vlan_interface = true
   }
   aps = {
-    bridge_vlan_comment    = "VLAN APs"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN APs"
+    create_vlan_interface = true
   }
 }
 

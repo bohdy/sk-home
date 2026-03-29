@@ -96,17 +96,15 @@ variable "bridge_ports" {
 }
 
 # Keep per-device VLAN behavior separate from the shared VLAN catalog so the
-# switch can choose local comments and interface ownership without redefining
-# shared VLAN IDs.
+# switch can choose interface ownership without redefining shared VLAN IDs or
+# canonical comments.
 variable "device_vlans" {
   description = "Switch 1PP VLAN behavior keyed by the shared VLAN catalog key."
   type = map(object({
-    bridge_vlan_comment    = optional(string)
-    create_vlan_interface  = optional(bool, false)
-    vlan_interface_comment = optional(string)
-    vlan_interface_parent  = optional(string)
-    vlan_interface_mtu     = optional(string)
-    disabled               = optional(bool, false)
+    create_vlan_interface = optional(bool, false)
+    vlan_interface_parent = optional(string)
+    vlan_interface_mtu    = optional(string)
+    disabled              = optional(bool, false)
   }))
   default = {}
 }

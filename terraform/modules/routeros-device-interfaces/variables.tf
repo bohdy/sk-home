@@ -82,6 +82,7 @@ variable "vlan_catalog" {
   type = map(object({
     vlan_id        = number
     interface_name = string
+    comment        = string
   }))
   default = {}
 }
@@ -103,17 +104,15 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Keep per-device VLAN behavior separate from the shared catalog so local
-# comments and interface ownership can differ without redefining VLAN IDs.
+# Keep per-device VLAN behavior separate from the shared catalog so interface
+# ownership can differ without redefining VLAN IDs or canonical comments.
 variable "device_vlans" {
   description = "Per-device VLAN behavior keyed by shared VLAN catalog key."
   type = map(object({
-    bridge_vlan_comment    = optional(string)
-    create_vlan_interface  = optional(bool, false)
-    vlan_interface_comment = optional(string)
-    vlan_interface_parent  = optional(string)
-    vlan_interface_mtu     = optional(string)
-    disabled               = optional(bool, false)
+    create_vlan_interface = optional(bool, false)
+    vlan_interface_parent = optional(string)
+    vlan_interface_mtu    = optional(string)
+    disabled              = optional(bool, false)
   }))
   default = {}
 }

@@ -4,15 +4,20 @@ vlans:
   users:
     vlan_id: 10
     interface_name: vlan10
+    comment: VLAN Users
   servers:
     vlan_id: 20
     interface_name: vlan20
+    comment: VLAN Servers
   management:
     vlan_id: 100
     interface_name: vlan100
+    comment: VLAN Management
   cameras:
     vlan_id: 101
     interface_name: vlan101
+    comment: VLAN Cameras
   aps:
     vlan_id: 102
     interface_name: vlan102
+    comment: VLAN APs

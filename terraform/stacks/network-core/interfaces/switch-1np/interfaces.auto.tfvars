@@ -89,20 +89,14 @@ bridge_ports = {
   }
 }
 
-# Keep per-device VLAN behavior explicit so bridge comments and switch-owned
-# VLAN interfaces remain reviewable without redefining shared VLAN IDs.
+# Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
+# reviewable without redefining shared VLAN IDs or canonical comments.
 device_vlans = {
   management = {
-    bridge_vlan_comment    = "MGMT"
-    create_vlan_interface  = true
-    vlan_interface_comment = "100"
+    create_vlan_interface = true
   }
-  users = {
-    bridge_vlan_comment = "LAN"
-  }
+  users = {}
   aps = {
-    bridge_vlan_comment    = "AP MGMT"
-    create_vlan_interface  = true
-    vlan_interface_comment = "VLAN102 AP MGMT"
+    create_vlan_interface = true
   }
 }

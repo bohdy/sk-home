@@ -81,7 +81,7 @@ locals {
     for vlan_key in sort(tolist(local.explicit_vlan_keys)) :
     vlan_key => {
       name     = vlan_key
-      comment  = try(var.device_vlans[vlan_key].bridge_vlan_comment, null)
+      comment  = local.vlan_catalog[vlan_key].comment
       vlan_ids = toset([tostring(local.vlan_catalog[vlan_key].vlan_id)])
       tagged = toset(concat(
         local.bridge_name == null ? [] : [local.bridge_name],
@@ -107,7 +107,7 @@ locals {
       interface = try(vlan.vlan_interface_parent, local.bridge_name)
       vlan_id   = local.vlan_catalog[vlan_key].vlan_id
       mtu       = try(vlan.vlan_interface_mtu, null)
-      comment   = try(vlan.vlan_interface_comment, null)
+      comment   = local.vlan_catalog[vlan_key].comment
       disabled  = try(vlan.disabled, false)
     } if try(vlan.create_vlan_interface, false)
   }
