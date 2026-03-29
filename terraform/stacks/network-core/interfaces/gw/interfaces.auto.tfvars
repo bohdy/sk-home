@@ -118,8 +118,8 @@ bridge_ports = {
   }
 }
 
-# Keep outage-sensitive bridge VLAN rows explicit so only the selected staged
-# VLAN migration can change the live bridge VLAN table.
+# Keep only the remaining outage-sensitive bridge VLAN rows explicit while the
+# approved staged VLAN migrations move into derived bridge VLAN rows.
 bridge_vlans = {
   vlan10 = {
     comment  = "VLAN Users"
@@ -133,23 +133,11 @@ bridge_vlans = {
     tagged   = ["bridge", "ether4"]
     untagged = []
   }
-  vlan100 = {
-    comment  = "VLAN Management"
-    vlan_ids = ["100"]
-    tagged   = ["bridge", "ether1", "sfp-sfpplus1"]
-    untagged = ["ether3", "ether4"]
-  }
-  vlan102 = {
-    comment  = "VLAN APs"
-    vlan_ids = ["102"]
-    tagged   = ["bridge", "ether1", "sfp-sfpplus1"]
-    untagged = ["ether6"]
-  }
 }
 
-# Derive only the low-blast-radius camera bridge VLAN row from the shared
-# catalog during this staged migration.
-derived_bridge_vlan_keys = ["cameras"]
+# Derive the approved bridge VLAN rows from the shared catalog while the rest
+# remain explicitly authored for safer staged convergence.
+derived_bridge_vlan_keys = ["management", "cameras", "aps"]
 
 # Keep per-device VLAN behavior explicit so bridge comments and gateway-owned
 # VLAN interfaces remain reviewable without redefining shared VLAN IDs or

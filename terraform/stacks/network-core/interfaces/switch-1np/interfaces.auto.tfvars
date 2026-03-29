@@ -55,7 +55,7 @@ bridge_ports = {
   ether2 = {
     comment           = "defconf"
     pvid_vlan         = "users"
-    untagged_vlans    = ["management"]
+    untagged_vlans    = ["users"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -89,32 +89,20 @@ bridge_ports = {
   }
 }
 
-# Keep outage-sensitive bridge VLAN rows explicit so the live bridge VLAN table
-# stays unchanged while other non-disruptive convergence work lands.
+# Keep only the remaining outage-sensitive bridge VLAN rows explicit while the
+# approved staged VLAN migrations move into derived bridge VLAN rows.
 bridge_vlans = {
-  vlan100 = {
-    comment  = "MGMT"
-    vlan_ids = ["100"]
-    tagged   = ["bridge", "ether1"]
-    untagged = ["ether2", "ether5"]
-  }
   vlan10 = {
     comment  = "LAN"
     vlan_ids = ["10"]
     tagged   = ["bridge", "ether1", "ether5"]
-    untagged = ["ether3", "ether4"]
-  }
-  vlan102 = {
-    comment  = "AP MGMT"
-    vlan_ids = ["102"]
-    tagged   = ["bridge", "ether1"]
-    untagged = ["ether5"]
+    untagged = ["ether2", "ether3", "ether4"]
   }
 }
 
-# This device has no camera bridge VLAN row to stage, so keep bridge VLAN rows
-# fully explicit for now.
-derived_bridge_vlan_keys = []
+# Derive the approved bridge VLAN rows from the shared catalog while the rest
+# remain explicitly authored for safer staged convergence.
+derived_bridge_vlan_keys = ["management", "aps"]
 
 # Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
 # reviewable without redefining shared VLAN IDs or canonical comments.
