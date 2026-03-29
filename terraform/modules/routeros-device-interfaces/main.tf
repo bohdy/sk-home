@@ -79,10 +79,11 @@ locals {
   # membership lists so tagged and untagged forwarding stays synchronized.
   bridge_vlan_inventory = {
     for vlan_key in sort(tolist(local.explicit_vlan_keys)) :
-    vlan_key => {
-      name     = vlan_key
-      comment  = local.vlan_catalog[vlan_key].comment
-      vlan_ids = toset([tostring(local.vlan_catalog[vlan_key].vlan_id)])
+    local.vlan_catalog[vlan_key].interface_name => {
+      catalog_key = vlan_key
+      name        = local.vlan_catalog[vlan_key].interface_name
+      comment     = local.vlan_catalog[vlan_key].comment
+      vlan_ids    = toset([tostring(local.vlan_catalog[vlan_key].vlan_id)])
       tagged = toset(concat(
         local.bridge_name == null ? [] : [local.bridge_name],
         [
@@ -111,6 +112,33 @@ locals {
       disabled  = try(vlan.disabled, false)
     } if try(vlan.create_vlan_interface, false)
   }
+}
+
+# Preserve the pre-refactor bridge VLAN instance addresses so the shared
+# catalog migration does not force bridge VLAN destroy/create operations.
+moved {
+  from = routeros_interface_bridge_vlan.this["users"]
+  to   = routeros_interface_bridge_vlan.this["vlan10"]
+}
+
+moved {
+  from = routeros_interface_bridge_vlan.this["servers"]
+  to   = routeros_interface_bridge_vlan.this["vlan20"]
+}
+
+moved {
+  from = routeros_interface_bridge_vlan.this["management"]
+  to   = routeros_interface_bridge_vlan.this["vlan100"]
+}
+
+moved {
+  from = routeros_interface_bridge_vlan.this["cameras"]
+  to   = routeros_interface_bridge_vlan.this["vlan101"]
+}
+
+moved {
+  from = routeros_interface_bridge_vlan.this["aps"]
+  to   = routeros_interface_bridge_vlan.this["vlan102"]
 }
 
 # Manage physical interface comments through update-only resources so Terraform
