@@ -8,16 +8,26 @@ on:
     # Prague-local run time shifts by one hour when daylight saving changes.
     - cron: "17 6,18 * * *"
 
+# Cancel obsolete drift runs for the same ref so a slow or stuck schedule does
+# not leave the self-hosted runner busy with stale read-only work.
+concurrency:
+  group: terraform-drift-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   drift:
     name: Drift check ${{ matrix.stack }}
     runs-on: self-hosted
+    timeout-minutes: 45
     env:
       # Keep the stable backend region in workflow config because it is a
       # non-secret compatibility value rather than credential material.
       AWS_REGION: auto
     strategy:
       fail-fast: false
+      # Keep the coverage unchanged while limiting parallel plans so the
+      # self-hosted runner does not absorb all six stacks at once.
+      max-parallel: 2
       matrix:
         include:
           # Keep the twice-daily drift workflow limited to stacks that have
@@ -44,23 +54,27 @@ jobs:
       # Check out the repository before loading secrets so the shared helper can
       # be reused by local runs and all CI workflows without duplication.
       - name: Checkout repository
+        timeout-minutes: 5
         uses: actions/checkout@v6.0.2
 
       # Fail fast on self-hosted runners that are missing the tools required by
       # JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws curl git node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         id: load_bitwarden_secrets
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Require Telegram settings in this workflow so drift and failure events
       # do not silently disappear after the feature is introduced.
       - name: Validate Telegram notification settings
         id: validate_telegram_settings
+        timeout-minutes: 5
         run: |
           [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]] || { echo "Missing TELEGRAM_BOT_TOKEN in Bitwarden output."; exit 1; }
           [[ -n "${TELEGRAM_CHAT_ID:-}" ]] || { echo "Missing TELEGRAM_CHAT_ID in Bitwarden output."; exit 1; }
@@ -68,6 +82,7 @@ jobs:
       # Verify that the runner can reach the remote state backend and the
       # RouterOS control plane before Terraform tries to read live state.
       - name: Preflight network access
+        timeout-minutes: 5
         shell: bash
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
@@ -99,14 +114,28 @@ jobs:
       # on Terraform's native detailed exit codes to distinguish clean runs
       # from real drift, and the wrapper can mask that signal.
       - name: Setup Terraform
+        timeout-minutes: 5
         uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: 1.14.8
           terraform_wrapper: false
 
+      # Reuse provider downloads across drift runs on the persistent runner so
+      # repeated init steps spend less time fetching identical plugins.
+      - name: Prepare Terraform plugin cache
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          mkdir -p "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
+
       # Reinitialize the backend so the drift check uses the same remote state
       # configuration as interactive Terraform runs.
       - name: Terraform init
+        timeout-minutes: 10
         run: terraform init -reconfigure
 
       # Use Terraform's detailed exit codes so the workflow can distinguish
@@ -115,6 +144,7 @@ jobs:
       # on concurrent applies or manual maintenance operations.
       - name: Terraform drift plan
         id: drift_plan
+        timeout-minutes: 20
         shell: bash
         run: |
           set +e
@@ -139,6 +169,7 @@ jobs:
       # the detected difference directly from the Actions artifact.
       - name: Render drift plan
         if: steps.drift_plan.outputs.drift_detected == 'true'
+        timeout-minutes: 5
         run: terraform show -no-color tfplan > tfplan.txt
 
       # Publish the human-readable drift plan as a short-lived artifact before
@@ -146,6 +177,7 @@ jobs:
       # red.
       - name: Upload drift artifact
         if: steps.drift_plan.outputs.drift_detected == 'true'
+        timeout-minutes: 5
         uses: actions/upload-artifact@v7
         with:
           name: terraform-drift-${{ matrix.stack_name }}
@@ -156,6 +188,7 @@ jobs:
       # actionable message with the affected stack and a direct run link.
       - name: Notify Telegram on drift
         if: steps.drift_plan.outputs.drift_detected == 'true'
+        timeout-minutes: 5
         env:
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -170,6 +203,7 @@ jobs:
       # workflow status page and scheduled run history.
       - name: Fail when drift is detected
         if: steps.drift_plan.outputs.drift_detected == 'true'
+        timeout-minutes: 5
         run: |
           echo "Terraform drift detected for ${{ matrix.stack_name }}."
           exit 1
@@ -179,6 +213,7 @@ jobs:
       - name: Notify Telegram on workflow failure
         if: failure() && steps.load_bitwarden_secrets.outcome == 'success' && steps.validate_telegram_settings.outcome == 'success' && steps.drift_plan.outputs.drift_detected != 'true'
         continue-on-error: true
+        timeout-minutes: 5
         env:
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
