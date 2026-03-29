@@ -318,13 +318,14 @@ jobs:
         if: matrix.enable_plan
         run: terraform show -no-color tfplan > tfplan.txt
 
-      # Publish the plan text as a workflow artifact for later review.
+      # Publish the plan text as a short-lived workflow artifact for review.
       - name: Upload Terraform plan artifact
         if: matrix.enable_plan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-${{ matrix.stack_name }}
           path: ${{ matrix.stack }}/tfplan.txt
+          retention-days: 1
 
   apply:
     name: Apply ${{ matrix.stack }}
