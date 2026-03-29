@@ -80,14 +80,14 @@ jobs:
             "network-core-interfaces-switch-1np:terraform/stacks/network-core/interfaces/switch-1np:true:true"
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
-            "cluster-core:terraform/stacks/cluster-core:false:false"
-            "dns-blocky:terraform/stacks/dns-blocky:false:false"
-            "apps-unifi:terraform/stacks/apps-unifi:false:false"
-            "observability:terraform/stacks/observability:false:false"
-            "platform-proxmox:terraform/stacks/platform-proxmox:false:false"
+            "cluster-core:terraform/stacks/cluster-core:true:false"
+            "dns-blocky:terraform/stacks/dns-blocky:true:false"
+            "apps-unifi:terraform/stacks/apps-unifi:true:false"
+            "observability:terraform/stacks/observability:true:false"
+            "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
             "wifi:terraform/stacks/wifi:false:false"
-            "identity-edge:terraform/stacks/identity-edge:false:false"
-            "overlay:terraform/stacks/overlay:false:false"
+            "identity-edge:terraform/stacks/identity-edge:true:false"
+            "overlay:terraform/stacks/overlay:true:false"
           )
 
           workflow_changed="false"
@@ -253,12 +253,77 @@ jobs:
       # Fail fast on self-hosted runners that are missing basic tooling required
       # by JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+
+      # Some imported stacks still preserve sensitive live inputs in Kubernetes
+      # rather than Bitwarden. Hydrate only the values needed for read-only
+      # plans and mask them before Terraform sees the environment.
+      - name: Hydrate imported stack plan secrets
+        if: matrix.stack_name == 'identity-edge' || matrix.stack_name == 'overlay' || matrix.stack_name == 'observability' || matrix.stack_name == 'apps-unifi'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TF_VAR_kubeconfig_path:-}" ]]; then
+            echo "TF_VAR_kubeconfig_path is required to hydrate imported stack secrets." >&2
+            exit 1
+          fi
+
+          write_secret_env() {
+            local key="$1"
+            local value="$2"
+
+            printf '::add-mask::%s\n' "${value}"
+
+            {
+              printf '%s<<__STACK_SECRET_EOF__\n' "${key}"
+              printf '%s\n' "${value}"
+              printf '__STACK_SECRET_EOF__\n'
+            } >> "${GITHUB_ENV}"
+          }
+
+          case "${{ matrix.stack_name }}" in
+            identity-edge)
+              tunnel_secret_b64="$(
+                kubectl --kubeconfig "${TF_VAR_kubeconfig_path}" -n networking get secret tunnel-token -o jsonpath='{.data.token}' \
+                | base64 -d \
+                | base64 -d \
+                | node -e 'const fs = require("fs"); const input = fs.readFileSync(0, "utf8").trim(); process.stdout.write(JSON.parse(input).s);'
+              )"
+              write_secret_env "TF_VAR_tunnel_secret_b64" "${tunnel_secret_b64}"
+              ;;
+            overlay)
+              tailscale_authkey="$(
+                kubectl --kubeconfig "${TF_VAR_kubeconfig_path}" -n infra-tailscale get secret tailscale-auth -o jsonpath='{.data.TS_AUTHKEY}' \
+                | base64 -d
+              )"
+              write_secret_env "TF_VAR_tailscale_authkey" "${tailscale_authkey}"
+              ;;
+            observability)
+              unpoller_username="$(
+                kubectl --kubeconfig "${TF_VAR_kubeconfig_path}" -n monitoring get secret unpoller -o jsonpath='{.data.UP_UNIFI_DEFAULT_USER}' \
+                | base64 -d
+              )"
+              unpoller_password="$(
+                kubectl --kubeconfig "${TF_VAR_kubeconfig_path}" -n monitoring get secret unpoller -o jsonpath='{.data.UP_UNIFI_DEFAULT_PASS}' \
+                | base64 -d
+              )"
+              write_secret_env "TF_VAR_unpoller_username" "${unpoller_username}"
+              write_secret_env "TF_VAR_unpoller_password" "${unpoller_password}"
+              ;;
+            apps-unifi)
+              mongo_root_password="$(
+                kubectl --kubeconfig "${TF_VAR_kubeconfig_path}" -n unifi get secret unifi-mongo-secret-289546e9 -o jsonpath='{.data.mongo-root-password}' \
+                | base64 -d
+              )"
+              write_secret_env "TF_VAR_mongo_root_password" "${mongo_root_password}"
+              ;;
+          esac
 
       # Verify that the runner can reach the remote state backend for every
       # stack and the RouterOS control plane when the network-core stack runs.

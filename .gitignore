@@ -24,6 +24,13 @@ crash.*.log
 !terraform/stacks/network-core/interfaces/gw/interfaces.auto.tfvars
 !terraform/stacks/network-core/interfaces/switch-1pp/interfaces.auto.tfvars
 !terraform/stacks/network-core/interfaces/switch-1np/interfaces.auto.tfvars
+!terraform/stacks/identity-edge/identity-edge.auto.tfvars
+!terraform/stacks/overlay/overlay.auto.tfvars
+!terraform/stacks/cluster-core/cluster-core.auto.tfvars
+!terraform/stacks/dns-blocky/dns-blocky.auto.tfvars
+!terraform/stacks/observability/observability.auto.tfvars
+!terraform/stacks/apps-unifi/apps-unifi.auto.tfvars
+!terraform/stacks/platform-proxmox/platform-proxmox.auto.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
