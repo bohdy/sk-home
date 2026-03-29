@@ -202,6 +202,7 @@ jobs:
           result_file="${RUNNER_TEMP}/mikrotik-certificate-results.env"
 
           [[ -f "${result_file}" ]] || { echo "Missing renewal result file: ${result_file}"; exit 1; }
+          # shellcheck disable=SC1090
           source "${result_file}"
 
           {

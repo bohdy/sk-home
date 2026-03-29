@@ -1,3 +1,5 @@
+# Publish the stable Blocky service metadata that operators or sibling stacks
+# may need without exposing secret or runtime-only values.
 output "namespace_name" {
   description = "Namespace that owns the Blocky workload."
   value       = kubernetes_namespace_v1.blocky.metadata[0].name

@@ -69,6 +69,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## Verification
 
 - Verify the changed files after editing them.
+- When changing tracked Markdown, shell scripts, or GitHub Actions workflows, verify the matching repo-hygiene checks still pass or explicitly call out why they could not be run locally.
 - For any change that touches credentials, authentication, CI injection, or secret-management paths, explicitly verify that secrets are not exposed in logs or other observable outputs.
 - Summarize what was validated when reporting completed work.
 - Call out any verification gaps or follow-up automation that would improve enforcement.

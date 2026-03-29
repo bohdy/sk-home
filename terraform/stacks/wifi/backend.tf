@@ -1,5 +1,5 @@
-# Commit the full non-secret backend shape for this stack and keep only R2
-# credentials external to the repository.
+# Commit the full non-secret backend shape for the reserved wifi root and keep
+# only R2 credentials external to the repository.
 terraform {
   backend "s3" {
     bucket = "sk-home"

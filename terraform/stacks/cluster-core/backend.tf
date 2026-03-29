@@ -1,3 +1,5 @@
+# Commit the full non-secret backend shape for the shared cluster foundation
+# stack and keep only remote-state credentials external.
 terraform {
   backend "s3" {
     bucket = "sk-home"

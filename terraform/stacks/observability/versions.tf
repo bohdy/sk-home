@@ -1,3 +1,5 @@
+# Pin the Terraform and provider baselines for the observability stack so Helm
+# and Kubernetes behavior stays reproducible across environments.
 terraform {
   required_version = "~> 1.14.8"
 

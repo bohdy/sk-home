@@ -1,3 +1,6 @@
+# Keep the migrated Proxmox platform inputs explicit here so the stack can
+# bridge imported secrets and live infrastructure defaults without hardcoding
+# them directly inside VM or snippet resources.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string

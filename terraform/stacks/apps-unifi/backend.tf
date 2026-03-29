@@ -1,3 +1,5 @@
+# Commit the full non-secret backend shape for the UniFi application stack and
+# keep only R2 credentials outside version control.
 terraform {
   backend "s3" {
     bucket = "sk-home"

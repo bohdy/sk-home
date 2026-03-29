@@ -1,3 +1,5 @@
+# Manage the migrated Blocky DNS workload in one root so service exposure,
+# storage, rendered config, and pod rollout behavior stay aligned.
 locals {
   blocky_config_yaml = file("${path.module}/config.yaml")
   blocky_config_hash = sha256(local.blocky_config_yaml)

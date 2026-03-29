@@ -1,3 +1,6 @@
+# Keep the imported Blocky stack inputs centralized here so the live DNS
+# workload configuration remains reviewable and shared desired state stays out
+# of ad hoc resource literals.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string

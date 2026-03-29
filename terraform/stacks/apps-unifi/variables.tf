@@ -1,3 +1,5 @@
+# Keep the imported UniFi stack inputs explicit so Terraform can adopt the live
+# resources without reintroducing Pulumi-era secrets into committed files.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string

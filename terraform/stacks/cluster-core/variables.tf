@@ -1,3 +1,5 @@
+# Describe the adopted cluster-core inputs explicitly so the shared platform
+# stack stays reviewable and does not hide live defaults in resource bodies.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string

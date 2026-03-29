@@ -1,3 +1,5 @@
+# Commit the full non-secret backend shape for the observability stack and keep
+# only remote-state credentials external to the repository.
 terraform {
   backend "s3" {
     bucket = "sk-home"

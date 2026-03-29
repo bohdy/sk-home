@@ -1,3 +1,5 @@
+# Publish the stable observability endpoints and metadata that other stacks or
+# operators may reference after the migration completes.
 output "victoria_metrics_external_ip" {
   description = "Existing MetalLB IP preserved for external VictoriaMetrics ingestion."
   value       = var.victoria_metrics_external_ip
