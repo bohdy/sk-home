@@ -81,9 +81,13 @@ resource "routeros_ip_route" "static_route" {
 
   for_each = local.ipv4_static_routes
 
-  dst_address   = each.value.dst_address
-  gateway       = each.value.blackhole ? var.blackhole_gateway_placeholder : ""
-  blackhole     = each.value.blackhole
+  dst_address = each.value.dst_address
+  gateway     = each.value.blackhole ? var.blackhole_gateway_placeholder : ""
+  # RouterOS treats blackhole as a presence flag rather than a meaningful
+  # true/false value, and the provider currently refreshes these routes back as
+  # false. Keep the argument present for blackhole routes while matching the
+  # provider's readback value to avoid perpetual drift.
+  blackhole     = each.value.blackhole ? false : null
   routing_table = each.value.routing_table
   distance      = each.value.distance
   disabled      = each.value.disabled
@@ -97,9 +101,11 @@ resource "routeros_ipv6_route" "static_route" {
 
   for_each = local.ipv6_static_routes
 
-  dst_address   = each.value.dst_address
-  gateway       = each.value.blackhole ? var.blackhole_gateway_placeholder : ""
-  blackhole     = each.value.blackhole
+  dst_address = each.value.dst_address
+  gateway     = each.value.blackhole ? var.blackhole_gateway_placeholder : ""
+  # Keep IPv6 blackhole handling aligned with the IPv4 workaround above so the
+  # provider still emits the attribute while local plans stay convergent.
+  blackhole     = each.value.blackhole ? false : null
   routing_table = each.value.routing_table
   distance      = each.value.distance
   disabled      = each.value.disabled
