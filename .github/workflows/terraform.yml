@@ -235,15 +235,15 @@ jobs:
         working-directory: ${{ matrix.stack }}
 
     steps:
-      # Fail fast on self-hosted runners that are missing basic tooling required
-      # by JavaScript-based GitHub Actions and Terraform setup.
-      - name: Preflight runner tools
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
-
       # Check out the repository before loading secrets so the shared helper can
       # be reused by local runs and all CI workflows without duplication.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+
+      # Fail fast on self-hosted runners that are missing basic tooling required
+      # by JavaScript-based GitHub Actions and Terraform setup.
+      - name: Preflight runner tools
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
@@ -340,15 +340,15 @@ jobs:
         working-directory: ${{ matrix.stack }}
 
     steps:
-      # Fail fast on self-hosted runners that are missing the tooling required
-      # to execute Terraform applies consistently.
-      - name: Preflight runner tools
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
-
       # Check out the repository before loading secrets so the shared helper can
       # be reused by local runs and all CI workflows without duplication.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+
+      # Fail fast on self-hosted runners that are missing the tooling required
+      # to execute Terraform applies consistently.
+      - name: Preflight runner tools
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
