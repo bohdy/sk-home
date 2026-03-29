@@ -118,8 +118,10 @@ locals {
   vlan_interface_inventory = {
     for vlan_key, vlan in var.device_vlans :
     local.vlan_catalog[vlan_key].interface_name => {
-      name      = local.vlan_catalog[vlan_key].interface_name
-      interface = try(vlan.vlan_interface_parent, local.bridge_name)
+      name = local.vlan_catalog[vlan_key].interface_name
+      # Optional object attributes evaluate to null when unset, so coalesce
+      # must handle the bridge fallback instead of try.
+      interface = coalesce(try(vlan.vlan_interface_parent, null), local.bridge_name)
       vlan_id   = local.vlan_catalog[vlan_key].vlan_id
       mtu       = try(vlan.vlan_interface_mtu, null)
       comment   = local.vlan_catalog[vlan_key].comment
