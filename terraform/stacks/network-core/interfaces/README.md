@@ -25,7 +25,7 @@ The three per-device roots reuse the shared module in [`terraform/modules/router
 
 ## Local Configuration
 
-Each per-device root commits its own non-secret `interfaces.auto.tfvars` file for port behavior and VLAN-interface ownership, while the shared managed VLAN catalog in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml) owns VLAN IDs, RouterOS interface names, and canonical comments. Use the root-specific `terraform.tfvars.example` files only for local-only overrides or temporary inputs that should not become shared desired state.
+Each per-device root commits its own non-secret `interfaces.auto.tfvars` file for port behavior and VLAN-interface ownership, while the shared managed VLAN catalog in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml) owns VLAN IDs, RouterOS interface names, and canonical comments. The catalog slugs are the operator-facing identifiers, while the legacy `vlanNNN` bridge-VLAN Terraform addresses remain an internal implementation detail so plans stay non-destructive. Use the root-specific `terraform.tfvars.example` files only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -40,5 +40,5 @@ Recommended sensitive input handling:
 - The per-device roots are now CI-ready for validate, apply, and scheduled drift checks because their existing live objects have already been imported into the matching remote states.
 - If future work adds pre-existing live RouterOS objects that are not yet in state, import them into the matching per-device root before the first apply that manages them.
 - The per-device split is intentionally more import-friendly than the old shared interfaces root because each state now mirrors one actual device.
-- Keep shared VLAN IDs, RouterOS VLAN interface names, and canonical comments in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml), and keep per-device tagged or untagged port membership only in the matching root.
+- Keep shared VLAN IDs, RouterOS VLAN interface names, and canonical comments in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml), keep per-device tagged or untagged port membership only in the matching root, and treat the legacy `vlanNNN` bridge-VLAN state addresses as an internal compatibility layer rather than operator-facing config.
 - Treat each root's `interfaces.auto.tfvars` file as committed source-of-truth configuration for non-secret live interface values.

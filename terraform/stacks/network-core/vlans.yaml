@@ -1,5 +1,7 @@
 # Keep the shared managed VLAN catalog outside the per-device Terraform roots
 # so gateway, switches, and DHCP all reuse one committed VLAN identity source.
+# The slug keys stay operator-facing, while `interface_name` preserves the
+# hidden legacy Terraform bridge-VLAN instance addresses.
 vlans:
   users:
     vlan_id: 10

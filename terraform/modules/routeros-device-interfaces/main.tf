@@ -76,7 +76,9 @@ locals {
   ))
 
   # Derive bridge VLAN records from the shared VLAN catalog and explicit port
-  # membership lists so tagged and untagged forwarding stays synchronized.
+  # membership lists so tagged and untagged forwarding stays synchronized while
+  # the legacy `vlanNNN` state addresses remain stable behind the slug-based
+  # catalog keys.
   bridge_vlan_inventory = {
     for vlan_key in sort(tolist(local.explicit_vlan_keys)) :
     local.vlan_catalog[vlan_key].interface_name => {
