@@ -1,3 +1,5 @@
+# Expose only the non-secret UniFi access points that sibling stacks or
+# operators may need after this stack converges.
 output "web_url" {
   description = "Public URL preserved for the UniFi GUI."
   value       = "https://${var.domain}"

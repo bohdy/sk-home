@@ -1,3 +1,5 @@
+# Manage the Cloudflare entrypoint and the in-cluster UniFi application objects
+# together so the external hostname and adopted workload stay in sync.
 resource "cloudflare_dns_record" "unifi" {
   zone_id = var.cloudflare_zone_id
   name    = "unifi"

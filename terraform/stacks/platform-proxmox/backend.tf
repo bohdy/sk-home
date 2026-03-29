@@ -1,3 +1,5 @@
+# Commit the full non-secret backend shape for the Proxmox platform stack and
+# keep only remote-state credentials outside version control.
 terraform {
   backend "s3" {
     bucket = "sk-home"

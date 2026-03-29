@@ -1,3 +1,5 @@
+# Publish the stable Proxmox platform outputs that other stacks or operators
+# may need without leaking secret-bearing runtime inputs.
 output "stack_context" {
   description = "Resolved root-module context for the Proxmox platform stack."
   value = {

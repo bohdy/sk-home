@@ -1,3 +1,5 @@
+# Publish the stable cluster-core outputs that downstream application stacks
+# use for issuer names, storage defaults, and stack context.
 output "storage_class_name" {
   description = "Default storage class name preserved from the old Pulumi stack."
   value       = var.storage_class_name

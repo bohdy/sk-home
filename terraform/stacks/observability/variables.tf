@@ -1,3 +1,5 @@
+# Keep the observability stack inputs centralized here so imported dashboard,
+# ingress, and Helm-release behavior remains explicit and reviewable.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string

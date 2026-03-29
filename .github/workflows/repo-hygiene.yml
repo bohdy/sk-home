@@ -1,0 +1,63 @@
+name: Repo Hygiene
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/*.yml"
+      - "AGENTS.md"
+      - "README.md"
+      - "terraform/**/*.md"
+      - "scripts/*.sh"
+      - "scripts/normalize_markdown.py"
+  push:
+    branches:
+      - main
+      - "chore/**"
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - ".github/workflows/*.yml"
+      - "AGENTS.md"
+      - "README.md"
+      - "terraform/**/*.md"
+      - "scripts/*.sh"
+      - "scripts/normalize_markdown.py"
+
+jobs:
+  validate:
+    name: Validate repo hygiene
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out tracked docs, workflows, and scripts so each validation step
+      # reads the exact revision under review.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Install the current stable setup-python action so the Markdown
+      # normalizer runs without assuming a preconfigured runner image.
+      - name: Setup Python
+        uses: actions/setup-python@v6.1.0
+        with:
+          python-version: "3.x"
+
+      # Keep repository prose normalized to one physical line per block so docs
+      # follow AGENTS.md and stay reviewable in small diffs.
+      - name: Check Markdown normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/normalize_markdown.py $(git ls-files '*README.md' 'AGENTS.md')
+
+      # Parse every tracked shell helper so syntax regressions fail before they
+      # can hide inside unrelated infrastructure or documentation changes.
+      - name: Check shell script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/*.sh
+
+      # Use the current stable actionlint release from the upstream project so
+      # workflow expression and structure regressions fail in CI.
+      - name: Lint GitHub Actions workflows
+        uses: rhysd/actionlint@v1.7.7

@@ -1,3 +1,5 @@
+# Commit the full non-secret backend shape for the Blocky stack and keep only
+# remote-state credentials outside the repository.
 terraform {
   backend "s3" {
     bucket = "sk-home"

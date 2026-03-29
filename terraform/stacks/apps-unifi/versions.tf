@@ -1,3 +1,5 @@
+# Pin the Terraform and provider baselines so this imported workload stays
+# reproducible across local runs and GitHub Actions validation.
 terraform {
   required_version = "~> 1.14.8"
 

@@ -85,6 +85,8 @@ jobs:
             "apps-unifi:terraform/stacks/apps-unifi:true:false"
             "observability:terraform/stacks/observability:true:false"
             "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
+            # Keep the reserved wifi root validate-only until real wireless
+            # resources and provider requirements exist in that stack.
             "wifi:terraform/stacks/wifi:false:false"
             "identity-edge:terraform/stacks/identity-edge:true:false"
             "overlay:terraform/stacks/overlay:true:false"
