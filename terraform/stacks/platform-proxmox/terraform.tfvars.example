@@ -1,0 +1,10 @@
+project_name     = "sk-home"
+environment      = "home"
+site_name        = "primary"
+proxmox_endpoint = "https://replace-me:8006/api2/json"
+
+# The shared Bitwarden helper can inject the remaining values as TF_VAR_*
+# environment variables. Keep snippet payload management disabled unless you
+# intentionally want Terraform to recreate the bootstrap files on Proxmox.
+manage_imported_snippet_payloads = false
+declare_clone_source            = false

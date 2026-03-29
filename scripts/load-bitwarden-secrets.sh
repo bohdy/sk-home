@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 usage() {
   cat <<'EOF' >&2
 Usage:
-  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] <profile>
+  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] [--kubeconfig-dir <path>] <profile>
 
 Profiles:
   terraform             Export Terraform and backend credentials.
@@ -20,6 +20,7 @@ Environment:
   BWS_ACCESS_TOKEN                Required Bitwarden Secrets Manager access token.
   BITWARDEN_PROJECT_ID            Optional default project scope when --project-id is omitted.
   MIKROTIK_ACME_STATE_DIR         Optional base directory for certificate workflow state.
+  TERRAFORM_RUNTIME_STATE_DIR     Optional base directory for Terraform helper state such as kubeconfig materialization.
 
 Examples:
   eval "$(./scripts/load-bitwarden-secrets.sh terraform)"
@@ -33,6 +34,7 @@ format="export"
 profile=""
 project_id="${BITWARDEN_PROJECT_ID:-}"
 ssh_dir=""
+kubeconfig_dir=""
 github_env_file="${GITHUB_ENV:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -51,6 +53,11 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || usage
       ssh_dir="$1"
+      ;;
+    --kubeconfig-dir)
+      shift
+      [[ $# -gt 0 ]] || usage
+      kubeconfig_dir="$1"
       ;;
     -h|--help)
       usage
@@ -140,6 +147,34 @@ write_file() {
   chmod "${file_mode}" "${file_path}"
 }
 
+emit_optional_value() {
+  local secret_name="$1"
+  local target_name="$2"
+
+  if [[ -n "${!secret_name:-}" ]]; then
+    emit_value "${target_name}" "${!secret_name}"
+  fi
+}
+
+materialize_kubeconfig() {
+  local runtime_state_dir
+  local resolved_kubeconfig_dir
+  local kubeconfig_file
+
+  if [[ -z "${KUBECONFIG_CONTENT:-}" ]]; then
+    return 0
+  fi
+
+  runtime_state_dir="${TERRAFORM_RUNTIME_STATE_DIR:-${REPO_ROOT}/.tmp/terraform-runtime}"
+  resolved_kubeconfig_dir="${kubeconfig_dir:-${runtime_state_dir}/kubeconfig}"
+  kubeconfig_file="${resolved_kubeconfig_dir}/config"
+
+  write_file "${kubeconfig_file}" 600 "${KUBECONFIG_CONTENT}"
+  chmod 700 "${resolved_kubeconfig_dir}"
+
+  emit_value "TF_VAR_kubeconfig_path" "${kubeconfig_file}"
+}
+
 load_secrets_into_environment() {
   local temp_env_file
   local bws_args=(secret list --output env)
@@ -172,6 +207,21 @@ emit_terraform_profile() {
   emit_value "AWS_SECRET_ACCESS_KEY" "${AWS_SECRET_ACCESS_KEY}"
   emit_value "TF_VAR_mikrotik_username" "${MIKROTIK_USERNAME}"
   emit_value "TF_VAR_mikrotik_password" "${MIKROTIK_PASSWORD}"
+  emit_optional_value "CLOUDFLARE_API_TOKEN" "TF_VAR_cloudflare_api_token"
+  emit_optional_value "CLOUDFLARE_ACCOUNT_ID" "TF_VAR_cloudflare_account_id"
+  emit_optional_value "PROXMOX_VE_ENDPOINT" "TF_VAR_proxmox_endpoint"
+  emit_optional_value "PROXMOX_VE_API_TOKEN" "TF_VAR_proxmox_api_token"
+  emit_optional_value "PROXMOX_SSH_PRIVATE_KEY" "TF_VAR_proxmox_ssh_private_key"
+  emit_optional_value "K8S_TOKEN" "TF_VAR_k8s_token"
+  emit_optional_value "SSH_PUB_KEY" "TF_VAR_bohdy_ssh_public_key"
+  emit_optional_value "DOCKER_USERNAME" "TF_VAR_docker_username"
+  emit_optional_value "DOCKER_PASSWORD" "TF_VAR_docker_password"
+  emit_optional_value "DOCKER_AUTH_BASE64" "TF_VAR_docker_auth_base64"
+  emit_optional_value "TAILSCALE_AUTHKEY" "TF_VAR_tailscale_authkey"
+  emit_optional_value "MONGO_ROOT_PASSWORD" "TF_VAR_mongo_root_password"
+  emit_optional_value "UNPOLLER_USERNAME" "TF_VAR_unpoller_username"
+  emit_optional_value "UNPOLLER_PASSWORD" "TF_VAR_unpoller_password"
+  materialize_kubeconfig
   emit_optional_telegram_values
 }
 
