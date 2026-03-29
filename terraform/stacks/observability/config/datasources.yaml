@@ -1,0 +1,7 @@
+apiVersion: 1
+datasources:
+  - name: VictoriaMetrics
+    type: prometheus
+    url: __VICTORIA_METRICS_URL__
+    access: proxy
+    isDefault: true

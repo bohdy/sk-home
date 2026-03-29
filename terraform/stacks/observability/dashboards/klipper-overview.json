@@ -1,0 +1,114 @@
+{
+  "title": "Klipper Overview",
+  "tags": ["klipper", "monitoring"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "System CPU Usage",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "klipper_system_cpu" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Moonraker CPU Usage",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [{ "refId": "A", "expr": "klipper_moonraker_cpu_usage" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "CPU Temperature",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "targets": [{ "refId": "A", "expr": "klipper_system_cpu_temp" }],
+      "fieldConfig": {
+        "defaults": { "unit": "celsius", "min": 0, "max": 120 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false, "fields": "" },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Memory Usage",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * klipper_system_memory_used / klipper_system_memory_total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false, "fields": "" },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Print Progress",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "targets": [{ "refId": "A", "expr": "100 * klipper_print_file_progress" }],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false, "fields": "" },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Total Jobs",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "targets": [{ "refId": "A", "expr": "klipper_total_jobs" }],
+      "fieldConfig": {
+        "defaults": { "unit": "none", "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false, "fields": "" },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value"
+      }
+    }
+  ]
+}

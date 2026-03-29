@@ -1,0 +1,351 @@
+global:
+  scrape_interval: 30s
+scrape_configs:
+  - job_name: victoriametrics
+    static_configs:
+      - targets:
+          - 'victoria-metrics:8428'
+  - job_name: kubernetes-apiservers
+    scheme: https
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'kubernetes.default.svc:443'
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: false
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+  - job_name: kubernetes-nodes
+    scheme: https
+    kubernetes_sd_configs:
+      - role: node
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: false
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: 'kubernetes.default.svc:443'
+      - source_labels:
+          - __meta_kubernetes_node_name
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics
+  - job_name: kubernetes-nodes-cadvisor
+    scheme: https
+    kubernetes_sd_configs:
+      - role: node
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      insecure_skip_verify: false
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: 'kubernetes.default.svc:443'
+      - source_labels:
+          - __meta_kubernetes_node_name
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+  - job_name: kube-state-metrics
+    static_configs:
+      - targets:
+          - 'kube-state-metrics:8080'
+  - job_name: unpoller
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'unpoller:9130'
+  - job_name: ping
+    metrics_path: /probe
+    params:
+      module:
+        - icmp
+    static_configs:
+      - targets:
+          - 1.1.1.1
+        labels:
+          location: Cloudflare DNS
+      - targets:
+          - 8.8.8.8
+        labels:
+          location: Google DNS
+      - targets:
+          - google.com
+        labels:
+          location: Google
+      - targets:
+          - cloudflare.com
+        labels:
+          location: Cloudflare
+      - targets:
+          - nl-ams-as3333-3.anchors.atlas.ripe.net
+        labels:
+          location: 'Amsterdam, NL'
+          latitude: '52.3702'
+          longitude: '4.8952'
+      - targets:
+          - de-fra-as12306.anchors.atlas.ripe.net
+        labels:
+          location: 'Frankfurt, DE'
+          latitude: '50.0961'
+          longitude: '8.6284'
+      - targets:
+          - cz-prg-as25192.anchors.atlas.ripe.net
+        labels:
+          location: 'Prague, CZ'
+          latitude: '50.0810'
+          longitude: '14.4511'
+      - targets:
+          - fr-par-as12876.anchors.atlas.ripe.net
+        labels:
+          location: 'Paris, FR'
+          latitude: '48.7947'
+          longitude: '2.4117'
+      - targets:
+          - uk-lon-as14061.anchors.atlas.ripe.net
+        labels:
+          location: 'London, GB'
+          latitude: '51.5225'
+          longitude: '-0.6290'
+      - targets:
+          - se-sto-as12552.anchors.atlas.ripe.net
+        labels:
+          location: 'Stockholm, SE'
+          latitude: '59.4071'
+          longitude: '17.8353'
+      - targets:
+          - at-vie-as1120.anchors.atlas.ripe.net
+        labels:
+          location: 'Vienna, AT'
+          latitude: '48.2142'
+          longitude: '16.3577'
+      - targets:
+          - be-anr-as2611-client.anchors.atlas.ripe.net
+        labels:
+          location: 'Antwerp, BE'
+          latitude: '51.1845'
+          longitude: '4.4207'
+      - targets:
+          - bg-pvn-as198127.anchors.atlas.ripe.net
+        labels:
+          location: 'Pleven, BG'
+          latitude: '43.3941'
+          longitude: '24.6221'
+      - targets:
+          - ch-zrh-as198249.anchors.atlas.ripe.net
+        labels:
+          location: 'Zurich, CH'
+          latitude: '47.4495'
+          longitude: '8.5404'
+      - targets:
+          - dk-blp-as39839.anchors.atlas.ripe.net
+        labels:
+          location: 'Copenhagen, DK'
+          latitude: '55.7271'
+          longitude: '12.3775'
+      - targets:
+          - ee-tll-as204671.anchors.atlas.ripe.net
+        labels:
+          location: 'Tallinn, EE'
+          latitude: '59.4572'
+          longitude: '24.6932'
+      - targets:
+          - es-mad-as12008.anchors.atlas.ripe.net
+        labels:
+          location: 'Madrid, ES'
+          latitude: '40.4480'
+          longitude: '-3.5741'
+      - targets:
+          - fi-hel-as203296.anchors.atlas.ripe.net
+        labels:
+          location: 'Helsinki, FI'
+          latitude: '60.2064'
+          longitude: '24.8950'
+      - targets:
+          - gr-ath-as199399.anchors.atlas.ripe.net
+        labels:
+          location: 'Athens, GR'
+          latitude: '37.9734'
+          longitude: '23.7455'
+      - targets:
+          - hr-zag-as2108.anchors.atlas.ripe.net
+        labels:
+          location: 'Zagreb, HR'
+          latitude: '45.7924'
+          longitude: '15.9694'
+      - targets:
+          - hu-bud-as12303.anchors.atlas.ripe.net
+        labels:
+          location: 'Budapest, HU'
+          latitude: '47.4979'
+          longitude: '19.0402'
+      - targets:
+          - ie-dub-as1213.anchors.atlas.ripe.net
+        labels:
+          location: 'Dublin, IE'
+          latitude: '53.3366'
+          longitude: '-6.3656'
+      - targets:
+          - is-rey-as1850.anchors.atlas.ripe.net
+        labels:
+          location: 'Reykjavik, IS'
+          latitude: '64.1426'
+          longitude: '-21.9042'
+      - targets:
+          - it-rom-as24796.anchors.atlas.ripe.net
+        labels:
+          location: 'Rome, IT'
+          latitude: '41.8990'
+          longitude: '12.5119'
+      - targets:
+          - lt-vil-as15419.anchors.atlas.ripe.net
+        labels:
+          location: 'Vilnius, LT'
+          latitude: '54.6883'
+          longitude: '25.2154'
+      - targets:
+          - lv-rix-as24921.anchors.atlas.ripe.net
+        labels:
+          location: 'Riga, LV'
+          latitude: '56.9693'
+          longitude: '24.1703'
+      - targets:
+          - no-osl-as207788.anchors.atlas.ripe.net
+        labels:
+          location: 'Oslo, NO'
+          latitude: '59.9158'
+          longitude: '10.7415'
+      - targets:
+          - pl-bia-as41931.anchors.atlas.ripe.net
+        labels:
+          location: 'Bialystok, PL'
+          latitude: '53.1325'
+          longitude: '23.1688'
+      - targets:
+          - pt-lis-as212073.anchors.atlas.ripe.net
+        labels:
+          location: 'Lisbon, PT'
+          latitude: '38.7475'
+          longitude: '-9.0980'
+      - targets:
+          - ro-buh-as211281.anchors.atlas.ripe.net
+        labels:
+          location: 'Bucharest, RO'
+          latitude: '44.4781'
+          longitude: '26.0723'
+      - targets:
+          - rs-beg-as13004.anchors.atlas.ripe.net
+        labels:
+          location: 'Belgrade, RS'
+          latitude: '44.8076'
+          longitude: '20.4625'
+      - targets:
+          - us-nyc-as12008.anchors.atlas.ripe.net
+        labels:
+          location: 'New York, US'
+          latitude: '40.7407'
+          longitude: '-74.0021'
+      - targets:
+          - us-chi-as11878.anchors.atlas.ripe.net
+        labels:
+          location: 'Chicago, US'
+          latitude: '42.0784'
+          longitude: '-87.9156'
+      - targets:
+          - us-slc-as397032.anchors.atlas.ripe.net
+        labels:
+          location: 'Salt Lake City, US'
+          latitude: '40.5114'
+          longitude: '-111.8877'
+      - targets:
+          - us-lax-as11878.anchors.atlas.ripe.net
+        labels:
+          location: 'Los Angeles, US'
+          latitude: '34.0479'
+          longitude: '-118.2554'
+      - targets:
+          - us-sea-as11878.anchors.atlas.ripe.net
+        labels:
+          location: 'Seattle, US'
+          latitude: '47.6194'
+          longitude: '-122.3481'
+      - targets:
+          - speedtest.gci.net
+        labels:
+          location: 'Anchorage, US-AK'
+          latitude: '61.2181'
+          longitude: '-149.9003'
+      - targets:
+          - speed.hawaiiantel.net
+        labels:
+          location: 'Honolulu, US-HI'
+          latitude: '21.3069'
+          longitude: '-157.8583'
+      - targets:
+          - ke-nbo-as328977.anchors.atlas.ripe.net
+        labels:
+          location: 'Nairobi, KE'
+          latitude: '-1.3107'
+          longitude: '36.8250'
+      - targets:
+          - za-cpt-as37105.anchors.atlas.ripe.net
+        labels:
+          location: 'Cape Town, ZA'
+          latitude: '-33.9704'
+          longitude: '18.4642'
+      - targets:
+          - ae-dxb-as15412-client.anchors.atlas.ripe.net
+        labels:
+          location: 'Dubai, AE'
+          latitude: '25.0265'
+          longitude: '55.1869'
+      - targets:
+          - jp-tyo-as2497.anchors.atlas.ripe.net
+        labels:
+          location: 'Tokyo, JP'
+          latitude: '35.7313'
+          longitude: '139.7194'
+      - targets:
+          - sg-sin-as12008.anchors.atlas.ripe.net
+        labels:
+          location: 'Singapore, SG'
+          latitude: '1.2952'
+          longitude: '103.7898'
+      - targets:
+          - au-syd-as12008.anchors.atlas.ripe.net
+        labels:
+          location: 'Sydney, AU'
+          latitude: '-33.9182'
+          longitude: '151.1893'
+      - targets:
+          - ar-bue-as4270.anchors.atlas.ripe.net
+        labels:
+          location: 'Buenos Aires, AR'
+          latitude: '-34.6037'
+          longitude: '-58.3816'
+      - targets:
+          - br-sao-as12008.anchors.atlas.ripe.net
+        labels:
+          location: 'São Paulo, BR'
+          latitude: '-23.5505'
+          longitude: '-46.6333'
+      - targets:
+          - sk-bby-as49798-client.anchors.atlas.ripe.net
+        labels:
+          location: 'Banská Bystrica, SK'
+          latitude: '48.7535'
+          longitude: '19.1448'
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: 'blackbox-exporter:9115'

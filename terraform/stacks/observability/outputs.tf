@@ -1,9 +1,14 @@
+output "victoria_metrics_external_ip" {
+  description = "Existing MetalLB IP preserved for external VictoriaMetrics ingestion."
+  value       = var.victoria_metrics_external_ip
+}
+
+output "grafana_hostname" {
+  description = "Public Grafana hostname preserved by the imported ingress."
+  value       = var.grafana_hostname
+}
+
 output "stack_context" {
-  description = "Resolved root-module context for the observability stack."
-  value = {
-    project_name            = var.project_name
-    environment             = var.environment
-    observability_site_name = var.observability_site_name
-    common_tags             = local.common_tags
-  }
+  description = "Non-sensitive stack metadata preserved for downstream consumers and linting."
+  value       = local.common_tags
 }
