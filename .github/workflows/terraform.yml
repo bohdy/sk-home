@@ -48,6 +48,13 @@ on:
       - "scripts/load-bitwarden-secrets.sh"
       - "terraform/**"
 
+# Cancel superseded pull request and non-main branch runs so stale validation
+# jobs do not occupy the self-hosted runner. Keep main branch runs intact so
+# deployment-oriented executions are not preempted mid-flight.
+concurrency:
+  group: terraform-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   detect-changes:
     name: Detect changed Terraform stacks
@@ -234,12 +241,16 @@ jobs:
     runs-on: self-hosted
     needs: detect-changes
     if: needs.detect-changes.outputs.has_validate_changes == 'true'
+    timeout-minutes: 60
     env:
       # Keep the stable backend region in workflow config because it is a
       # non-secret compatibility value rather than credential material.
       AWS_REGION: auto
     strategy:
       fail-fast: false
+      # Keep validation responsive without allowing the matrix to consume the
+      # entire self-hosted runner at once.
+      max-parallel: 2
       matrix: ${{ fromJson(needs.detect-changes.outputs.validate_matrix) }}
 
     defaults:
@@ -250,16 +261,19 @@ jobs:
       # Check out the repository before loading secrets so the shared helper can
       # be reused by local runs and all CI workflows without duplication.
       - name: Checkout repository
+        timeout-minutes: 5
         uses: actions/checkout@v6.0.2
 
       # Fail fast on self-hosted runners that are missing basic tooling required
       # by JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Some imported stacks still preserve sensitive live inputs in Kubernetes
@@ -267,6 +281,7 @@ jobs:
       # plans and mask them before Terraform sees the environment.
       - name: Hydrate imported stack plan secrets
         if: matrix.stack_name == 'identity-edge' || matrix.stack_name == 'overlay' || matrix.stack_name == 'observability' || matrix.stack_name == 'apps-unifi'
+        timeout-minutes: 5
         shell: bash
         run: |
           set -euo pipefail
@@ -330,6 +345,7 @@ jobs:
       # Verify that the runner can reach the remote state backend for every
       # stack and the RouterOS control plane when the network-core stack runs.
       - name: Preflight network access
+        timeout-minutes: 5
         shell: bash
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
@@ -359,21 +375,37 @@ jobs:
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
+        timeout-minutes: 5
         uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: 1.14.8
 
+      # Reuse provider downloads across validation jobs on the persistent
+      # self-hosted runner so repeated init steps avoid redundant downloads.
+      - name: Prepare Terraform plugin cache
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          mkdir -p "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
+
       # Keep formatting enforcement simple and consistent across all stacks.
       - name: Check Terraform formatting
+        timeout-minutes: 5
         run: terraform fmt -check -recursive
 
       # Install providers, initialize the R2 backend, and validate each stack
       # against the same remote-state backend used outside CI.
       - name: Terraform init
+        timeout-minutes: 10
         run: terraform init -reconfigure
 
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate
+        timeout-minutes: 10
         run: terraform validate
 
       # Produce a real read-only plan only for stacks with committed non-secret
@@ -381,17 +413,20 @@ jobs:
       # competing for the backend lock used by applies and manual state work.
       - name: Terraform plan
         if: matrix.enable_plan
+        timeout-minutes: 20
         run: terraform plan -lock=false -no-color -out=tfplan
 
       # Convert the binary plan to plain text so it can be reviewed from CI
       # without rerunning Terraform locally.
       - name: Render Terraform plan
         if: matrix.enable_plan
+        timeout-minutes: 5
         run: terraform show -no-color tfplan > tfplan.txt
 
       # Publish the plan text as a short-lived workflow artifact for review.
       - name: Upload Terraform plan artifact
         if: matrix.enable_plan
+        timeout-minutes: 5
         uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-${{ matrix.stack_name }}
@@ -405,12 +440,21 @@ jobs:
       - detect-changes
       - validate
     if: needs.detect-changes.outputs.has_apply_changes == 'true'
+    timeout-minutes: 60
+    # Serialize mutating runs per stack so separate branch and main executions
+    # cannot apply against the same Terraform root at the same time.
+    concurrency:
+      group: terraform-apply-${{ matrix.stack_name }}
+      cancel-in-progress: false
     env:
       # Keep the stable backend region in workflow config because it is a
       # non-secret compatibility value rather than credential material.
       AWS_REGION: auto
     strategy:
       fail-fast: false
+      # Applies stay single-lane so the self-hosted runner and live devices do
+      # not absorb several concurrent state changes at once.
+      max-parallel: 1
       matrix: ${{ fromJson(needs.detect-changes.outputs.apply_matrix) }}
 
     defaults:
@@ -421,21 +465,25 @@ jobs:
       # Check out the repository before loading secrets so the shared helper can
       # be reused by local runs and all CI workflows without duplication.
       - name: Checkout repository
+        timeout-minutes: 5
         uses: actions/checkout@v6.0.2
 
       # Fail fast on self-hosted runners that are missing the tooling required
       # to execute Terraform applies consistently.
       - name: Preflight runner tools
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
+        timeout-minutes: 5
         run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
 
       # Verify network reachability again in the deployment job so apply fails
       # fast before touching remote state or device APIs.
       - name: Preflight network access
+        timeout-minutes: 5
         shell: bash
         run: |
           nc -zvw5 3b4089f3bd57e01c9d7c03c2587c3436.r2.cloudflarestorage.com 443 || { echo "Cannot reach Cloudflare R2 endpoint on port 443"; exit 1; }
@@ -465,16 +513,31 @@ jobs:
 
       # Install a pinned Terraform version so local and CI behavior stay aligned.
       - name: Setup Terraform
+        timeout-minutes: 5
         uses: hashicorp/setup-terraform@v4.0.0
         with:
           terraform_version: 1.14.8
 
+      # Reuse provider downloads across apply runs on the persistent runner so
+      # validation and apply do not keep redownloading identical plugins.
+      - name: Prepare Terraform plugin cache
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          mkdir -p "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
+
       # Reinitialize the backend in the apply job so state operations use fresh
       # provider and backend configuration.
       - name: Terraform init
+        timeout-minutes: 10
         run: terraform init -reconfigure
 
       # Apply the committed desired state for CI-ready stacks after validation
       # succeeds on the same revision.
       - name: Terraform apply
+        timeout-minutes: 30
         run: terraform apply -auto-approve -no-color
