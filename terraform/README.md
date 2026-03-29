@@ -42,6 +42,7 @@ Each stack root is its own Terraform root module with separate state, variables,
 10. Fill in environment-specific values without committing secrets.
 11. Run `terraform init -reconfigure` inside the selected stack directory.
 12. Run `terraform plan` inside the selected stack directory.
+13. If you save a plan locally with `terraform plan -out=tfplan`, keep it in the stack directory as a temporary local artifact and do not rename it into a tracked file path.
 
 ## Bitwarden Secrets
 
@@ -77,6 +78,7 @@ Keep `terraform validate` and provider/backend-sensitive checks in GitHub Action
 
 - Keep secrets out of committed files.
 - Keep `BWS_ACCESS_TOKEN` outside the repository and load live credentials from Bitwarden instead of duplicating them in `.env`.
+- Local `tfplan` files and task-isolation worktrees under `.worktrees/` are intentionally gitignored so normal local workflow artifacts do not leave the repository looking dirty.
 - Prefer variables over hardcoded values when adding providers, modules, or resources.
 - Keep physical networking, DHCP, wireless, identity edge, and overlay networking in separate stacks unless there is a strong reason to couple them.
 - The `network-core` stack is prepared for three MikroTik devices using aliased RouterOS providers, `https://...` endpoints backed by `www-ssl`, and variable-based credentials.
