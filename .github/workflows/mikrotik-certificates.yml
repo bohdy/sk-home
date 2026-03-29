@@ -58,13 +58,17 @@ jobs:
       # Fail fast when the self-hosted runner lacks the shell needed to parse
       # and execute the repository automation scripts.
       - name: Preflight runner tools
-        run: |
-          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
+        run: ./scripts/require-runner-tools.sh bash
 
       # Check out the repository so the workflow can validate the committed
       # script and inventory files directly.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+
+      # Keep the shared Bitwarden loader parseable before scheduled and manual
+      # runs depend on it for secret injection.
+      - name: Validate Bitwarden helper syntax
+        run: bash -n scripts/load-bitwarden-secrets.sh
 
       # Catch shell syntax errors before a scheduled renewal run needs the script.
       - name: Validate renewal script syntax
@@ -113,14 +117,7 @@ jobs:
       # Confirm the runner can reach the external dependencies needed for DNS-01
       # issuance and the internal RouterOS management endpoints.
       - name: Preflight runner tools
-        run: |
-          command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
-          command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
-          command -v curl >/dev/null 2>&1 || { echo "Missing required tool: curl"; exit 1; }
-          command -v openssl >/dev/null 2>&1 || { echo "Missing required tool: openssl"; exit 1; }
-          command -v ssh >/dev/null 2>&1 || { echo "Missing required tool: ssh"; exit 1; }
-          command -v scp >/dev/null 2>&1 || { echo "Missing required tool: scp"; exit 1; }
-          command -v nc >/dev/null 2>&1 || { echo "Missing required tool: nc"; exit 1; }
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws curl openssl ssh scp nc
 
       # Check out the repository early so later steps can reuse committed
       # helpers for both secret loading and Telegram notification delivery.
