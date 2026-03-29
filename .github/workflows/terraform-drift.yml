@@ -45,6 +45,7 @@ jobs:
         run: |
           command -v bash >/dev/null 2>&1 || { echo "Missing required tool: bash"; exit 1; }
           command -v bws >/dev/null 2>&1 || { echo "Missing required tool: bws"; exit 1; }
+          command -v curl >/dev/null 2>&1 || { echo "Missing required tool: curl"; exit 1; }
           command -v git >/dev/null 2>&1 || { echo "Missing required tool: git"; exit 1; }
           command -v node >/dev/null 2>&1 || { echo "Missing required tool: node"; exit 1; }
           command -v unzip >/dev/null 2>&1 || { echo "Missing required tool: unzip"; exit 1; }
@@ -58,7 +59,16 @@ jobs:
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
+        id: load_bitwarden_secrets
         run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+
+      # Require Telegram settings in this workflow so drift and failure events
+      # do not silently disappear after the feature is introduced.
+      - name: Validate Telegram notification settings
+        id: validate_telegram_settings
+        run: |
+          [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]] || { echo "Missing TELEGRAM_BOT_TOKEN in Bitwarden output."; exit 1; }
+          [[ -n "${TELEGRAM_CHAT_ID:-}" ]] || { echo "Missing TELEGRAM_CHAT_ID in Bitwarden output."; exit 1; }
 
       # Verify that the runner can reach the remote state backend and the
       # RouterOS control plane before Terraform tries to read live state.
@@ -145,6 +155,20 @@ jobs:
           name: terraform-drift-${{ matrix.stack_name }}
           path: ${{ matrix.stack }}/tfplan.txt
 
+      # Notify Telegram before the deliberate drift failure so operators get an
+      # actionable message with the affected stack and a direct run link.
+      - name: Notify Telegram on drift
+        if: steps.drift_plan.outputs.drift_detected == 'true'
+        env:
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat <<EOF | ${{ github.workspace }}/scripts/send-telegram-message.sh
+          Terraform Drift: drift detected
+          Stack: ${{ matrix.stack_name }}
+          Artifact: terraform-drift-${{ matrix.stack_name }}
+          Run: ${WORKFLOW_RUN_URL}
+          EOF
+
       # Mark the run failed after artifact upload so drift is visible from the
       # workflow status page and scheduled run history.
       - name: Fail when drift is detected
@@ -152,3 +176,17 @@ jobs:
         run: |
           echo "Terraform drift detected for ${{ matrix.stack_name }}."
           exit 1
+
+      # Notify on non-drift workflow failures after Bitwarden has already
+      # loaded the Telegram settings needed for message delivery.
+      - name: Notify Telegram on workflow failure
+        if: failure() && steps.load_bitwarden_secrets.outcome == 'success' && steps.validate_telegram_settings.outcome == 'success' && steps.drift_plan.outputs.drift_detected != 'true'
+        continue-on-error: true
+        env:
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat <<EOF | ${{ github.workspace }}/scripts/send-telegram-message.sh
+          Terraform Drift: workflow failure
+          Stack: ${{ matrix.stack_name }}
+          Run: ${WORKFLOW_RUN_URL}
+          EOF

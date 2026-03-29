@@ -30,6 +30,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/terraform.yml"
+      - "scripts/load-bitwarden-secrets.sh"
       - "terraform/**"
   push:
     branches:
@@ -39,6 +40,7 @@ on:
       - "fix/**"
     paths:
       - ".github/workflows/terraform.yml"
+      - "scripts/load-bitwarden-secrets.sh"
       - "terraform/**"
 
 jobs:
