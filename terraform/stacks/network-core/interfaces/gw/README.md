@@ -29,4 +29,4 @@ Recommended sensitive input handling:
 ## Rollout Notes
 
 - This root manages objects that already exist on the live gateway. Import the existing bridge, bridge ports, bridge VLANs, VLAN interfaces, and `sit1` before the first apply.
-- Keep gateway bridge port VLAN membership and `device_vlans` interface ownership synchronized in the same change whenever a port role changes.
+- Keep gateway bridge port VLAN membership, explicit `bridge_vlans`, and any `derived_bridge_vlan_keys` changes synchronized in the same change whenever a port role changes.

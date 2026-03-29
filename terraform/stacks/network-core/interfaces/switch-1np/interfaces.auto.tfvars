@@ -89,6 +89,33 @@ bridge_ports = {
   }
 }
 
+# Keep outage-sensitive bridge VLAN rows explicit so the live bridge VLAN table
+# stays unchanged while other non-disruptive convergence work lands.
+bridge_vlans = {
+  vlan100 = {
+    comment  = "MGMT"
+    vlan_ids = ["100"]
+    tagged   = ["bridge", "ether1"]
+    untagged = ["ether2", "ether5"]
+  }
+  vlan10 = {
+    comment  = "LAN"
+    vlan_ids = ["10"]
+    tagged   = ["bridge", "ether1", "ether5"]
+    untagged = ["ether3", "ether4"]
+  }
+  vlan102 = {
+    comment  = "AP MGMT"
+    vlan_ids = ["102"]
+    tagged   = ["bridge", "ether1"]
+    untagged = ["ether5"]
+  }
+}
+
+# This device has no camera bridge VLAN row to stage, so keep bridge VLAN rows
+# fully explicit for now.
+derived_bridge_vlan_keys = []
+
 # Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
 # reviewable without redefining shared VLAN IDs or canonical comments.
 device_vlans = {

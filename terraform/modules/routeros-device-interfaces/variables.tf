@@ -104,6 +104,28 @@ variable "bridge_ports" {
   default = {}
 }
 
+# Keep outage-sensitive bridge VLAN rows explicitly authored so Terraform can
+# preserve the existing live topology where derivation would cause risk.
+variable "bridge_vlans" {
+  description = "Explicit bridge VLAN table entries keyed by stable RouterOS-facing row name."
+  type = map(object({
+    comment  = optional(string)
+    vlan_ids = set(string)
+    tagged   = set(string)
+    untagged = optional(set(string), [])
+    disabled = optional(bool, false)
+  }))
+  default = {}
+}
+
+# Allow only selected bridge VLAN rows to be derived from the shared slug
+# catalog while leaving the rest explicitly authored for safer rollout.
+variable "derived_bridge_vlan_keys" {
+  description = "Shared VLAN catalog keys whose bridge VLAN rows should be derived instead of read from explicit bridge_vlans."
+  type        = set(string)
+  default     = []
+}
+
 # Keep per-device VLAN behavior separate from the shared catalog so interface
 # ownership can differ without redefining VLAN IDs or canonical comments.
 variable "device_vlans" {

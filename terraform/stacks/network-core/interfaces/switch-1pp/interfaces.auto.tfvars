@@ -176,6 +176,32 @@ bridge_ports = {
   }
 }
 
+# Keep outage-sensitive bridge VLAN rows explicit so only the selected staged
+# VLAN migration can change the live bridge VLAN table.
+bridge_vlans = {
+  vlan100 = {
+    vlan_ids = ["100"]
+    tagged   = ["bridge", "sfp-sfpplus2"]
+    untagged = ["ether6"]
+  }
+  vlan10 = {
+    comment  = "VLAN10 - LAN"
+    vlan_ids = ["10"]
+    tagged   = ["bridge", "ether4", "sfp-sfpplus2"]
+    untagged = ["ether1"]
+  }
+  vlan102 = {
+    comment  = "VLAN102"
+    vlan_ids = ["102"]
+    tagged   = ["bridge", "sfp-sfpplus2"]
+    untagged = ["ether4"]
+  }
+}
+
+# Derive only the low-blast-radius camera bridge VLAN row from the shared
+# catalog during this staged migration.
+derived_bridge_vlan_keys = ["cameras"]
+
 # Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
 # reviewable without redefining shared VLAN IDs or canonical comments.
 device_vlans = {

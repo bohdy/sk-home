@@ -95,6 +95,28 @@ variable "bridge_ports" {
   default = {}
 }
 
+# Keep outage-sensitive bridge VLAN rows explicitly authored on the gateway so
+# Terraform does not churn critical live VLAN rows during partial convergence.
+variable "bridge_vlans" {
+  description = "Gateway bridge VLAN rows keyed by stable RouterOS-facing row name."
+  type = map(object({
+    comment  = optional(string)
+    vlan_ids = set(string)
+    tagged   = set(string)
+    untagged = optional(set(string), [])
+    disabled = optional(bool, false)
+  }))
+  default = {}
+}
+
+# Allow only selected gateway bridge VLAN rows to be derived from the shared
+# catalog during staged rollout.
+variable "derived_bridge_vlan_keys" {
+  description = "Gateway shared VLAN catalog keys whose bridge VLAN rows should be derived."
+  type        = set(string)
+  default     = []
+}
+
 # Keep per-device VLAN behavior separate from the shared VLAN catalog so the
 # gateway can choose interface ownership without redefining shared VLAN IDs or
 # canonical comments.

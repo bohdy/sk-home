@@ -62,10 +62,17 @@ locals {
     })
   }
 
-  # Collect explicit committed VLAN memberships from the bridge-port map so
-  # bridge VLAN rows can be derived instead of hand-authored per device.
-  explicit_vlan_keys = toset(concat(
-    keys(var.device_vlans),
+  # Normalize explicitly-authored bridge VLAN rows so outage-sensitive live
+  # bridge topology can remain untouched during incremental rollout.
+  explicit_bridge_vlan_inventory = {
+    for row_name, vlan in var.bridge_vlans :
+    row_name => merge(vlan, { name = row_name })
+  }
+
+  # Collect only the selected derived VLAN memberships from the bridge-port map
+  # so one migration can safely converge a subset of bridge VLAN rows.
+  derived_vlan_keys = toset(concat(
+    tolist(var.derived_bridge_vlan_keys),
     flatten([
       for _, port in var.bridge_ports :
       concat(
@@ -75,12 +82,10 @@ locals {
     ])
   ))
 
-  # Derive bridge VLAN records from the shared VLAN catalog and explicit port
-  # membership lists so tagged and untagged forwarding stays synchronized while
-  # the legacy `vlanNNN` state addresses remain stable behind the slug-based
-  # catalog keys.
-  bridge_vlan_inventory = {
-    for vlan_key in sort(tolist(local.explicit_vlan_keys)) :
+  # Derive only the selected bridge VLAN rows from the shared VLAN catalog and
+  # explicit port membership lists while the rest stay explicitly authored.
+  derived_bridge_vlan_inventory = {
+    for vlan_key in sort(tolist(local.derived_vlan_keys)) :
     local.vlan_catalog[vlan_key].interface_name => {
       catalog_key = vlan_key
       name        = local.vlan_catalog[vlan_key].interface_name
@@ -98,8 +103,15 @@ locals {
         interface_name if contains(tolist(try(port.untagged_vlans, [])), vlan_key)
       ])
       disabled = try(var.device_vlans[vlan_key].disabled, false)
-    }
+    } if contains(tolist(var.derived_bridge_vlan_keys), vlan_key)
   }
+
+  # Merge explicit and derived bridge VLAN rows so the rollout can converge
+  # only the selected VLANs without disrupting the rest of the live bridge.
+  bridge_vlan_inventory = merge(
+    local.explicit_bridge_vlan_inventory,
+    local.derived_bridge_vlan_inventory
+  )
 
   # Build one VLAN interface per device-owned VLAN interface declaration so the
   # shared catalog controls RouterOS names and numeric VLAN IDs.

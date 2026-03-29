@@ -28,5 +28,5 @@ Recommended sensitive input handling:
 ## Rollout Notes
 
 - This root manages objects that already exist on the live switch. Import the existing bridge, bridge ports, bridge VLANs, and VLAN interfaces before the first apply.
-- Keep Switch 1NP tagged and untagged port membership in `bridge_ports` and reserve `device_vlans` for VLAN-interface ownership only.
+- Keep Switch 1NP tagged and untagged port membership in `bridge_ports`, keep outage-sensitive bridge VLAN rows in explicit `bridge_vlans`, and reserve `device_vlans` for VLAN-interface ownership only.
 - Dynamic VLAN rows added by RouterOS should stay out of committed desired state unless the provider can manage them directly.
