@@ -120,18 +120,11 @@ bridge_ports = {
 
 # Keep only the remaining outage-sensitive bridge VLAN rows explicit while the
 # approved staged VLAN migrations move into derived bridge VLAN rows.
-bridge_vlans = {
-  vlan20 = {
-    comment  = "VLAN Servers"
-    vlan_ids = ["20"]
-    tagged   = ["bridge", "ether4"]
-    untagged = []
-  }
-}
+bridge_vlans = {}
 
 # Derive the approved bridge VLAN rows from the shared catalog while the rest
 # remain explicitly authored for safer staged convergence.
-derived_bridge_vlan_keys = ["users", "management", "cameras", "aps"]
+derived_bridge_vlan_keys = ["users", "servers", "management", "cameras", "aps"]
 
 # Keep per-device VLAN behavior explicit so bridge comments and gateway-owned
 # VLAN interfaces remain reviewable without redefining shared VLAN IDs or
