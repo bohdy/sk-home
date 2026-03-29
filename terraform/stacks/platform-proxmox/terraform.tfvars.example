@@ -4,7 +4,7 @@ site_name        = "primary"
 proxmox_endpoint = "https://replace-me:8006/api2/json"
 
 # The shared Bitwarden helper can inject the remaining values as TF_VAR_*
-# environment variables. The cluster bootstrap secrets are optional until the
-# imported snippet payloads are ready to be fully source-managed.
+# environment variables. Keep snippet payload management disabled unless you
+# intentionally want Terraform to recreate the bootstrap files on Proxmox.
 manage_imported_snippet_payloads = false
 declare_clone_source            = false

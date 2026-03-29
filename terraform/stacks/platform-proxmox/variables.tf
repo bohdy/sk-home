@@ -76,14 +76,14 @@ variable "k8s_token" {
 }
 
 variable "docker_username" {
-  description = "Docker registry username rendered into the imported cluster bootstrap snippets."
+  description = "Docker registry username rendered into the imported cluster bootstrap snippets. Falls back to the username embedded in docker_auth_base64 when omitted."
   type        = string
   sensitive   = true
   default     = "__MIGRATION_PLACEHOLDER__"
 }
 
 variable "docker_password" {
-  description = "Docker registry password rendered into the imported cluster bootstrap snippets."
+  description = "Docker registry password rendered into the imported cluster bootstrap snippets. Falls back to the password embedded in docker_auth_base64 when omitted."
   type        = string
   sensitive   = true
   default     = "__MIGRATION_PLACEHOLDER__"
@@ -97,7 +97,7 @@ variable "docker_auth_base64" {
 }
 
 variable "manage_imported_snippet_payloads" {
-  description = "When true, Terraform actively uploads the Proxmox snippet payloads instead of only adopting the existing files."
+  description = "When true, Terraform actively uploads and recreates the Proxmox snippet payloads during an explicit recovery or reprovisioning pass."
   type        = bool
   default     = false
 }

@@ -67,6 +67,24 @@ locals {
     cdrom_file_id    = "none"
   }
 
+  # The imported bootstrap snippets only need one live Docker auth source. When
+  # the legacy standalone password secret is absent, derive the username and
+  # password from the already-present base64 auth payload instead of writing
+  # placeholder credentials back to Proxmox.
+  docker_auth_parts = var.docker_auth_base64 == "__MIGRATION_PLACEHOLDER__" ? [] : split(":", nonsensitive(base64decode(var.docker_auth_base64)))
+  effective_docker_username = var.docker_username != "__MIGRATION_PLACEHOLDER__" ? var.docker_username : (
+    length(local.docker_auth_parts) > 0 ? local.docker_auth_parts[0] : ""
+  )
+  effective_docker_password = var.docker_password != "__MIGRATION_PLACEHOLDER__" ? var.docker_password : (
+    length(local.docker_auth_parts) > 1 ? join(":", slice(local.docker_auth_parts, 1, length(local.docker_auth_parts))) : ""
+  )
+  cluster_snippet_inputs_ready = (
+    var.k8s_token != "__MIGRATION_PLACEHOLDER__" &&
+    var.docker_auth_base64 != "__MIGRATION_PLACEHOLDER__" &&
+    local.effective_docker_username != "" &&
+    local.effective_docker_password != ""
+  )
+
   # Keep the current bootstrap template path explicit so the stack remains
   # reviewable even though the rendered content includes secrets at runtime.
   cluster_cloud_init = {
@@ -75,8 +93,8 @@ locals {
       bohdy_username                        = var.bohdy_username
       bohdy_ssh_public_key                  = var.bohdy_ssh_public_key
       docker_auth_base64                    = var.docker_auth_base64
-      docker_password                       = var.docker_password
-      docker_username                       = var.docker_username
+      docker_password                       = local.effective_docker_password
+      docker_username                       = local.effective_docker_username
       github_actions_proxmox_ssh_public_key = var.github_actions_proxmox_ssh_public_key
       hostname                              = node.name
       is_master                             = tostring(node.is_master)
@@ -93,11 +111,10 @@ locals {
   })
 }
 
-# Preserve the cluster-node cloud-init snippets as imported Proxmox files. The
-# raw content is rendered from committed templates, but drift in the secret-filled
-# payload is ignored until the missing Bitwarden bootstrap values are supplied.
+# Keep the cluster bootstrap snippets modeled in Terraform, but only materialize
+# them on Proxmox during an explicit recovery or reprovisioning pass.
 resource "proxmox_virtual_environment_file" "cluster_cloud_init" {
-  for_each = local.cluster_nodes
+  for_each = var.manage_imported_snippet_payloads ? local.cluster_nodes : {}
 
   node_name    = var.proxmox_node_name
   datastore_id = "local"
@@ -113,16 +130,23 @@ resource "proxmox_virtual_environment_file" "cluster_cloud_init" {
   }
 
   lifecycle {
+    precondition {
+      condition     = !var.manage_imported_snippet_payloads || local.cluster_snippet_inputs_ready
+      error_message = "manage_imported_snippet_payloads requires k8s_token plus Docker auth values that resolve to a real username and password."
+    }
+
     ignore_changes = [
       overwrite,
-      source_raw,
       timeout_upload,
     ]
   }
 }
 
-# Preserve the standalone Ubuntu bootstrap snippet that seeds vm-openclaw.
+# Keep the standalone Ubuntu bootstrap snippet available for explicit recovery
+# work, but do not push it by default during normal platform plans.
 resource "proxmox_virtual_environment_file" "openclaw_cloud_init" {
+  count = var.manage_imported_snippet_payloads ? 1 : 0
+
   node_name    = var.proxmox_node_name
   datastore_id = "local"
   content_type = "snippets"
@@ -139,7 +163,6 @@ resource "proxmox_virtual_environment_file" "openclaw_cloud_init" {
   lifecycle {
     ignore_changes = [
       overwrite,
-      source_raw,
       timeout_upload,
     ]
   }
@@ -229,7 +252,7 @@ resource "proxmox_virtual_environment_vm" "cluster_nodes" {
       keys     = [var.bohdy_ssh_public_key]
     }
 
-    user_data_file_id = proxmox_virtual_environment_file.cluster_cloud_init[each.key].id
+    user_data_file_id = var.manage_imported_snippet_payloads ? proxmox_virtual_environment_file.cluster_cloud_init[each.key].id : "local:snippets/${each.value.file_name}"
   }
 
   serial_device {
@@ -338,7 +361,7 @@ resource "proxmox_virtual_environment_vm" "openclaw" {
       keys     = [var.bohdy_ssh_public_key]
     }
 
-    user_data_file_id = proxmox_virtual_environment_file.openclaw_cloud_init.id
+    user_data_file_id = var.manage_imported_snippet_payloads ? proxmox_virtual_environment_file.openclaw_cloud_init[0].id : "local:snippets/${local.openclaw_vm.file_name}"
   }
 
   serial_device {

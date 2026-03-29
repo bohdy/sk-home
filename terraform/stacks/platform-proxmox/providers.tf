@@ -7,6 +7,6 @@ provider "proxmox" {
   # even though API token auth covers the rest of the stack.
   ssh {
     username    = "root"
-    private_key = var.proxmox_ssh_private_key
+    private_key = replace(var.proxmox_ssh_private_key, "\\n", "\n")
   }
 }

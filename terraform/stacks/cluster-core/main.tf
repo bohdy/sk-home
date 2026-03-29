@@ -223,6 +223,7 @@ resource "kubernetes_manifest" "cluster_issuer_prod" {
   }
 
   depends_on = [
+    kubernetes_manifest.cert_manager_deployments,
     kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
@@ -260,6 +261,7 @@ resource "kubernetes_manifest" "cluster_issuer_staging" {
   }
 
   depends_on = [
+    kubernetes_manifest.cert_manager_deployments,
     kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
