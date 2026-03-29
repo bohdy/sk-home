@@ -41,6 +41,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Non-secret infrastructure settings that define desired state should usually be committed as normal repository configuration.
 - Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
+- New functions, features, workflows, and dependencies MUST use the latest stable versions available when they are introduced. Upgrades to existing components must be evaluated and planned carefully instead of being changed automatically.
 
 ## Documentation Standards
 

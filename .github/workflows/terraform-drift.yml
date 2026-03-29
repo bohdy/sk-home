@@ -3,8 +3,10 @@ name: Terraform Drift
 on:
   workflow_dispatch:
   schedule:
-    # Run hourly at a stable non-zero minute to avoid top-of-hour congestion.
-    - cron: "17 * * * *"
+    # Run twice daily on a fixed UTC schedule at a stable non-zero minute to
+    # avoid top-of-hour congestion. GitHub Actions cron is UTC-only, so the
+    # Prague-local run time shifts by one hour when daylight saving changes.
+    - cron: "17 6,18 * * *"
 
 jobs:
   drift:
@@ -18,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Keep the hourly drift workflow limited to stacks that have
+          # Keep the twice-daily drift workflow limited to stacks that have
           # committed non-secret inputs, completed state onboarding, and are
           # safe to run unattended in CI.
           - stack: terraform/stacks/network-core
@@ -146,14 +148,16 @@ jobs:
         if: steps.drift_plan.outputs.drift_detected == 'true'
         run: terraform show -no-color tfplan > tfplan.txt
 
-      # Publish the human-readable drift plan before failing the job so the
-      # scheduled run remains actionable instead of just red.
+      # Publish the human-readable drift plan as a short-lived artifact before
+      # failing the job so the scheduled run remains actionable instead of just
+      # red.
       - name: Upload drift artifact
         if: steps.drift_plan.outputs.drift_detected == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-drift-${{ matrix.stack_name }}
           path: ${{ matrix.stack }}/tfplan.txt
+          retention-days: 1
 
       # Notify Telegram before the deliberate drift failure so operators get an
       # actionable message with the affected stack and a direct run link.
