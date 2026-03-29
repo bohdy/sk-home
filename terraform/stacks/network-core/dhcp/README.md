@@ -28,7 +28,7 @@ The configured endpoint format for this repo is `https://<host>` backed by Route
 
 ## Local Configuration
 
-The shared non-secret DHCP configuration is committed in `dhcp.auto.tfvars`. Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
+The shared non-secret DHCP configuration is committed in `dhcp.auto.tfvars`, and the shared managed VLAN catalog lives in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml). Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -40,6 +40,7 @@ Recommended sensitive input handling:
 ## Data Model
 
 - Define DHCP scopes through `dhcp_scopes` so pools, server bindings, and per-network options stay synchronized.
+- Reference the gateway VLAN interface through `vlan_key` so DHCP reuses the shared managed VLAN catalog instead of hardcoding RouterOS interface names.
 - Define static reservations through `dhcp_reservations` so committed IP-to-MAC ownership stays reviewable.
 - Define vendor-specific DHCP options through `dhcp_option_sets` and reference them from a scope with `option_set`. Each option should carry an explicit RouterOS `name` so human-readable option objects do not depend on map keys.
 - Keep reservation addresses within the intended subnet and avoid conflicts with unmanaged static addresses outside DHCP.

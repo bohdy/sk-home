@@ -74,13 +74,29 @@ variable "bridge" {
   default = null
 }
 
-# Model bridge ports separately so access, trunk, and hybrid behavior remains
-# explicit and reviewable per physical interface.
+# Keep the shared managed VLAN catalog symbolic so per-device roots can refer
+# to stable VLAN keys instead of repeating RouterOS VLAN IDs and interface
+# names in multiple data structures.
+variable "vlan_catalog" {
+  description = "Managed VLAN catalog keyed by stable VLAN key."
+  type = map(object({
+    vlan_id        = number
+    interface_name = string
+    comment        = string
+  }))
+  default = {}
+}
+
+# Model bridge ports in one structure so ingress policy and explicit tagged or
+# untagged VLAN membership stay reviewable per physical interface.
 variable "bridge_ports" {
   description = "Bridge-port membership and ingress behavior keyed by physical interface name."
   type = map(object({
     comment           = optional(string)
     pvid              = optional(number)
+    pvid_vlan         = optional(string)
+    tagged_vlans      = optional(set(string), [])
+    untagged_vlans    = optional(set(string), [])
     frame_types       = optional(string)
     ingress_filtering = optional(bool)
     disabled          = optional(bool, false)
@@ -88,10 +104,10 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Track bridge VLAN table entries separately from per-port settings so tagged
-# and untagged membership remains easy to audit.
+# Keep outage-sensitive bridge VLAN rows explicitly authored so Terraform can
+# preserve the existing live topology where derivation would cause risk.
 variable "bridge_vlans" {
-  description = "Bridge VLAN table entries keyed by logical VLAN record name."
+  description = "Explicit bridge VLAN table entries keyed by stable RouterOS-facing row name."
   type = map(object({
     comment  = optional(string)
     vlan_ids = set(string)
@@ -102,16 +118,23 @@ variable "bridge_vlans" {
   default = {}
 }
 
-# Define VLAN interfaces explicitly so bridge-backed L3-facing interfaces stay
-# aligned with the committed bridge design.
-variable "vlan_interfaces" {
-  description = "VLAN interfaces keyed by RouterOS interface name."
+# Allow only selected bridge VLAN rows to be derived from the shared slug
+# catalog while leaving the rest explicitly authored for safer rollout.
+variable "derived_bridge_vlan_keys" {
+  description = "Shared VLAN catalog keys whose bridge VLAN rows should be derived instead of read from explicit bridge_vlans."
+  type        = set(string)
+  default     = []
+}
+
+# Keep per-device VLAN behavior separate from the shared catalog so interface
+# ownership can differ without redefining VLAN IDs or canonical comments.
+variable "device_vlans" {
+  description = "Per-device VLAN behavior keyed by shared VLAN catalog key."
   type = map(object({
-    comment   = optional(string)
-    interface = string
-    vlan_id   = number
-    mtu       = optional(string)
-    disabled  = optional(bool, false)
+    create_vlan_interface = optional(bool, false)
+    vlan_interface_parent = optional(string)
+    vlan_interface_mtu    = optional(string)
+    disabled              = optional(bool, false)
   }))
   default = {}
 }

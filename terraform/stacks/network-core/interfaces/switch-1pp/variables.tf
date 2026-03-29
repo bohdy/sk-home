@@ -78,13 +78,16 @@ variable "bridge" {
   default = null
 }
 
-# Model bridge ports separately so imported trunk and access behavior remains
-# explicit and reviewable per physical interface.
+# Model bridge ports in one structure so ingress behavior and explicit tagged or
+# untagged VLAN membership remain reviewable per physical interface.
 variable "bridge_ports" {
-  description = "Switch 1PP bridge-port membership and ingress behavior keyed by physical interface name."
+  description = "Switch 1PP bridge-port behavior and explicit VLAN membership keyed by physical interface name."
   type = map(object({
     comment           = optional(string)
     pvid              = optional(number)
+    pvid_vlan         = optional(string)
+    tagged_vlans      = optional(set(string), [])
+    untagged_vlans    = optional(set(string), [])
     frame_types       = optional(string)
     ingress_filtering = optional(bool)
     disabled          = optional(bool, false)
@@ -92,10 +95,10 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Track bridge VLAN table entries separately from per-port settings so tagged
-# and untagged membership remains easy to audit.
+# Keep outage-sensitive bridge VLAN rows explicitly authored on Switch 1PP so
+# Terraform does not churn critical live VLAN rows during partial convergence.
 variable "bridge_vlans" {
-  description = "Switch 1PP bridge VLAN table entries keyed by logical VLAN record name."
+  description = "Switch 1PP bridge VLAN rows keyed by stable RouterOS-facing row name."
   type = map(object({
     comment  = optional(string)
     vlan_ids = set(string)
@@ -106,16 +109,24 @@ variable "bridge_vlans" {
   default = {}
 }
 
-# Define VLAN interfaces explicitly so imported switch VLAN interfaces stay
-# aligned with the committed bridge design.
-variable "vlan_interfaces" {
-  description = "Switch 1PP VLAN interfaces keyed by RouterOS interface name."
+# Allow only selected Switch 1PP bridge VLAN rows to be derived from the shared
+# catalog during staged rollout.
+variable "derived_bridge_vlan_keys" {
+  description = "Switch 1PP shared VLAN catalog keys whose bridge VLAN rows should be derived."
+  type        = set(string)
+  default     = []
+}
+
+# Keep per-device VLAN behavior separate from the shared VLAN catalog so the
+# switch can choose interface ownership without redefining shared VLAN IDs or
+# canonical comments.
+variable "device_vlans" {
+  description = "Switch 1PP VLAN behavior keyed by the shared VLAN catalog key."
   type = map(object({
-    comment   = optional(string)
-    interface = string
-    vlan_id   = number
-    mtu       = optional(string)
-    disabled  = optional(bool, false)
+    create_vlan_interface = optional(bool, false)
+    vlan_interface_parent = optional(string)
+    vlan_interface_mtu    = optional(string)
+    disabled              = optional(bool, false)
   }))
   default = {}
 }

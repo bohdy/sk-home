@@ -43,34 +43,41 @@ bridge = {
 }
 
 # Keep bridge port membership keyed by physical interface name so imported
-# trunk and access behavior remains easy to review.
+# trunk, access, and hybrid behavior remain easy to review without repeating
+# full bridge VLAN rows in separate data structures.
 bridge_ports = {
   ether1 = {
-    pvid              = 100
+    pvid_vlan         = "management"
+    tagged_vlans      = ["management", "users", "aps"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether2 = {
     comment           = "defconf"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["management"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether3 = {
     comment           = "defconf"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["users"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether4 = {
     comment           = "defconf"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["users"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether5 = {
     comment           = "defconf"
-    pvid              = 102
+    pvid_vlan         = "aps"
+    tagged_vlans      = ["users"]
+    untagged_vlans    = ["management", "aps"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -82,8 +89,8 @@ bridge_ports = {
   }
 }
 
-# Keep bridge VLAN table entries explicit so imported VLAN forwarding intent
-# does not depend on RouterOS live defaults.
+# Keep outage-sensitive bridge VLAN rows explicit so the live bridge VLAN table
+# stays unchanged while other non-disruptive convergence work lands.
 bridge_vlans = {
   vlan100 = {
     comment  = "MGMT"
@@ -105,17 +112,18 @@ bridge_vlans = {
   }
 }
 
-# Keep VLAN interfaces explicit in committed configuration so imported switch
-# VLAN interfaces stay in the same state as the rest of the bridge topology.
-vlan_interfaces = {
-  vlan100 = {
-    comment   = "100"
-    interface = "bridge"
-    vlan_id   = 100
+# This device has no camera bridge VLAN row to stage, so keep bridge VLAN rows
+# fully explicit for now.
+derived_bridge_vlan_keys = []
+
+# Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
+# reviewable without redefining shared VLAN IDs or canonical comments.
+device_vlans = {
+  management = {
+    create_vlan_interface = true
   }
-  vlan102 = {
-    comment   = "VLAN102 AP MGMT"
-    interface = "bridge"
-    vlan_id   = 102
+  users = {}
+  aps = {
+    create_vlan_interface = true
   }
 }

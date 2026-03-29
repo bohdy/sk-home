@@ -64,52 +64,62 @@ bridge = {
 }
 
 # Keep bridge port membership keyed by physical interface name so access, trunk,
-# and hybrid behavior remains easy to review.
+# and hybrid behavior remain easy to review without repeating full bridge VLAN
+# rows in separate data structures.
 bridge_ports = {
   ether1 = {
     comment           = "Tagged trunk to SW-1NP"
+    tagged_vlans      = ["management", "users", "aps"]
     frame_types       = "admit-only-vlan-tagged"
     ingress_filtering = true
   }
   ether2 = {
     comment           = "Access port for 1PP LAN"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["users"]
     frame_types       = "admit-only-untagged-and-priority-tagged"
     ingress_filtering = true
   }
   ether3 = {
     comment           = "Access port for Synology management"
-    pvid              = 100
+    pvid_vlan         = "management"
+    untagged_vlans    = ["management"]
     frame_types       = "admit-only-untagged-and-priority-tagged"
     ingress_filtering = true
   }
   ether4 = {
     comment           = "Hybrid port for Proxmox"
-    pvid              = 100
+    pvid_vlan         = "management"
+    tagged_vlans      = ["servers"]
+    untagged_vlans    = ["management"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether5 = {
     comment           = "Access port for 1PP MacMini"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["users"]
     frame_types       = "admit-only-untagged-and-priority-tagged"
     ingress_filtering = true
   }
   ether6 = {
     comment           = "Hybrid port for 1PP AP"
-    pvid              = 102
+    pvid_vlan         = "aps"
+    tagged_vlans      = ["users"]
+    untagged_vlans    = ["aps"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   sfp-sfpplus1 = {
     comment           = "Tagged trunk to SW-1PP"
+    tagged_vlans      = ["management", "users", "cameras", "aps"]
     frame_types       = "admit-only-vlan-tagged"
     ingress_filtering = true
   }
 }
 
-# Keep bridge VLAN table entries explicit so tagged and untagged forwarding
-# intent does not depend on RouterOS live defaults.
+# Keep outage-sensitive bridge VLAN rows explicit so only the selected staged
+# VLAN migration can change the live bridge VLAN table.
 bridge_vlans = {
   vlan10 = {
     comment  = "VLAN Users"
@@ -129,12 +139,6 @@ bridge_vlans = {
     tagged   = ["bridge", "ether1", "sfp-sfpplus1"]
     untagged = ["ether3", "ether4"]
   }
-  vlan101 = {
-    comment  = "VLAN Cameras"
-    vlan_ids = ["101"]
-    tagged   = ["bridge", "sfp-sfpplus1"]
-    untagged = []
-  }
   vlan102 = {
     comment  = "VLAN APs"
     vlan_ids = ["102"]
@@ -143,33 +147,28 @@ bridge_vlans = {
   }
 }
 
-# Keep VLAN interfaces explicit on the gateway bridge so interface comments and
-# RouterOS VLAN IDs stay committed together.
-vlan_interfaces = {
-  vlan10 = {
-    comment   = "VLAN Users"
-    interface = "bridge"
-    vlan_id   = 10
+# Derive only the low-blast-radius camera bridge VLAN row from the shared
+# catalog during this staged migration.
+derived_bridge_vlan_keys = ["cameras"]
+
+# Keep per-device VLAN behavior explicit so bridge comments and gateway-owned
+# VLAN interfaces remain reviewable without redefining shared VLAN IDs or
+# canonical comments.
+device_vlans = {
+  users = {
+    create_vlan_interface = true
   }
-  vlan20 = {
-    comment   = "VLAN Servers"
-    interface = "bridge"
-    vlan_id   = 20
+  servers = {
+    create_vlan_interface = true
   }
-  vlan100 = {
-    comment   = "VLAN Management"
-    interface = "bridge"
-    vlan_id   = 100
+  management = {
+    create_vlan_interface = true
   }
-  vlan101 = {
-    comment   = "VLAN Cameras"
-    interface = "bridge"
-    vlan_id   = 101
+  cameras = {
+    create_vlan_interface = true
   }
-  vlan102 = {
-    comment   = "VLAN APs"
-    interface = "bridge"
-    vlan_id   = 102
+  aps = {
+    create_vlan_interface = true
   }
 }
 

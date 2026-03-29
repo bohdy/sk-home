@@ -26,7 +26,7 @@ mikrotik_insecure = true
 # reservation target, and per-network options from one shared declaration.
 dhcp_scopes = {
   server10 = {
-    interface   = "vlan10"
+    vlan_key    = "users"
     pool_name   = "pool-vlan10"
     range_start = "10.1.10.10"
     range_end   = "10.1.10.200"
@@ -37,7 +37,7 @@ dhcp_scopes = {
     lease_time  = "30m"
   }
   server100 = {
-    interface   = "vlan100"
+    vlan_key    = "management"
     pool_name   = "pool-vlan100"
     range_start = "10.1.100.10"
     range_end   = "10.1.100.250"
@@ -49,7 +49,7 @@ dhcp_scopes = {
   }
   server101 = {
     comment     = "VLAN101 - CAM"
-    interface   = "vlan101"
+    vlan_key    = "cameras"
     pool_name   = "pool-vlan101"
     range_start = "10.1.101.10"
     range_end   = "10.1.101.250"
@@ -59,7 +59,7 @@ dhcp_scopes = {
   }
   server102 = {
     comment     = "VLAN102"
-    interface   = "vlan102"
+    vlan_key    = "aps"
     pool_name   = "pool-vlan102"
     range_start = "10.1.102.10"
     range_end   = "10.1.102.20"
