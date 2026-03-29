@@ -1,0 +1,18 @@
+# Keep the shared managed VLAN catalog outside the per-device Terraform roots
+# so gateway, switches, and DHCP all reuse one committed VLAN identity source.
+vlans:
+  users:
+    vlan_id: 10
+    interface_name: vlan10
+  servers:
+    vlan_id: 20
+    interface_name: vlan20
+  management:
+    vlan_id: 100
+    interface_name: vlan100
+  cameras:
+    vlan_id: 101
+    interface_name: vlan101
+  aps:
+    vlan_id: 102
+    interface_name: vlan102

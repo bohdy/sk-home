@@ -35,11 +35,11 @@ locals {
   # reach back into nullable input objects directly.
   bridge_name = var.bridge == null ? null : var.bridge.name
 
-  # Normalize VLAN interfaces so comments and bridge parent bindings can be
-  # derived from committed data instead of hardcoded literals.
-  vlan_interface_inventory = {
-    for interface_name, interface in var.vlan_interfaces :
-    interface_name => merge(interface, { name = interface_name })
+  # Normalize the managed VLAN catalog so the module can derive RouterOS-facing
+  # VLAN IDs and interface names from one shared keyed inventory.
+  vlan_catalog = {
+    for vlan_key, vlan in var.vlan_catalog :
+    vlan_key => merge(vlan, { key = vlan_key })
   }
 
   # Keep 6to4 tunnel definitions keyed by RouterOS name so tunnel resources
@@ -49,18 +49,67 @@ locals {
     interface_name => merge(interface, { name = interface_name })
   }
 
-  # Normalize bridge ports from keyed data so pvid and frame-type logic stays
-  # reviewable by interface name.
+  # Normalize bridge ports from keyed data so symbolic VLAN references can be
+  # resolved before RouterOS resources consume them.
   bridge_port_inventory = {
     for interface_name, port in var.bridge_ports :
-    interface_name => merge(port, { interface = interface_name })
+    interface_name => merge(port, {
+      interface = interface_name
+      pvid = try(
+        local.vlan_catalog[port.pvid_vlan].vlan_id,
+        try(port.pvid, null)
+      )
+    })
   }
 
-  # Normalize bridge VLAN records so resource instances can expose logical
-  # labels without depending on array ordering from live RouterOS APIs.
+  # Collect explicit committed VLAN memberships from the bridge-port map so
+  # bridge VLAN rows can be derived instead of hand-authored per device.
+  explicit_vlan_keys = toset(concat(
+    keys(var.device_vlans),
+    flatten([
+      for _, port in var.bridge_ports :
+      concat(
+        tolist(try(port.tagged_vlans, [])),
+        tolist(try(port.untagged_vlans, []))
+      )
+    ])
+  ))
+
+  # Derive bridge VLAN records from the shared VLAN catalog and explicit port
+  # membership lists so tagged and untagged forwarding stays synchronized.
   bridge_vlan_inventory = {
-    for vlan_name, vlan in var.bridge_vlans :
-    vlan_name => merge(vlan, { name = vlan_name })
+    for vlan_key in sort(tolist(local.explicit_vlan_keys)) :
+    vlan_key => {
+      name     = vlan_key
+      comment  = try(var.device_vlans[vlan_key].bridge_vlan_comment, null)
+      vlan_ids = toset([tostring(local.vlan_catalog[vlan_key].vlan_id)])
+      tagged = toset(concat(
+        local.bridge_name == null ? [] : [local.bridge_name],
+        [
+          for interface_name, port in var.bridge_ports :
+          interface_name if contains(tolist(try(port.tagged_vlans, [])), vlan_key)
+        ]
+      ))
+      untagged = toset([
+        for interface_name, port in var.bridge_ports :
+        interface_name if contains(tolist(try(port.untagged_vlans, [])), vlan_key)
+      ])
+      disabled = try(var.device_vlans[vlan_key].disabled, false)
+    }
+  }
+
+  # Build one VLAN interface per device-owned VLAN interface declaration so the
+  # shared catalog controls RouterOS names and numeric VLAN IDs.
+  vlan_interface_inventory = {
+    for vlan_key, vlan in var.device_vlans :
+    local.vlan_catalog[vlan_key].interface_name => {
+      name      = local.vlan_catalog[vlan_key].interface_name
+      interface = try(vlan.vlan_interface_parent, local.bridge_name)
+      vlan_id   = local.vlan_catalog[vlan_key].vlan_id
+      mtu       = try(vlan.vlan_interface_mtu, null)
+      comment   = try(vlan.vlan_interface_comment, null)
+      disabled  = try(vlan.disabled, false)
+    } if try(vlan.create_vlan_interface, false)
   }
 }
 

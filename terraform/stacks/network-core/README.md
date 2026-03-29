@@ -63,6 +63,8 @@ Manual `workflow_dispatch` runs can use the workflow's `acme_environment` select
 
 The shared non-secret `network-core` configuration is committed in `network-core.auto.tfvars`. Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
+The shared managed VLAN catalog for the nested interface and DHCP roots is committed in [`vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml).
+
 Recommended sensitive input handling for nested MikroTik-backed roots such as [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md), [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) and [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md):
 
 - keep `mikrotik_password` out of committed files
@@ -84,6 +86,7 @@ Example non-sensitive endpoint values:
 - Interface descriptions, gateway bridge/VLAN topology, switch bridge/VLAN topology, and the `sit1` tunnel in this repo are managed in the nested [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) per-device roots rather than in this parent root.
 - DHCP in this repo is modeled only on the `GW` device and is managed in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) stack rather than in this parent root.
 - Static routing in this repo is modeled only on the `GW` device and is managed in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) stack rather than in this parent root.
+- Keep shared VLAN IDs and canonical RouterOS VLAN interface names in [`vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml) so the nested interface and DHCP roots do not redefine them independently.
 - Keep the legacy RouterOS provider wiring in this parent root until the old DHCP state has been migrated or cleaned up. Removing it too early breaks Terraform plan because the old state still references that provider.
 - Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.

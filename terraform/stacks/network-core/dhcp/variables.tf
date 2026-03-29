@@ -60,7 +60,7 @@ variable "dhcp_scopes" {
   description = "DHCP scope definitions managed on the MikroTik gateway."
   type = map(object({
     comment     = optional(string)
-    interface   = string
+    vlan_key    = string
     pool_name   = string
     range_start = string
     range_end   = string

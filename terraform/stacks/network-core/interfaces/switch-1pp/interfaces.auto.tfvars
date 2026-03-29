@@ -40,11 +40,13 @@ bridge = {
 }
 
 # Keep bridge port membership keyed by physical interface name so imported
-# trunk and access behavior remains easy to review.
+# trunk, access, and hybrid behavior remain easy to review without repeating
+# full bridge VLAN rows in separate data structures.
 bridge_ports = {
   ether1 = {
     comment           = "defconf"
-    pvid              = 10
+    pvid_vlan         = "users"
+    untagged_vlans    = ["users"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -62,7 +64,9 @@ bridge_ports = {
   }
   ether4 = {
     comment           = "defconf"
-    pvid              = 102
+    pvid_vlan         = "aps"
+    tagged_vlans      = ["users"]
+    untagged_vlans    = ["aps"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -74,7 +78,8 @@ bridge_ports = {
   }
   ether6 = {
     comment           = "AP Tattoo"
-    pvid              = 100
+    pvid_vlan         = "management"
+    untagged_vlans    = ["management"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -98,12 +103,13 @@ bridge_ports = {
   }
   ether10 = {
     comment           = "Camera - detsky pokoj"
-    pvid              = 101
+    pvid_vlan         = "cameras"
+    untagged_vlans    = ["cameras"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether11 = {
-    pvid              = 101
+    pvid_vlan         = "cameras"
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -121,7 +127,7 @@ bridge_ports = {
   }
   ether14 = {
     comment           = "defconf"
-    pvid              = 100
+    pvid_vlan         = "management"
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -133,13 +139,13 @@ bridge_ports = {
   }
   ether16 = {
     comment           = "defconf"
-    pvid              = 100
+    pvid_vlan         = "management"
     frame_types       = "admit-all"
     ingress_filtering = true
   }
   ether17 = {
     comment           = "defconf"
-    pvid              = 100
+    pvid_vlan         = "management"
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -151,7 +157,8 @@ bridge_ports = {
   }
   sfp-sfpplus2 = {
     comment           = "defconf"
-    pvid              = 100
+    pvid_vlan         = "management"
+    tagged_vlans      = ["management", "users", "cameras", "aps"]
     frame_types       = "admit-all"
     ingress_filtering = true
   }
@@ -169,48 +176,22 @@ bridge_ports = {
   }
 }
 
-# Keep bridge VLAN table entries explicit so imported VLAN forwarding intent
-# does not depend on RouterOS live defaults.
-bridge_vlans = {
-  vlan100 = {
-    vlan_ids = ["100"]
-    tagged   = ["bridge", "sfp-sfpplus2"]
-    untagged = ["ether6"]
+# Keep per-device VLAN behavior explicit so bridge comments and switch-owned
+# VLAN interfaces remain reviewable without redefining shared VLAN IDs.
+device_vlans = {
+  management = {
+    create_vlan_interface = true
   }
-  vlan10 = {
-    comment  = "VLAN10 - LAN"
-    vlan_ids = ["10"]
-    tagged   = ["bridge", "ether4", "sfp-sfpplus2"]
-    untagged = ["ether1"]
+  users = {
+    bridge_vlan_comment   = "VLAN10 - LAN"
+    create_vlan_interface = true
   }
-  vlan101 = {
-    comment  = "Cameras"
-    vlan_ids = ["101"]
-    tagged   = ["bridge", "sfp-sfpplus2"]
-    untagged = ["ether10"]
+  cameras = {
+    bridge_vlan_comment = "Cameras"
   }
-  vlan102 = {
-    comment  = "VLAN102"
-    vlan_ids = ["102"]
-    tagged   = ["bridge", "sfp-sfpplus2"]
-    untagged = ["ether4"]
-  }
-}
-
-# Keep VLAN interfaces explicit in committed configuration so imported switch
-# VLAN interfaces stay in the same state as the rest of the bridge topology.
-vlan_interfaces = {
-  vlan10 = {
-    interface = "bridge"
-    vlan_id   = 10
-  }
-  vlan100 = {
-    interface = "bridge"
-    vlan_id   = 100
-  }
-  vlan102 = {
-    comment   = "AP MGMT"
-    interface = "bridge"
-    vlan_id   = 102
+  aps = {
+    bridge_vlan_comment    = "VLAN102"
+    create_vlan_interface  = true
+    vlan_interface_comment = "AP MGMT"
   }
 }

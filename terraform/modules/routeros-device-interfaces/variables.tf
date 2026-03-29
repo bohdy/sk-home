@@ -74,13 +74,28 @@ variable "bridge" {
   default = null
 }
 
-# Model bridge ports separately so access, trunk, and hybrid behavior remains
-# explicit and reviewable per physical interface.
+# Keep the shared managed VLAN catalog symbolic so per-device roots can refer
+# to stable VLAN keys instead of repeating RouterOS VLAN IDs and interface
+# names in multiple data structures.
+variable "vlan_catalog" {
+  description = "Managed VLAN catalog keyed by stable VLAN key."
+  type = map(object({
+    vlan_id        = number
+    interface_name = string
+  }))
+  default = {}
+}
+
+# Model bridge ports in one structure so ingress policy and explicit tagged or
+# untagged VLAN membership stay reviewable per physical interface.
 variable "bridge_ports" {
   description = "Bridge-port membership and ingress behavior keyed by physical interface name."
   type = map(object({
     comment           = optional(string)
     pvid              = optional(number)
+    pvid_vlan         = optional(string)
+    tagged_vlans      = optional(set(string), [])
+    untagged_vlans    = optional(set(string), [])
     frame_types       = optional(string)
     ingress_filtering = optional(bool)
     disabled          = optional(bool, false)
@@ -88,30 +103,17 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Track bridge VLAN table entries separately from per-port settings so tagged
-# and untagged membership remains easy to audit.
-variable "bridge_vlans" {
-  description = "Bridge VLAN table entries keyed by logical VLAN record name."
+# Keep per-device VLAN behavior separate from the shared catalog so local
+# comments and interface ownership can differ without redefining VLAN IDs.
+variable "device_vlans" {
+  description = "Per-device VLAN behavior keyed by shared VLAN catalog key."
   type = map(object({
-    comment  = optional(string)
-    vlan_ids = set(string)
-    tagged   = set(string)
-    untagged = optional(set(string), [])
-    disabled = optional(bool, false)
-  }))
-  default = {}
-}
-
-# Define VLAN interfaces explicitly so bridge-backed L3-facing interfaces stay
-# aligned with the committed bridge design.
-variable "vlan_interfaces" {
-  description = "VLAN interfaces keyed by RouterOS interface name."
-  type = map(object({
-    comment   = optional(string)
-    interface = string
-    vlan_id   = number
-    mtu       = optional(string)
-    disabled  = optional(bool, false)
+    bridge_vlan_comment    = optional(string)
+    create_vlan_interface  = optional(bool, false)
+    vlan_interface_comment = optional(string)
+    vlan_interface_parent  = optional(string)
+    vlan_interface_mtu     = optional(string)
+    disabled               = optional(bool, false)
   }))
   default = {}
 }

@@ -78,13 +78,16 @@ variable "bridge" {
   default = null
 }
 
-# Model bridge ports separately so access, trunk, and hybrid behavior remains
-# explicit and reviewable per gateway interface.
+# Model bridge ports in one structure so ingress behavior and explicit tagged or
+# untagged VLAN membership stay reviewable per gateway interface.
 variable "bridge_ports" {
-  description = "Gateway bridge-port membership and ingress behavior keyed by physical interface name."
+  description = "Gateway bridge-port behavior and explicit VLAN membership keyed by physical interface name."
   type = map(object({
     comment           = optional(string)
     pvid              = optional(number)
+    pvid_vlan         = optional(string)
+    tagged_vlans      = optional(set(string), [])
+    untagged_vlans    = optional(set(string), [])
     frame_types       = optional(string)
     ingress_filtering = optional(bool)
     disabled          = optional(bool, false)
@@ -92,30 +95,18 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Track bridge VLAN table entries separately from per-port settings so tagged
-# and untagged membership remains easy to audit.
-variable "bridge_vlans" {
-  description = "Gateway bridge VLAN table entries keyed by logical VLAN record name."
+# Keep per-device VLAN behavior separate from the shared VLAN catalog so the
+# gateway can choose local comments and interface ownership without redefining
+# shared VLAN IDs.
+variable "device_vlans" {
+  description = "Gateway VLAN behavior keyed by the shared VLAN catalog key."
   type = map(object({
-    comment  = optional(string)
-    vlan_ids = set(string)
-    tagged   = set(string)
-    untagged = optional(set(string), [])
-    disabled = optional(bool, false)
-  }))
-  default = {}
-}
-
-# Define VLAN interfaces explicitly so the gateway bridge carries a committed
-# L3-facing interface inventory alongside its L2 VLAN table.
-variable "vlan_interfaces" {
-  description = "Gateway VLAN interfaces keyed by RouterOS interface name."
-  type = map(object({
-    comment   = optional(string)
-    interface = string
-    vlan_id   = number
-    mtu       = optional(string)
-    disabled  = optional(bool, false)
+    bridge_vlan_comment    = optional(string)
+    create_vlan_interface  = optional(bool, false)
+    vlan_interface_comment = optional(string)
+    vlan_interface_parent  = optional(string)
+    vlan_interface_mtu     = optional(string)
+    disabled               = optional(bool, false)
   }))
   default = {}
 }

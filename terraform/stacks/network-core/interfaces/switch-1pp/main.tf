@@ -7,6 +7,10 @@ locals {
     role    = "switch"
     hosturl = var.mikrotik_hosturl
   }
+
+  # Load the shared VLAN catalog once so this root can reuse the same managed
+  # VLAN IDs and interface names as the rest of network-core.
+  vlan_catalog = yamldecode(file("${path.module}/../../vlans.yaml")).vlans
 }
 
 # Reuse the shared RouterOS interface module so Switch 1PP can own its own
@@ -28,8 +32,8 @@ module "interfaces" {
   additional_tags        = var.additional_tags
   ethernet_interfaces    = var.ethernet_interfaces
   bridge                 = var.bridge
+  vlan_catalog           = local.vlan_catalog
   bridge_ports           = var.bridge_ports
-  bridge_vlans           = var.bridge_vlans
-  vlan_interfaces        = var.vlan_interfaces
+  device_vlans           = var.device_vlans
   six_to_four_interfaces = {}
 }

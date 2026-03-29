@@ -12,11 +12,18 @@ locals {
     var.additional_tags
   )
 
+  # Load the shared VLAN catalog so DHCP reuses the same canonical RouterOS
+  # interface names as the interface roots.
+  vlan_catalog = yamldecode(file("${path.module}/../vlans.yaml")).vlans
+
   # Normalize DHCP scope inputs so the resource graph can derive per-scope
-  # names from one source of truth.
+  # names and VLAN-backed interface names from one source of truth.
   dhcp_scopes = {
     for name, scope in var.dhcp_scopes :
-    name => merge(scope, { name = name })
+    name => merge(scope, {
+      name      = name
+      interface = local.vlan_catalog[scope.vlan_key].interface_name
+    })
   }
 
   # Keep reservation metadata keyed and normalized so static lease resources can

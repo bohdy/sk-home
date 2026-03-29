@@ -17,7 +17,7 @@ This root owns the Switch 1PP interface concerns that should be planned and impo
 
 ## Local Configuration
 
-The shared non-secret Switch 1PP interface configuration is committed in `interfaces.auto.tfvars`. Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
+The shared non-secret Switch 1PP interface configuration is committed in `interfaces.auto.tfvars`, while the shared managed VLAN catalog lives in [`../../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml). Use `terraform.tfvars.example` only for local-only overrides or temporary inputs that should not become shared desired state.
 
 Recommended sensitive input handling:
 
@@ -28,4 +28,5 @@ Recommended sensitive input handling:
 ## Rollout Notes
 
 - This root manages objects that already exist on the live switch. Import the existing bridge, bridge ports, bridge VLANs, and VLAN interfaces before the first apply.
+- Keep Switch 1PP tagged and untagged port membership in `bridge_ports` and reserve `device_vlans` for local comments or VLAN-interface ownership.
 - Dynamic VLAN rows added by RouterOS should stay out of committed desired state unless the provider can manage them directly.
