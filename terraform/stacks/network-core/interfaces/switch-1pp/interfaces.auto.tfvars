@@ -184,17 +184,10 @@ bridge_vlans = {}
 # remain explicitly authored for safer staged convergence.
 derived_bridge_vlan_keys = ["users", "management", "cameras", "aps"]
 
-# Keep per-device VLAN behavior explicit so switch-owned VLAN interfaces remain
-# reviewable without redefining shared VLAN IDs or canonical comments.
+# Keep per-device VLAN behavior explicit so the switch only instantiates the
+# management VLAN interface it needs for its own L3 presence.
 device_vlans = {
   management = {
-    create_vlan_interface = true
-  }
-  users = {
-    create_vlan_interface = true
-  }
-  cameras = {}
-  aps = {
     create_vlan_interface = true
   }
 }
