@@ -95,3 +95,15 @@ variable "docker_auth_base64" {
   sensitive   = true
   default     = "__MIGRATION_PLACEHOLDER__"
 }
+
+variable "manage_imported_snippet_payloads" {
+  description = "When true, Terraform actively uploads the Proxmox snippet payloads instead of only adopting the existing files."
+  type        = bool
+  default     = false
+}
+
+variable "declare_clone_source" {
+  description = "When true, Terraform records the original clone source metadata for imported VMs even though the provider treats it as create-only."
+  type        = bool
+  default     = false
+}

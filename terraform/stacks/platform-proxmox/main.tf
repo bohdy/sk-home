@@ -102,16 +102,21 @@ resource "proxmox_virtual_environment_file" "cluster_cloud_init" {
   node_name    = var.proxmox_node_name
   datastore_id = "local"
   content_type = "snippets"
-  overwrite    = true
 
-  source_raw {
-    data      = local.cluster_cloud_init[each.key]
-    file_name = each.value.file_name
+  dynamic "source_raw" {
+    for_each = var.manage_imported_snippet_payloads ? [1] : []
+
+    content {
+      data      = local.cluster_cloud_init[each.key]
+      file_name = each.value.file_name
+    }
   }
 
   lifecycle {
     ignore_changes = [
-      source_raw[0].data,
+      overwrite,
+      source_raw,
+      timeout_upload,
     ]
   }
 }
@@ -121,11 +126,22 @@ resource "proxmox_virtual_environment_file" "openclaw_cloud_init" {
   node_name    = var.proxmox_node_name
   datastore_id = "local"
   content_type = "snippets"
-  overwrite    = true
 
-  source_raw {
-    data      = local.openclaw_cloud_init
-    file_name = local.openclaw_vm.file_name
+  dynamic "source_raw" {
+    for_each = var.manage_imported_snippet_payloads ? [1] : []
+
+    content {
+      data      = local.openclaw_cloud_init
+      file_name = local.openclaw_vm.file_name
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      overwrite,
+      source_raw,
+      timeout_upload,
+    ]
   }
 }
 
@@ -134,19 +150,22 @@ resource "proxmox_virtual_environment_file" "openclaw_cloud_init" {
 resource "proxmox_virtual_environment_vm" "cluster_nodes" {
   for_each = local.cluster_nodes
 
-  vm_id      = each.value.vm_id
-  node_name  = var.proxmox_node_name
-  name       = each.value.name
-  started    = true
-  on_boot    = true
-  boot_order = ["scsi0"]
-  tags       = each.value.tags
+  vm_id     = each.value.vm_id
+  node_name = var.proxmox_node_name
+  name      = each.value.name
+  started   = true
+  on_boot   = true
+  tags      = each.value.tags
 
   scsi_hardware = "virtio-scsi-pci"
 
-  clone {
-    vm_id = var.template_vm_id
-    full  = true
+  dynamic "clone" {
+    for_each = var.declare_clone_source ? [1] : []
+
+    content {
+      vm_id = var.template_vm_id
+      full  = true
+    }
   }
 
   cdrom {
@@ -213,10 +232,6 @@ resource "proxmox_virtual_environment_vm" "cluster_nodes" {
     user_data_file_id = proxmox_virtual_environment_file.cluster_cloud_init[each.key].id
   }
 
-  operating_system {
-    type = "other"
-  }
-
   serial_device {
     device = "socket"
   }
@@ -233,8 +248,10 @@ resource "proxmox_virtual_environment_vm" "cluster_nodes" {
 
   lifecycle {
     ignore_changes = [
+      boot_order,
       disk[0].speed,
       initialization[0].user_data_file_id,
+      keyboard_layout,
     ]
   }
 }
@@ -242,19 +259,22 @@ resource "proxmox_virtual_environment_vm" "cluster_nodes" {
 # Import the standalone Ubuntu VM with the same preserved network identity and
 # cloud-init snippet as the Pulumi-managed source.
 resource "proxmox_virtual_environment_vm" "openclaw" {
-  vm_id      = local.openclaw_vm.vm_id
-  node_name  = var.proxmox_node_name
-  name       = local.openclaw_vm.name
-  started    = true
-  on_boot    = true
-  boot_order = ["scsi0"]
-  tags       = local.openclaw_vm.tags
+  vm_id     = local.openclaw_vm.vm_id
+  node_name = var.proxmox_node_name
+  name      = local.openclaw_vm.name
+  started   = true
+  on_boot   = true
+  tags      = local.openclaw_vm.tags
 
   scsi_hardware = "virtio-scsi-pci"
 
-  clone {
-    vm_id = var.template_vm_id
-    full  = true
+  dynamic "clone" {
+    for_each = var.declare_clone_source ? [1] : []
+
+    content {
+      vm_id = var.template_vm_id
+      full  = true
+    }
   }
 
   cdrom {
@@ -321,10 +341,6 @@ resource "proxmox_virtual_environment_vm" "openclaw" {
     user_data_file_id = proxmox_virtual_environment_file.openclaw_cloud_init.id
   }
 
-  operating_system {
-    type = "other"
-  }
-
   serial_device {
     device = "socket"
   }
@@ -341,8 +357,10 @@ resource "proxmox_virtual_environment_vm" "openclaw" {
 
   lifecycle {
     ignore_changes = [
+      boot_order,
       disk[0].speed,
       initialization[0].user_data_file_id,
+      keyboard_layout,
     ]
   }
 }
@@ -355,5 +373,4 @@ resource "proxmox_virtual_environment_metrics_server" "victoria_metrics" {
   server          = "10.1.30.210"
   port            = 8089
   influx_db_proto = "udp"
-  disable         = false
 }
