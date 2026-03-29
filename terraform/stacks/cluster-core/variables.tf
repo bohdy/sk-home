@@ -91,18 +91,6 @@ variable "storage_class_name" {
   default     = "synology-nfs"
 }
 
-variable "cert_manager_chart_version" {
-  description = "Pinned cert-manager chart version."
-  type        = string
-  default     = "v1.14.4"
-}
-
-variable "cert_manager_release_name" {
-  description = "Existing Helm release name for cert-manager."
-  type        = string
-  default     = "cert-manager-chart"
-}
-
 variable "cert_manager_cloudflare_secret_name" {
   description = "Existing Pulumi-era Cloudflare API token secret name used by cert-manager."
   type        = string

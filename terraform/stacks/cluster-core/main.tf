@@ -66,6 +66,7 @@ resource "helm_release" "metallb" {
       ]
     }
   })]
+
 }
 
 resource "kubernetes_manifest" "metallb_ip_pool" {
@@ -139,6 +140,7 @@ resource "helm_release" "nfs_subdir_external_provisioner" {
       reclaimPolicy = "Retain"
     }
   })]
+
 }
 
 resource "kubernetes_config_map_v1" "coredns" {
@@ -146,7 +148,9 @@ resource "kubernetes_config_map_v1" "coredns" {
     name      = "coredns"
     namespace = "kube-system"
     annotations = {
-      "terraform.sk-home/imported" = "true"
+      # Preserve the Pulumi-era patch annotation because the live CoreDNS
+      # ConfigMap was already converged through that path.
+      "pulumi.com/patchForce" = "true"
     }
   }
 
@@ -161,28 +165,29 @@ resource "kubernetes_namespace_v1" "cert_manager" {
   }
 }
 
-resource "helm_release" "cert_manager" {
-  name       = var.cert_manager_release_name
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  version    = var.cert_manager_chart_version
-  namespace  = kubernetes_namespace_v1.cert_manager.metadata[0].name
-
-  values = [yamlencode({
-    installCRDs = true
-  })]
-}
-
 resource "kubernetes_secret_v1" "cert_manager_cloudflare" {
-  data_wo_revision = 1
+  data_wo_revision               = 1
+  wait_for_service_account_token = false
 
   metadata {
     name      = var.cert_manager_cloudflare_secret_name
     namespace = kubernetes_namespace_v1.cert_manager.metadata[0].name
+    annotations = {
+      # Preserve the Pulumi-created metadata so import reaches a stable no-op
+      # plan without rewriting the live secret.
+      "pulumi.com/autonamed" = "true"
+    }
   }
 
   data_wo = {
     api-token = var.cloudflare_api_token
+  }
+
+  lifecycle {
+    ignore_changes = [
+      data_wo_revision,
+      wait_for_service_account_token,
+    ]
   }
 }
 
@@ -218,7 +223,7 @@ resource "kubernetes_manifest" "cluster_issuer_prod" {
   }
 
   depends_on = [
-    helm_release.cert_manager,
+    kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
 }
@@ -255,7 +260,7 @@ resource "kubernetes_manifest" "cluster_issuer_staging" {
   }
 
   depends_on = [
-    helm_release.cert_manager,
+    kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
 }
