@@ -1,0 +1,6 @@
+project_name         = "sk-home"
+environment          = "home"
+kubeconfig_path      = ".tmp/terraform-runtime/kubeconfig/config"
+cloudflare_zone_id   = "replace-me"
+cloudflare_tunnel_id = "replace-me"
+shared_access_policy_id = "replace-me"

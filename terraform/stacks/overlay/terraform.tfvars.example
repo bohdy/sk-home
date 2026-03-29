@@ -7,6 +7,9 @@ environment = "home"
 # Identify the tailnet managed by the overlay stack.
 tailnet_name = "example.tailnet"
 
+# Provide the kubeconfig path materialized by the shared Bitwarden helper.
+kubeconfig_path = ".tmp/terraform-runtime/kubeconfig/config"
+
 # Add optional non-sensitive metadata tags as needed.
 additional_tags = {
   owner = "home-lab"

@@ -1,0 +1,4 @@
+project_name         = "sk-home"
+environment          = "home"
+observability_site_name = "primary"
+kubeconfig_path      = ".tmp/terraform-runtime/kubeconfig/config"

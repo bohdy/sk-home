@@ -9,3 +9,13 @@ output "stack_context" {
     common_tags  = local.common_tags
   }
 }
+
+output "namespace_name" {
+  description = "Namespace that owns the Tailscale subnet router objects."
+  value       = kubernetes_namespace_v1.tailscale.metadata[0].name
+}
+
+output "deployment_name" {
+  description = "Deployment name for the Tailscale subnet router."
+  value       = kubernetes_deployment_v1.tailscale.metadata[0].name
+}

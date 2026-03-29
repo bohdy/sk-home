@@ -22,6 +22,11 @@ The bootstrap is intentionally minimal. It provides:
 - `stacks/network-core/interfaces/switch-1np/`: MikroTik Switch 1NP bridge, VLAN, and physical interface configuration
 - `stacks/network-core/dhcp/`: MikroTik gateway DHCP scopes, reservations, and DHCP options
 - `stacks/network-core/routing/`: MikroTik gateway static routing and BGP configuration
+- `stacks/cluster-core/`: Kubernetes platform foundations migrated from the old Pulumi `k8s` stack
+- `stacks/dns-blocky/`: Blocky DNS workload migrated from the old Pulumi `blocky` stack
+- `stacks/apps-unifi/`: UniFi application workload migrated from the old Pulumi app stack
+- `stacks/observability/`: observability destination stack for the old Pulumi `metrics` domain
+- `stacks/platform-proxmox/`: Proxmox/platform destination stack for the old Pulumi `infra` domain
 - `stacks/wifi/`: UniFi wireless configuration
 - `stacks/identity-edge/`: Cloudflare ZTNA and edge access controls
 - `stacks/overlay/`: Tailscale tailnet and overlay-network settings
@@ -57,6 +62,8 @@ Useful local commands:
 
 - `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"`
 - `eval "$(./scripts/load-bitwarden-secrets.sh mikrotik-certificates)"`
+
+When Bitwarden stores `KUBECONFIG_CONTENT`, the Terraform profile also materializes a temporary kubeconfig file and exports `TF_VAR_kubeconfig_path` automatically for Kubernetes-backed stacks.
 
 ## Local Pre-Commit Checks
 
@@ -95,6 +102,6 @@ Keep `terraform validate` and provider/backend-sensitive checks in GitHub Action
 - When splitting existing resources into a new stack root, migrate or import the existing state before the first apply so the old root does not try to delete objects that moved into the new root.
 - Self-hosted GitHub runners must provide `bws` and `BWS_ACCESS_TOKEN` so the workflows can load Bitwarden secrets at runtime.
 - All stacks commit the stable Cloudflare R2 backend settings directly in `backend.tf` and keep only credentials external.
-- Bitwarden should store `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `MIKROTIK_USERNAME`, `MIKROTIK_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `MIKROTIK_SSH_PRIVATE_KEY`, `MIKROTIK_SSH_KNOWN_HOSTS`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` for this repo.
+- Bitwarden should store `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `MIKROTIK_USERNAME`, `MIKROTIK_PASSWORD`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `KUBECONFIG_CONTENT`, `MIKROTIK_SSH_PRIVATE_KEY`, `MIKROTIK_SSH_KNOWN_HOSTS`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID` for this repo.
 - Bitwarden can also store `TELEGRAM_MESSAGE_THREAD_ID` when notifications should land in one Telegram forum topic instead of the chat root.
 - Update this README whenever the Terraform workflow or structure changes.

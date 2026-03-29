@@ -24,6 +24,11 @@ on:
           - network-core-interfaces-switch-1np
           - network-core-dhcp
           - network-core-routing
+          - cluster-core
+          - dns-blocky
+          - apps-unifi
+          - observability
+          - platform-proxmox
           - wifi
           - identity-edge
           - overlay
@@ -75,6 +80,11 @@ jobs:
             "network-core-interfaces-switch-1np:terraform/stacks/network-core/interfaces/switch-1np:true:true"
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
+            "cluster-core:terraform/stacks/cluster-core:false:false"
+            "dns-blocky:terraform/stacks/dns-blocky:false:false"
+            "apps-unifi:terraform/stacks/apps-unifi:false:false"
+            "observability:terraform/stacks/observability:false:false"
+            "platform-proxmox:terraform/stacks/platform-proxmox:false:false"
             "wifi:terraform/stacks/wifi:false:false"
             "identity-edge:terraform/stacks/identity-edge:false:false"
             "overlay:terraform/stacks/overlay:false:false"
