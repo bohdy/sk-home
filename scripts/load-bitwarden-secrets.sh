@@ -218,6 +218,7 @@ emit_terraform_profile() {
   emit_optional_value "DOCKER_PASSWORD" "TF_VAR_docker_password"
   emit_optional_value "DOCKER_AUTH_BASE64" "TF_VAR_docker_auth_base64"
   emit_optional_value "TAILSCALE_AUTHKEY" "TF_VAR_tailscale_authkey"
+  emit_optional_value "K3S_TOKEN" "TF_VAR_k3s_token"
   emit_optional_value "MONGO_ROOT_PASSWORD" "TF_VAR_mongo_root_password"
   emit_optional_value "UNPOLLER_USERNAME" "TF_VAR_unpoller_username"
   emit_optional_value "UNPOLLER_PASSWORD" "TF_VAR_unpoller_password"
