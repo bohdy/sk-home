@@ -39,9 +39,6 @@ on:
   push:
     branches:
       - main
-      - "chore/**"
-      - "feat/**"
-      - "fix/**"
     paths:
       - ".github/workflows/mikrotik-certificates.yml"
       - "config/mikrotik-letsencrypt-targets.csv"
