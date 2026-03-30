@@ -62,30 +62,10 @@ locals {
     })
   }
 
-  # Normalize explicitly-authored bridge VLAN rows so outage-sensitive live
-  # bridge topology can remain untouched during incremental rollout.
-  explicit_bridge_vlan_inventory = {
-    for row_name, vlan in var.bridge_vlans :
-    row_name => merge(vlan, { name = row_name })
-  }
-
-  # Collect only the selected derived VLAN memberships from the bridge-port map
-  # so one migration can safely converge a subset of bridge VLAN rows.
-  derived_vlan_keys = toset(concat(
-    tolist(var.derived_bridge_vlan_keys),
-    flatten([
-      for _, port in var.bridge_ports :
-      concat(
-        tolist(try(port.tagged_vlans, [])),
-        tolist(try(port.untagged_vlans, []))
-      )
-    ])
-  ))
-
-  # Derive only the selected bridge VLAN rows from the shared VLAN catalog and
-  # explicit port membership lists while the rest stay explicitly authored.
-  derived_bridge_vlan_inventory = {
-    for vlan_key in sort(tolist(local.derived_vlan_keys)) :
+  # Derive bridge VLAN table rows from the shared VLAN catalog and per-port
+  # membership lists so one committed key set controls bridge VLAN topology.
+  bridge_vlan_inventory = {
+    for vlan_key in sort(tolist(var.bridge_vlan_keys)) :
     local.vlan_catalog[vlan_key].interface_name => {
       catalog_key = vlan_key
       name        = local.vlan_catalog[vlan_key].interface_name
@@ -103,15 +83,8 @@ locals {
         interface_name if contains(tolist(try(port.untagged_vlans, [])), vlan_key)
       ])
       disabled = try(var.device_vlans[vlan_key].disabled, false)
-    } if contains(tolist(var.derived_bridge_vlan_keys), vlan_key)
+    }
   }
-
-  # Merge explicit and derived bridge VLAN rows so the rollout can converge
-  # only the selected VLANs without disrupting the rest of the live bridge.
-  bridge_vlan_inventory = merge(
-    local.explicit_bridge_vlan_inventory,
-    local.derived_bridge_vlan_inventory
-  )
 
   # Build one VLAN interface per device-owned VLAN interface declaration so the
   # shared catalog controls RouterOS names and numeric VLAN IDs.
@@ -128,33 +101,6 @@ locals {
       disabled  = try(vlan.disabled, false)
     } if try(vlan.create_vlan_interface, false)
   }
-}
-
-# Preserve the pre-refactor bridge VLAN instance addresses so the shared
-# catalog migration does not force bridge VLAN destroy/create operations.
-moved {
-  from = routeros_interface_bridge_vlan.this["users"]
-  to   = routeros_interface_bridge_vlan.this["vlan10"]
-}
-
-moved {
-  from = routeros_interface_bridge_vlan.this["servers"]
-  to   = routeros_interface_bridge_vlan.this["vlan20"]
-}
-
-moved {
-  from = routeros_interface_bridge_vlan.this["management"]
-  to   = routeros_interface_bridge_vlan.this["vlan100"]
-}
-
-moved {
-  from = routeros_interface_bridge_vlan.this["cameras"]
-  to   = routeros_interface_bridge_vlan.this["vlan101"]
-}
-
-moved {
-  from = routeros_interface_bridge_vlan.this["aps"]
-  to   = routeros_interface_bridge_vlan.this["vlan102"]
 }
 
 # Manage physical interface comments through update-only resources so Terraform

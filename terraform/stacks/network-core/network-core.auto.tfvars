@@ -13,14 +13,6 @@ additional_tags = {
 
 # Point Terraform at the RouterOS HTTPS endpoints backed by `www-ssl`
 # certificates so the provider can use the TLS-secured REST/API transport.
-mikrotik_gw_hosturl         = "https://10.1.100.1"
-mikrotik_switch_1pp_hosturl = "https://10.1.100.2"
-mikrotik_switch_1np_hosturl = "https://10.1.100.3"
-
-# Keep the legacy automation inputs in the parent root until DHCP objects have
-# been migrated into the nested DHCP state.
-mikrotik_username = "terraform"
-
-# Keep the transitional TLS setting in the parent root until DHCP objects have
-# been migrated into the nested DHCP state.
-mikrotik_insecure = true
+mikrotik_gw_hosturl         = "https://**********"
+mikrotik_switch_1pp_hosturl = "https://**********"
+mikrotik_switch_1np_hosturl = "https://**********"

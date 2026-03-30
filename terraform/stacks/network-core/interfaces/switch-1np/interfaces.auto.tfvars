@@ -89,13 +89,9 @@ bridge_ports = {
   }
 }
 
-# Keep only the remaining outage-sensitive bridge VLAN rows explicit while the
-# approved staged VLAN migrations move into derived bridge VLAN rows.
-bridge_vlans = {}
-
-# Derive the approved bridge VLAN rows from the shared catalog while the rest
-# remain explicitly authored for safer staged convergence.
-derived_bridge_vlan_keys = ["users", "management", "aps"]
+# Control which shared VLAN catalog entries get bridge VLAN table rows on
+# Switch 1NP.
+bridge_vlan_keys = ["users", "management", "aps"]
 
 # Keep per-device VLAN behavior explicit so the switch only instantiates the
 # management VLAN interface it needs for its own L3 presence.

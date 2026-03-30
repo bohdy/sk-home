@@ -41,5 +41,5 @@ Recommended sensitive input handling:
 - If future work adds pre-existing live RouterOS objects that are not yet in state, import them into the matching per-device root before the first apply that manages them.
 - The per-device split is intentionally more import-friendly than the old shared interfaces root because each state now mirrors one actual device.
 - Keep shared VLAN IDs, RouterOS VLAN interface names, and canonical comments in [`../vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml), keep per-device tagged or untagged port membership only in the matching root, and treat the legacy `vlanNNN` bridge-VLAN state addresses as an internal compatibility layer rather than operator-facing config.
-- Use explicit `bridge_vlans` for outage-sensitive live rows, and use `derived_bridge_vlan_keys` only for the VLANs that are approved for staged bridge-VLAN convergence.
+- Use `bridge_vlan_keys` to control which shared catalog VLANs get bridge VLAN table entries on each device.
 - Treat each root's `interfaces.auto.tfvars` file as committed source-of-truth configuration for non-secret live interface values.

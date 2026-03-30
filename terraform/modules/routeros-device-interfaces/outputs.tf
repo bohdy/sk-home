@@ -10,15 +10,14 @@ output "common_tags" {
 output "interface_inventory" {
   description = "Committed non-sensitive interface inventory managed by the module."
   value = {
-    ethernet_interfaces      = var.ethernet_interfaces
-    bridge                   = var.bridge
-    vlan_catalog             = var.vlan_catalog
-    bridge_ports             = var.bridge_ports
-    bridge_vlans             = var.bridge_vlans
-    derived_bridge_vlan_keys = var.derived_bridge_vlan_keys
-    device_vlans             = var.device_vlans
-    derived_bridge_vlans     = local.bridge_vlan_inventory
-    derived_vlan_interfaces  = local.vlan_interface_inventory
-    six_to_four_interfaces   = var.six_to_four_interfaces
+    ethernet_interfaces    = var.ethernet_interfaces
+    bridge                 = var.bridge
+    vlan_catalog           = var.vlan_catalog
+    bridge_ports           = var.bridge_ports
+    bridge_vlan_keys       = var.bridge_vlan_keys
+    device_vlans           = var.device_vlans
+    bridge_vlans           = local.bridge_vlan_inventory
+    vlan_interfaces        = local.vlan_interface_inventory
+    six_to_four_interfaces = var.six_to_four_interfaces
   }
 }
