@@ -32,6 +32,7 @@ on:
           - wifi
           - identity-edge
           - overlay
+          - platform-k3s
   pull_request:
     paths:
       - ".github/workflows/terraform.yml"
@@ -92,6 +93,7 @@ jobs:
             "apps-unifi:terraform/stacks/apps-unifi:true:false"
             "observability:terraform/stacks/observability:true:false"
             "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
+            "platform-k3s:terraform/stacks/platform-k3s:true:false"
             # Keep the reserved wifi root validate-only until real wireless
             # resources and provider requirements exist in that stack.
             "wifi:terraform/stacks/wifi:false:false"
