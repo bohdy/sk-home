@@ -42,19 +42,19 @@ variable "storage_class_name" {
 }
 
 variable "pvc_name" {
-  description = "Existing Pulumi-era Blocky PVC name to adopt."
+  description = "Blocky PVC name."
   type        = string
   default     = "blocky-pvc-334f248e"
 }
 
 variable "config_map_name" {
-  description = "Existing Pulumi-era Blocky ConfigMap name to adopt."
+  description = "Blocky ConfigMap name."
   type        = string
   default     = "blocky-config-d14f1f13"
 }
 
 variable "daemonset_name" {
-  description = "Existing Pulumi-era Blocky DaemonSet name to adopt."
+  description = "Blocky DaemonSet name."
   type        = string
   default     = "blocky-9d18cedb"
 }

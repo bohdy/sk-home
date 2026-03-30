@@ -51,9 +51,6 @@ resource "kubernetes_persistent_volume_claim_v1" "blocky" {
   metadata {
     name      = var.pvc_name
     namespace = kubernetes_namespace_v1.blocky.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {
@@ -72,9 +69,6 @@ resource "kubernetes_config_map_v1" "blocky" {
   metadata {
     name      = var.config_map_name
     namespace = kubernetes_namespace_v1.blocky.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   data = {
@@ -88,9 +82,6 @@ resource "kubernetes_daemon_set_v1" "blocky" {
   metadata {
     name      = var.daemonset_name
     namespace = kubernetes_namespace_v1.blocky.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {

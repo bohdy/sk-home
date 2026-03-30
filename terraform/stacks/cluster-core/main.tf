@@ -147,11 +147,6 @@ resource "kubernetes_config_map_v1" "coredns" {
   metadata {
     name      = "coredns"
     namespace = "kube-system"
-    annotations = {
-      # Preserve the Pulumi-era patch annotation because the live CoreDNS
-      # ConfigMap was already converged through that path.
-      "pulumi.com/patchForce" = "true"
-    }
   }
 
   data = {
@@ -165,6 +160,26 @@ resource "kubernetes_namespace_v1" "cert_manager" {
   }
 }
 
+# Deploy cert-manager via Helm. Replaces the former Pulumi Helm chart that
+# left no recoverable release record, which previously forced Terraform to
+# manage every individual Kubernetes object by hand.
+resource "helm_release" "cert_manager" {
+  name       = "cert-manager"
+  repository = "https://charts.jetstack.io"
+  chart      = "cert-manager"
+  version    = var.cert_manager_chart_version
+  namespace  = kubernetes_namespace_v1.cert_manager.metadata[0].name
+
+  # Install and retain CRDs so existing Certificate and ClusterIssuer
+  # custom resources survive a future helm uninstall or terraform destroy.
+  values = [yamlencode({
+    crds = {
+      enabled = true
+      keep    = true
+    }
+  })]
+}
+
 resource "kubernetes_secret_v1" "cert_manager_cloudflare" {
   data_wo_revision               = 1
   wait_for_service_account_token = false
@@ -172,11 +187,6 @@ resource "kubernetes_secret_v1" "cert_manager_cloudflare" {
   metadata {
     name      = var.cert_manager_cloudflare_secret_name
     namespace = kubernetes_namespace_v1.cert_manager.metadata[0].name
-    annotations = {
-      # Preserve the Pulumi-created metadata so import reaches a stable no-op
-      # plan without rewriting the live secret.
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   data_wo = {
@@ -223,7 +233,7 @@ resource "kubernetes_manifest" "cluster_issuer_prod" {
   }
 
   depends_on = [
-    kubernetes_manifest.cert_manager_deployments,
+    helm_release.cert_manager,
     kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
@@ -261,7 +271,7 @@ resource "kubernetes_manifest" "cluster_issuer_staging" {
   }
 
   depends_on = [
-    kubernetes_manifest.cert_manager_deployments,
+    helm_release.cert_manager,
     kubernetes_namespace_v1.cert_manager,
     kubernetes_secret_v1.cert_manager_cloudflare,
   ]
