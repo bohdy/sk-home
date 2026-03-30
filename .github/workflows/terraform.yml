@@ -41,9 +41,6 @@ on:
   push:
     branches:
       - main
-      - "chore/**"
-      - "feat/**"
-      - "fix/**"
     paths:
       - ".github/workflows/terraform.yml"
       - "scripts/load-bitwarden-secrets.sh"
