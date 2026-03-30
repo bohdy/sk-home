@@ -36,6 +36,9 @@ data "ct_config" "server" {
     k3s_version_minor = local.k3s_version_minor
     k3s_token         = var.k3s_token
     node_ip           = each.value.ip
+    prefix_length     = var.network_prefix_length
+    gateway           = var.network_gateway
+    dns_servers       = join(" ", var.dns_servers)
   })
   strict = true
 }
@@ -52,6 +55,9 @@ data "ct_config" "agent" {
     k3s_token         = var.k3s_token
     node_ip           = each.value.ip
     server_ip         = local.server_ip
+    prefix_length     = var.network_prefix_length
+    gateway           = var.network_gateway
+    dns_servers       = join(" ", var.dns_servers)
   })
   strict = true
 }
@@ -143,19 +149,10 @@ resource "proxmox_virtual_environment_vm" "node" {
   }
 
   # Deliver the Ignition JSON through Proxmox cloud-init user-data. Flatcar
-  # reads the Ignition config from this source at first boot.
+  # reads the Ignition config from this source at first boot. Network
+  # configuration lives in the Butane templates (as networkd units) so
+  # Ignition has connectivity during the initramfs fetch stage.
   initialization {
-    dns {
-      servers = var.dns_servers
-    }
-
-    ip_config {
-      ipv4 {
-        address = "${each.value.ip}/${var.network_prefix_length}"
-        gateway = var.network_gateway
-      }
-    }
-
     user_data_file_id = proxmox_virtual_environment_file.ignition[each.key].id
   }
 

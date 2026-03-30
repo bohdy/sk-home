@@ -15,6 +15,21 @@ storage:
       contents:
         inline: ${hostname}
 
+    # Static network configuration for the node interface. Ignition applies
+    # networkd units during the initramfs fetch stage *before* downloading
+    # remote files, so this ensures the sysext image download has a route.
+    - path: /etc/systemd/network/10-eth0.network
+      mode: 0644
+      contents:
+        inline: |
+          [Match]
+          Name=eth*
+
+          [Network]
+          Address=${node_ip}/${prefix_length}
+          Gateway=${gateway}
+          DNS=${dns_servers}
+
     # k3s sysext image downloaded from the Flatcar sysext-bakery via
     # extensions.flatcar.org, which proxies versioned GitHub releases.
     - path: /opt/extensions/k3s/k3s-${k3s_version}-x86-64.raw
