@@ -1,0 +1,11 @@
+# Local overrides for secret or environment-specific values.
+# Copy to terraform.tfvars and fill in — do not commit terraform.tfvars.
+#
+# Most secrets are injected via TF_VAR_* environment variables from
+# load-bitwarden-secrets.sh, so this file is only needed for local-only
+# overrides that differ from committed defaults.
+
+# proxmox_endpoint        = "https://pve.example:8006"
+# proxmox_api_token       = "user@pam!token=secret"
+# proxmox_ssh_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\n..."
+# k3s_token               = "your-cluster-join-token"

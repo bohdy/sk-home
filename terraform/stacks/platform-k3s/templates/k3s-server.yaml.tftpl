@@ -15,23 +15,26 @@ storage:
       contents:
         inline: ${hostname}
 
-    # k3s sysext image downloaded from the Flatcar sysext-bakery.
+    # k3s sysext image downloaded from the Flatcar sysext-bakery via
+    # extensions.flatcar.org, which proxies versioned GitHub releases.
     - path: /opt/extensions/k3s/k3s-${k3s_version}-x86-64.raw
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/k3s-${k3s_version}-x86-64.raw
+        source: https://extensions.flatcar.org/extensions/k3s-${k3s_version}-x86-64.raw
 
     # systemd-sysupdate configuration for automated k3s minor-version updates.
+    # The k3s_version_minor placeholder (e.g. "v1.34") selects the matching
+    # sysupdate track so patch upgrades happen automatically.
     - path: /etc/sysupdate.k3s.d/k3s.conf
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/k3s.conf
+        source: https://extensions.flatcar.org/extensions/k3s/k3s-${k3s_version_minor}.conf
 
     # noop sysupdate config required for the global sysupdate service.
     - path: /etc/sysupdate.d/noop.conf
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/noop.conf
+        source: https://extensions.flatcar.org/extensions/noop.conf
 
     # k3s server configuration. Disable built-in Traefik and ServiceLB so the
     # cluster-core stack can manage MetalLB BGP and a separate Traefik Helm

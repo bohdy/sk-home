@@ -17,6 +17,10 @@ locals {
   # Resolve the single server node IP for agent join URLs. The stack expects
   # exactly one server node in the current single-server topology.
   server_ip = values(local.server_nodes)[0].ip
+
+  # Derive the minor version track (e.g. "v1.34") from the full k3s version
+  # string so sysupdate config points at the correct update channel.
+  k3s_version_minor = join(".", slice(split(".", var.k3s_version), 0, 2))
 }
 
 # --- Butane to Ignition transpilation ---
@@ -26,11 +30,12 @@ data "ct_config" "server" {
   for_each = local.server_nodes
 
   content = templatefile("${path.module}/templates/k3s-server.yaml.tftpl", {
-    hostname       = each.key
-    ssh_public_key = var.ssh_public_key
-    k3s_version    = var.k3s_version
-    k3s_token      = var.k3s_token
-    node_ip        = each.value.ip
+    hostname          = each.key
+    ssh_public_key    = var.ssh_public_key
+    k3s_version       = var.k3s_version
+    k3s_version_minor = local.k3s_version_minor
+    k3s_token         = var.k3s_token
+    node_ip           = each.value.ip
   })
   strict = true
 }
@@ -40,12 +45,13 @@ data "ct_config" "agent" {
   for_each = local.agent_nodes
 
   content = templatefile("${path.module}/templates/k3s-agent.yaml.tftpl", {
-    hostname       = each.key
-    ssh_public_key = var.ssh_public_key
-    k3s_version    = var.k3s_version
-    k3s_token      = var.k3s_token
-    node_ip        = each.value.ip
-    server_ip      = local.server_ip
+    hostname          = each.key
+    ssh_public_key    = var.ssh_public_key
+    k3s_version       = var.k3s_version
+    k3s_version_minor = local.k3s_version_minor
+    k3s_token         = var.k3s_token
+    node_ip           = each.value.ip
+    server_ip         = local.server_ip
   })
   strict = true
 }

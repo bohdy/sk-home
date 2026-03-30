@@ -15,23 +15,24 @@ storage:
       contents:
         inline: ${hostname}
 
-    # k3s sysext image downloaded from the Flatcar sysext-bakery.
+    # k3s sysext image downloaded from the Flatcar sysext-bakery via
+    # extensions.flatcar.org, which proxies versioned GitHub releases.
     - path: /opt/extensions/k3s/k3s-${k3s_version}-x86-64.raw
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/k3s-${k3s_version}-x86-64.raw
+        source: https://extensions.flatcar.org/extensions/k3s-${k3s_version}-x86-64.raw
 
     # systemd-sysupdate configuration for automated k3s minor-version updates.
     - path: /etc/sysupdate.k3s.d/k3s.conf
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/k3s.conf
+        source: https://extensions.flatcar.org/extensions/k3s/k3s-${k3s_version_minor}.conf
 
     # noop sysupdate config required for the global sysupdate service.
     - path: /etc/sysupdate.d/noop.conf
       mode: 0644
       contents:
-        source: https://github.com/flatcar/sysext-bakery/releases/download/latest/noop.conf
+        source: https://extensions.flatcar.org/extensions/noop.conf
 
     # k3s agent configuration pointing at the server node.
     - path: /etc/rancher/k3s/config.yaml
