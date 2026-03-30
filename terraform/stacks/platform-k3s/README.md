@@ -7,6 +7,7 @@ This stack provisions a k3s Kubernetes cluster on Flatcar Container Linux VMs ru
 - **OS**: Flatcar Container Linux (immutable, auto-updating) provisioned via Ignition (Butane YAML transpiled at plan time by the `poseidon/ct` provider).
 - **k3s**: Installed as a systemd-sysext image from the Flatcar sysext-bakery. Automated minor-version updates are handled by `systemd-sysupdate`.
 - **Topology**: One server node (control plane with embedded SQLite) and N agent nodes. The built-in Traefik and ServiceLB are disabled so the `cluster-core` stack can manage MetalLB BGP and a separate Traefik Helm release.
+- **Network**: Static IP configuration is delivered via systemd-networkd units inside the Butane templates rather than through Proxmox cloud-init `ipconfig`. This ensures Ignition has network connectivity during the initramfs fetch stage when it downloads the k3s sysext image.
 
 ## Prerequisites
 
