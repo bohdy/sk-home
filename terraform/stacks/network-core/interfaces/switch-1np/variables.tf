@@ -95,24 +95,10 @@ variable "bridge_ports" {
   default = {}
 }
 
-# Keep outage-sensitive bridge VLAN rows explicitly authored on Switch 1NP so
-# Terraform does not churn critical live VLAN rows during partial convergence.
-variable "bridge_vlans" {
-  description = "Switch 1NP bridge VLAN rows keyed by stable RouterOS-facing row name."
-  type = map(object({
-    comment  = optional(string)
-    vlan_ids = set(string)
-    tagged   = set(string)
-    untagged = optional(set(string), [])
-    disabled = optional(bool, false)
-  }))
-  default = {}
-}
-
-# Allow only selected Switch 1NP bridge VLAN rows to be derived from the shared
-# catalog during staged rollout.
-variable "derived_bridge_vlan_keys" {
-  description = "Switch 1NP shared VLAN catalog keys whose bridge VLAN rows should be derived."
+# Control which shared VLAN catalog entries receive bridge VLAN table rows
+# on Switch 1NP so each apply only touches the VLANs it actually carries.
+variable "bridge_vlan_keys" {
+  description = "Shared VLAN catalog keys that should have bridge VLAN table entries on Switch 1NP."
   type        = set(string)
   default     = []
 }

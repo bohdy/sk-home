@@ -4,8 +4,6 @@
 # Use this example file only for local overrides or temporary experiments that
 # should not become part of the shared infrastructure source of truth.
 #
-# The parent network-core root keeps legacy RouterOS credentials only while the
-# nested DHCP stack migration is in progress.
-#
-# Typical local-only inputs during the migration window:
-# mikrotik_password = "replace-me"
+# The parent root no longer carries RouterOS providers or credentials.
+# See the nested dhcp, routing, and interfaces roots for device-specific
+# credential handling.

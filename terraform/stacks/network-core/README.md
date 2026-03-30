@@ -12,7 +12,7 @@ This stack manages the MikroTik router and switches that define the physical net
 
 This parent root keeps the committed MikroTik device inventory and shared foundation metadata for the physical network core.
 
-The configured endpoint format for this repo remains `https://<host>` backed by RouterOS `www-ssl`, but live interface configuration now lives in the nested [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) directory as separate `gw`, `switch-1pp`, and `switch-1np` roots. Live DHCP provider configuration now lives in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) root and live routing configuration now lives in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) root. The parent root temporarily retains legacy RouterOS provider inputs so Terraform can still read and remove DHCP objects from the old state during the migration window while nested GW-only roots share one credential shape.
+The configured endpoint format for this repo remains `https://<host>` backed by RouterOS `www-ssl`, but live interface configuration now lives in the nested [`interfaces`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/README.md) directory as separate `gw`, `switch-1pp`, and `switch-1np` roots. Live DHCP provider configuration now lives in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) root and live routing configuration now lives in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) root. The parent root no longer carries RouterOS providers or credentials; it only holds the committed device inventory and shared foundation metadata.
 
 ## RouterOS Prerequisites
 
@@ -73,8 +73,6 @@ Recommended sensitive input handling for nested MikroTik-backed roots such as [`
 - on self-hosted GitHub runners, provide `bws` and `BWS_ACCESS_TOKEN` so workflows can load `MIKROTIK_USERNAME` and `MIKROTIK_PASSWORD` from Bitwarden
 - provide Cloudflare R2 credentials through `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION=auto`
 
-The parent root keeps the same credential shape only as a temporary migration bridge while old DHCP objects still exist in its remote state.
-
 Example non-sensitive endpoint values:
 
 - `mikrotik_gw_hosturl = "https://10.1.100.1"`
@@ -87,7 +85,6 @@ Example non-sensitive endpoint values:
 - DHCP in this repo is modeled only on the `GW` device and is managed in the nested [`dhcp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/dhcp/README.md) stack rather than in this parent root.
 - Static routing in this repo is modeled only on the `GW` device and is managed in the nested [`routing`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/routing/README.md) stack rather than in this parent root.
 - Keep shared VLAN IDs, canonical RouterOS VLAN interface names, and canonical comments in [`vlans.yaml`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/vlans.yaml) so the nested interface and DHCP roots do not redefine them independently.
-- Keep the legacy RouterOS provider wiring in this parent root until the old DHCP state has been migrated or cleaned up. Removing it too early breaks Terraform plan because the old state still references that provider.
 - Treat `network-core.auto.tfvars` as committed source-of-truth configuration for non-secret live infrastructure values.
 - Keep provider credentials shared only if the same automation account is intentionally used on all three devices.
 - If credentials diverge later, split the username and password variables per device instead of hardcoding exceptions.
