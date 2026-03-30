@@ -66,6 +66,14 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
 - Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
 
+## Terraform Credentials
+
+- Terraform stacks that manage live infrastructure require backend (R2/S3) and provider credentials that are stored in Bitwarden Secrets Manager.
+- Before running `terraform init`, `terraform plan`, or `terraform apply`, load credentials into the current shell by running `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` from the repository root.
+- The loader requires `BWS_ACCESS_TOKEN` to be set in the environment. This token must stay outside the repository and must never appear in commits, logs, or command output.
+- The `terraform` profile exports `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TF_VAR_mikrotik_password`, and other provider-specific variables. Agents must never read, echo, or log the values of these variables.
+- The loader may materialize temporary files such as a kubeconfig under `.tmp/`. These files must not be committed. Verify staged files before committing after any session that loaded secrets.
+
 ## Verification
 
 - Verify the changed files after editing them.
