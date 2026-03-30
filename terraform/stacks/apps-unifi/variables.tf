@@ -1,5 +1,5 @@
-# Keep the imported UniFi stack inputs explicit so Terraform can adopt the live
-# resources without reintroducing Pulumi-era secrets into committed files.
+# Keep the UniFi stack inputs explicit so live resource configuration stays
+# reviewable and secrets stay out of committed files.
 variable "project_name" {
   description = "Human-readable project name for this infrastructure stack."
   type        = string
@@ -73,31 +73,31 @@ variable "cluster_issuer_name" {
 }
 
 variable "mongo_secret_name" {
-  description = "Existing Pulumi-era MongoDB secret name to adopt."
+  description = "MongoDB secret name for the UniFi stack."
   type        = string
   default     = "unifi-mongo-secret-289546e9"
 }
 
 variable "mongo_pvc_name" {
-  description = "Existing Pulumi-era MongoDB PVC name to adopt."
+  description = "MongoDB PVC name for the UniFi stack."
   type        = string
   default     = "unifi-mongo-pvc-744244de"
 }
 
 variable "mongo_deployment_name" {
-  description = "Existing Pulumi-era MongoDB deployment name to adopt."
+  description = "MongoDB deployment name for the UniFi stack."
   type        = string
   default     = "unifi-mongo-dfddd9cd"
 }
 
 variable "unifi_pvc_name" {
-  description = "Existing Pulumi-era UniFi PVC name to adopt."
+  description = "UniFi application PVC name."
   type        = string
   default     = "unifi-pvc-e34a12e0"
 }
 
 variable "unifi_deployment_name" {
-  description = "Existing Pulumi-era UniFi deployment name to adopt."
+  description = "UniFi application deployment name."
   type        = string
   default     = "unifi-5a072c7e"
 }

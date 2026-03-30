@@ -147,11 +147,6 @@ resource "kubernetes_config_map_v1" "coredns" {
   metadata {
     name      = "coredns"
     namespace = "kube-system"
-    annotations = {
-      # Preserve the Pulumi-era patch annotation because the live CoreDNS
-      # ConfigMap was already converged through that path.
-      "pulumi.com/patchForce" = "true"
-    }
   }
 
   data = {
@@ -192,11 +187,6 @@ resource "kubernetes_secret_v1" "cert_manager_cloudflare" {
   metadata {
     name      = var.cert_manager_cloudflare_secret_name
     namespace = kubernetes_namespace_v1.cert_manager.metadata[0].name
-    annotations = {
-      # Preserve the Pulumi-created metadata so import reaches a stable no-op
-      # plan without rewriting the live secret.
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   data_wo = {

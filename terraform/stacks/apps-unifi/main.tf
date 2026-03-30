@@ -7,7 +7,7 @@ resource "cloudflare_dns_record" "unifi" {
   ttl     = 1
   content = "${var.cloudflare_tunnel_id}.cfargotunnel.com"
   proxied = true
-  comment = "Managed by Pulumi - Unifi Tunnel Ingress"
+  comment = "Managed by Terraform"
 }
 
 resource "cloudflare_zero_trust_access_application" "unifi" {
@@ -41,9 +41,6 @@ resource "kubernetes_secret_v1" "mongo" {
   metadata {
     name      = var.mongo_secret_name
     namespace = kubernetes_namespace_v1.unifi.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   data_wo = {
@@ -62,9 +59,6 @@ resource "kubernetes_persistent_volume_claim_v1" "mongo" {
   metadata {
     name      = var.mongo_pvc_name
     namespace = kubernetes_namespace_v1.unifi.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {
@@ -105,9 +99,6 @@ resource "kubernetes_deployment_v1" "mongo" {
   metadata {
     name      = var.mongo_deployment_name
     namespace = kubernetes_namespace_v1.unifi.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {
@@ -190,9 +181,6 @@ resource "kubernetes_persistent_volume_claim_v1" "unifi" {
   metadata {
     name      = var.unifi_pvc_name
     namespace = kubernetes_namespace_v1.unifi.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {
@@ -274,9 +262,6 @@ resource "kubernetes_deployment_v1" "unifi" {
   metadata {
     name      = var.unifi_deployment_name
     namespace = kubernetes_namespace_v1.unifi.metadata[0].name
-    annotations = {
-      "pulumi.com/autonamed" = "true"
-    }
   }
 
   spec {
