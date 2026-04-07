@@ -8,6 +8,7 @@ This stack provisions a k3s Kubernetes cluster on Flatcar Container Linux VMs ru
 - **k3s**: Installed as a systemd-sysext image from the Flatcar sysext-bakery. Automated minor-version updates are handled by `systemd-sysupdate`.
 - **Topology**: One server node (control plane with embedded SQLite) and N agent nodes. The built-in Traefik and ServiceLB are disabled so the `cluster-core` stack can manage MetalLB BGP and a separate Traefik Helm release.
 - **Network**: Static IP configuration is delivered via systemd-networkd units inside the Butane templates rather than through Proxmox cloud-init `ipconfig`. This ensures Ignition has network connectivity during the initramfs fetch stage when it downloads the k3s sysext image.
+- **Interface naming**: The Butane templates now match `e*` interface names so both `eth0`-style and predictable `ens*` naming work without manual per-node edits.
 
 ## Prerequisites
 
@@ -40,3 +41,7 @@ The helper script creates a Proxmox VM template from the official Flatcar Proxmo
 ```
 
 The resulting template ID is passed to Terraform as `template_vm_id`.
+
+## Recovery Notes
+
+Ignition runs during first boot. Changing the Butane templates in this stack updates Terraform's rendered Ignition snippets for new or reprovisioned nodes, but it does not rewrite existing Flatcar node files in place. For existing nodes that already booted with a bad interface config, rebuild or reprovision the affected VM so it consumes the corrected Ignition payload.

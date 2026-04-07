@@ -23,7 +23,8 @@ storage:
       contents:
         inline: |
           [Match]
-          Name=eth*
+          # Match both legacy eth0-style and predictable en* interface names.
+          Name=e*
 
           [Network]
           Address=${node_ip}/${prefix_length}
@@ -58,7 +59,6 @@ storage:
           server: "https://${server_ip}:6443"
           token: "${k3s_token}"
           node-ip: "${node_ip}"
-          flannel-iface: "eth0"
 
   links:
     # Activate the k3s sysext image.

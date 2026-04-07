@@ -23,7 +23,8 @@ storage:
       contents:
         inline: |
           [Match]
-          Name=eth*
+          # Match both legacy eth0-style and predictable en* interface names.
+          Name=e*
 
           [Network]
           Address=${node_ip}/${prefix_length}
@@ -63,7 +64,6 @@ storage:
           tls-san:
             - "${node_ip}"
             - "${hostname}"
-          flannel-iface: "eth0"
           disable:
             - traefik
             - servicelb
