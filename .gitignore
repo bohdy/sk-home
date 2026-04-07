@@ -27,6 +27,7 @@ crash.*.log
 !terraform/stacks/identity-edge/identity-edge.auto.tfvars
 !terraform/stacks/overlay/overlay.auto.tfvars
 !terraform/stacks/cluster-core/cluster-core.auto.tfvars
+!terraform/stacks/cluster-core-k3s/cluster-core.auto.tfvars
 !terraform/stacks/dns-blocky/dns-blocky.auto.tfvars
 !terraform/stacks/observability/observability.auto.tfvars
 !terraform/stacks/apps-unifi/apps-unifi.auto.tfvars
