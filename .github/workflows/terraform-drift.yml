@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       # Keep the coverage unchanged while limiting parallel plans so the
-      # self-hosted runner does not absorb all six stacks at once.
+      # self-hosted runner does not absorb all drift-covered stacks at once.
       max-parallel: 2
       matrix:
         include:
@@ -45,6 +45,8 @@ jobs:
             stack_name: network-core-dhcp
           - stack: terraform/stacks/network-core/routing
             stack_name: network-core-routing
+          - stack: terraform/stacks/platform-k3s
+            stack_name: platform-k3s
 
     defaults:
       run:
