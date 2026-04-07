@@ -19,3 +19,8 @@ output "node_ips" {
   description = "Map of node name to static IP address for all k3s cluster nodes."
   value       = { for k, v in var.nodes : k => v.ip }
 }
+
+output "kubeconfig_fetch_hint" {
+  description = "Command hint to copy kubeconfig from the server node and target the server API endpoint."
+  value       = "ssh core@${local.server_ip} 'sudo cat /etc/rancher/k3s/k3s.yaml' > .tmp/platform-k3s/kubeconfig && sed -i '' 's/127.0.0.1/${local.server_ip}/' .tmp/platform-k3s/kubeconfig"
+}

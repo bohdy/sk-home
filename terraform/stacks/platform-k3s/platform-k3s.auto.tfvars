@@ -7,8 +7,8 @@ environment  = "home"
 # Proxmox host. Update this when upgrading to a new Flatcar release.
 template_vm_id = 900
 
-# k3s version pinned to the latest sysext-bakery release. Patch updates within
-# the same minor track are handled automatically by systemd-sysupdate.
+# k3s version pinned for deterministic bootstrap. Ignition installs this exact
+# release on first boot via /opt/sk-home/install-k3s.sh.
 k3s_version = "v1.34.3+k3s1"
 
 # --- Network (VLAN 20 servers subnet) ---

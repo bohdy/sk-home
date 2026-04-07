@@ -15,15 +15,12 @@ storage:
       contents:
         inline: ${hostname}
 
-    # Static network configuration for the node interface. Ignition applies
-    # networkd units during the initramfs fetch stage *before* downloading
-    # remote files, so this ensures the sysext image download has a route.
+    # Static network configuration required very early in boot.
     - path: /etc/systemd/network/10-eth0.network
       mode: 0644
       contents:
         inline: |
           [Match]
-          # Match both legacy eth0-style and predictable en* interface names.
           Name=e*
 
           [Network]
@@ -31,73 +28,61 @@ storage:
           Gateway=${gateway}
           DNS=${dns_servers}
 
-    # k3s sysext image downloaded from the Flatcar sysext-bakery via
-    # extensions.flatcar.org, which proxies versioned GitHub releases.
-    - path: /opt/extensions/k3s/k3s-${k3s_version}-x86-64.raw
-      mode: 0644
-      contents:
-        source: https://extensions.flatcar.org/extensions/k3s-${k3s_version}-x86-64.raw
-
-    # systemd-sysupdate configuration for automated k3s minor-version updates.
-    - path: /etc/sysupdate.k3s.d/k3s.conf
-      mode: 0644
-      contents:
-        source: https://extensions.flatcar.org/extensions/k3s/k3s-${k3s_version_minor}.conf
-
-    # noop sysupdate config required for the global sysupdate service.
-    - path: /etc/sysupdate.d/noop.conf
-      mode: 0644
-      contents:
-        source: https://extensions.flatcar.org/extensions/noop.conf
-
-    # k3s agent configuration pointing at the server node.
+    # k3s agent runtime configuration.
     - path: /etc/rancher/k3s/config.yaml
       mode: 0644
       contents:
         inline: |
-          # k3s agent configuration managed by Terraform Ignition provisioning.
           server: "https://${server_ip}:6443"
           token: "${k3s_token}"
           node-ip: "${node_ip}"
 
-  links:
-    # Activate the k3s sysext image.
-    - path: /etc/extensions/k3s.raw
-      target: /opt/extensions/k3s/k3s-${k3s_version}-x86-64.raw
-      hard: false
+    # Install script that fetches the requested k3s release at runtime.
+    - path: /opt/sk-home/install-k3s.sh
+      mode: 0755
+      contents:
+        inline: |
+          #!/usr/bin/env bash
+          set -euo pipefail
 
-    # Disable Flatcar's built-in Docker and containerd since k3s bundles its
-    # own containerd runtime.
-    - path: /etc/extensions/docker-flatcar.raw
-      target: /dev/null
-      overwrite: true
-    - path: /etc/extensions/containerd-flatcar.raw
-      target: /dev/null
-      overwrite: true
+          VERSION="${k3s_version}"
+          BIN_DIR="/opt/bin"
+          BIN_PATH="$${BIN_DIR}/k3s"
+          URL="https://github.com/k3s-io/k3s/releases/download/${k3s_version}/k3s"
+
+          mkdir -p "$${BIN_DIR}"
+
+          if [[ -x "$${BIN_PATH}" ]] && "$${BIN_PATH}" --version 2>/dev/null | grep -q "$${VERSION}"; then
+            exit 0
+          fi
+
+          curl --fail --location --silent --show-error "$${URL}" --output "$${BIN_PATH}"
+          chmod 0755 "$${BIN_PATH}"
 
 systemd:
   units:
-    # Enable automated k3s sysext updates via systemd-sysupdate.
-    - name: systemd-sysupdate.timer
-      enabled: true
-
-    # Wire k3s sysupdate into the global sysupdate service and touch a
-    # reboot-required flag when the sysext image changes.
-    - name: systemd-sysupdate.service
-      dropins:
-        - name: k3s.conf
-          contents: |
-            [Service]
-            ExecStartPre=/usr/bin/sh -c "readlink --canonicalize /etc/extensions/k3s.raw > /tmp/k3s"
-            ExecStartPre=/usr/lib/systemd/systemd-sysupdate -C k3s update
-            ExecStartPost=/usr/bin/sh -c "readlink --canonicalize /etc/extensions/k3s.raw > /tmp/k3s-new"
-            ExecStartPost=/usr/bin/sh -c "if ! cmp --silent /tmp/k3s /tmp/k3s-new; then touch /run/reboot-required; fi"
-
-    # Disable locksmithd in favour of kured or manual reboot coordination.
+    # Disable locksmithd in favour of explicit reboot coordination.
     - name: locksmithd.service
       mask: true
 
-    # Start k3s in agent mode after the sysext is merged and network is up.
+    # Install (or refresh) k3s before the agent service starts.
+    - name: k3s-install.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Install k3s binary
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/opt/sk-home/install-k3s.sh
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
+
+    # Start k3s in agent mode after binary install and network are ready.
     - name: k3s-agent.service
       enabled: true
       contents: |
@@ -105,10 +90,11 @@ systemd:
         Description=k3s agent
         Documentation=https://k3s.io
         Wants=network-online.target
-        After=network-online.target
+        After=network-online.target k3s-install.service
+        Requires=k3s-install.service
 
         [Service]
-        Type=notify
+        Type=exec
         KillMode=process
         Delegate=yes
         LimitNOFILE=1048576
@@ -120,7 +106,7 @@ systemd:
         RestartSec=5s
         ExecStartPre=-/sbin/modprobe br_netfilter
         ExecStartPre=-/sbin/modprobe overlay
-        ExecStart=/usr/bin/k3s agent --config /etc/rancher/k3s/config.yaml
+        ExecStart=/opt/bin/k3s agent --config /etc/rancher/k3s/config.yaml
 
         [Install]
         WantedBy=multi-user.target
