@@ -144,6 +144,7 @@ bgp_connections = {
   }
   "bgp-sk-k3s-master01" = {
     as            = "65001"
+    comment       = "legacy-k8s-connection"
     disabled      = false
     instance      = "bgp-instance"
     routing_table = "main"
@@ -187,6 +188,7 @@ bgp_connections = {
   }
   "bgp-sk-k3s-worker02" = {
     as            = "65001"
+    comment       = "legacy-k8s-connection"
     disabled      = false
     instance      = "bgp-instance"
     multihop      = false
@@ -198,6 +200,70 @@ bgp_connections = {
     }
     remote = {
       address = "10.1.20.103"
+      as      = "65001"
+    }
+  }
+  # Keep parallel iBGP sessions to the new k3s cluster active during
+  # application migration so traffic can shift incrementally before legacy peer
+  # cleanup.
+  "bgp-sk-k3s-new-server01" = {
+    as            = "65001"
+    comment       = "k3s-parallel-cutover"
+    disabled      = false
+    instance      = "bgp-instance"
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role = "ibgp"
+    }
+    remote = {
+      address = "10.1.20.11"
+      as      = "65001"
+    }
+  }
+  "bgp-sk-k3s-new-worker01" = {
+    as            = "65001"
+    comment       = "k3s-parallel-cutover"
+    connect       = true
+    disabled      = false
+    instance      = "bgp-instance"
+    multihop      = false
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role    = "ibgp"
+      address = "10.1.20.1"
+    }
+    output = {
+      as_override                    = false
+      default_originate              = "always"
+      default_prepend                = 0
+      keep_sent_attributes           = false
+      no_client_to_client_reflection = false
+      no_early_cut                   = false
+      remove_private_as              = false
+    }
+    remote = {
+      address = "10.1.20.12"
+      as      = "65001"
+    }
+  }
+  "bgp-sk-k3s-new-worker02" = {
+    as            = "65001"
+    comment       = "k3s-parallel-cutover"
+    disabled      = false
+    instance      = "bgp-instance"
+    multihop      = false
+    routing_table = "main"
+    vrf           = "main"
+    templates     = ["k8s-cluster"]
+    local = {
+      role = "ibgp"
+    }
+    remote = {
+      address = "10.1.20.13"
       as      = "65001"
     }
   }
