@@ -18,9 +18,6 @@ locals {
   # exactly one server node in the current single-server topology.
   server_ip = values(local.server_nodes)[0].ip
 
-  # Derive the minor version track (e.g. "v1.34") from the full k3s version
-  # string so sysupdate config points at the correct update channel.
-  k3s_version_minor = join(".", slice(split(".", var.k3s_version), 0, 2))
 }
 
 # --- Butane to Ignition transpilation ---
@@ -30,15 +27,14 @@ data "ct_config" "server" {
   for_each = local.server_nodes
 
   content = templatefile("${path.module}/templates/k3s-server.yaml.tftpl", {
-    hostname          = each.key
-    ssh_public_key    = var.ssh_public_key
-    k3s_version       = var.k3s_version
-    k3s_version_minor = local.k3s_version_minor
-    k3s_token         = var.k3s_token
-    node_ip           = each.value.ip
-    prefix_length     = var.network_prefix_length
-    gateway           = var.network_gateway
-    dns_servers       = join(" ", var.dns_servers)
+    hostname       = each.key
+    ssh_public_key = var.ssh_public_key
+    k3s_version    = var.k3s_version
+    k3s_token      = var.k3s_token
+    node_ip        = each.value.ip
+    prefix_length  = var.network_prefix_length
+    gateway        = var.network_gateway
+    dns_servers    = join(" ", var.dns_servers)
   })
   strict = true
 }
@@ -48,24 +44,23 @@ data "ct_config" "agent" {
   for_each = local.agent_nodes
 
   content = templatefile("${path.module}/templates/k3s-agent.yaml.tftpl", {
-    hostname          = each.key
-    ssh_public_key    = var.ssh_public_key
-    k3s_version       = var.k3s_version
-    k3s_version_minor = local.k3s_version_minor
-    k3s_token         = var.k3s_token
-    node_ip           = each.value.ip
-    server_ip         = local.server_ip
-    prefix_length     = var.network_prefix_length
-    gateway           = var.network_gateway
-    dns_servers       = join(" ", var.dns_servers)
+    hostname       = each.key
+    ssh_public_key = var.ssh_public_key
+    k3s_version    = var.k3s_version
+    k3s_token      = var.k3s_token
+    node_ip        = each.value.ip
+    server_ip      = local.server_ip
+    prefix_length  = var.network_prefix_length
+    gateway        = var.network_gateway
+    dns_servers    = join(" ", var.dns_servers)
   })
   strict = true
 }
 
 # --- Ignition snippet uploads ---
 
-# Upload per-node Ignition JSON as Proxmox snippets so the cloud-init
-# drive can deliver them to Flatcar at first boot.
+# Upload per-node Ignition JSON as Proxmox snippets so Proxmox cloud-init
+# custom user-data can reference them at first boot.
 resource "proxmox_virtual_environment_file" "ignition" {
   for_each = var.nodes
 
@@ -148,12 +143,21 @@ resource "proxmox_virtual_environment_vm" "node" {
     type    = "virtio"
   }
 
-  # Deliver the Ignition JSON through Proxmox cloud-init user-data. Flatcar
-  # reads the Ignition config from this source at first boot. Network
-  # configuration lives in the Butane templates (as networkd units) so
-  # Ignition has connectivity during the initramfs fetch stage.
+  # Reference the per-node Ignition snippet as Proxmox custom cloud-init
+  # user-data and keep cloud-init network metadata as a static-IP fallback.
   initialization {
     user_data_file_id = proxmox_virtual_environment_file.ignition[each.key].id
+
+    dns {
+      servers = var.dns_servers
+    }
+
+    ip_config {
+      ipv4 {
+        address = "${each.value.ip}/${var.network_prefix_length}"
+        gateway = var.network_gateway
+      }
+    }
   }
 
   serial_device {

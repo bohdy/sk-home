@@ -72,6 +72,13 @@ variable "nodes" {
     condition     = alltrue([for n in values(var.nodes) : contains(["server", "agent"], n.role)])
     error_message = "Each node role must be either 'server' or 'agent'."
   }
+
+  validation {
+    # The current stack intentionally runs a single server and N agents.
+    # Enforcing this at plan time prevents ambiguous server_ip resolution.
+    condition     = length([for n in values(var.nodes) : n if n.role == "server"]) == 1
+    error_message = "Exactly one node must have role 'server'."
+  }
 }
 
 # --- Network ---
@@ -107,7 +114,7 @@ variable "dns_servers" {
 # --- k3s ---
 
 variable "k3s_version" {
-  description = "k3s release version for the sysext image (e.g. v1.32.3+k3s1)."
+  description = "k3s release version to install on each Flatcar node (e.g. v1.34.3+k3s1)."
   type        = string
 }
 
