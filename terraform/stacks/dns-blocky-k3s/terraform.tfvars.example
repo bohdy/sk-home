@@ -1,0 +1,11 @@
+project_name    = "sk-home"
+environment     = "home"
+kubeconfig_path = ".tmp/terraform-runtime/kubeconfig/config"
+
+# Pick a free IP from the MetalLB pool configured in cluster-core-k3s.
+dns_ip = "10.1.30.254"
+
+# Replace with local hosts for your environment.
+custom_dns_records = {
+  app.internal.example = "10.1.20.50"
+}

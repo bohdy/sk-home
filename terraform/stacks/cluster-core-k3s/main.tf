@@ -332,18 +332,6 @@ resource "helm_release" "traefik" {
           enabled = true
         }
       }
-      dns-tcp = {
-        expose      = { "true" = {} }
-        port        = 55553
-        protocol    = "TCP"
-        exposedPort = 53
-      }
-      dns-udp = {
-        expose      = { "true" = {} }
-        port        = 55553
-        protocol    = "UDP"
-        exposedPort = 53
-      }
     }
     ingressRoute = {
       dashboard = {

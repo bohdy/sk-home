@@ -60,6 +60,11 @@ scrape_configs:
     static_configs:
       - targets:
           - 'unpoller:9130'
+  - job_name: blocky-dns-k3s
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'blocky-metrics.app-blocky-k3s.svc.cluster.local:4000'
   - job_name: ping
     metrics_path: /probe
     params:
