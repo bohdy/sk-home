@@ -22,7 +22,7 @@ This stack uses the official `terraform-routeros/routeros` provider with a singl
 
 - `routeros.gw`
 
-The configured endpoint format for this repo is `https://<host>` backed by RouterOS `www-ssl`.
+The configured endpoint format for this stack follows the live GW API service. Today the committed gateway endpoint uses `http://<host>` because `www-ssl` on the GW is currently unavailable.
 
 ## Local Configuration
 
@@ -42,6 +42,7 @@ Recommended sensitive input handling:
 - Define BGP instances through `bgp_instances` so shared RouterOS BGP identity stays committed independently from peer sessions.
 - Define reusable peer defaults through `bgp_templates` so connection groups can inherit shared settings without repeating them per session.
 - Define live BGP sessions through `bgp_connections`, including explicit `local`, `remote`, and `output` blocks so imported RouterOS state can converge without hidden provider defaults.
+- Set `bgp_connections.keepalive_time` and `bgp_connections.hold_time` explicitly for peers that must use non-default BGP timers; this keeps hold/keepalive behavior convergent after import.
 - Define BGP routing policy through `routing_filter_rules` so export filters remain reviewable even though RouterOS filter rules are not named objects.
 - Blackhole routes currently use the committed `blackhole_gateway_placeholder` compatibility value because the provider still requires a gateway attribute even though RouterOS blackhole routes do not use a next hop.
 - Blackhole routes intentionally set `blackhole = false` in the resource blocks even when the desired route is a blackhole route. This is not a logic error. The RouterOS provider documents `blackhole` as a presence flag rather than a meaningful boolean, and local/CI plans showed perpetual drift when the configuration used the intuitive `blackhole = true` form.
