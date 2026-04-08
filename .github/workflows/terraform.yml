@@ -27,6 +27,7 @@ on:
           - cluster-core
           - cluster-core-k3s
           - dns-blocky
+          - dns-blocky-k3s
           - apps-unifi
           - observability
           - platform-proxmox
@@ -89,6 +90,7 @@ jobs:
             "cluster-core:terraform/stacks/cluster-core:true:false"
             "cluster-core-k3s:terraform/stacks/cluster-core-k3s:true:false"
             "dns-blocky:terraform/stacks/dns-blocky:true:false"
+            "dns-blocky-k3s:terraform/stacks/dns-blocky-k3s:true:false"
             "apps-unifi:terraform/stacks/apps-unifi:true:false"
             "observability:terraform/stacks/observability:true:false"
             "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
