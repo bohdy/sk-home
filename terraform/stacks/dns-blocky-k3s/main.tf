@@ -26,11 +26,10 @@ locals {
       path   = var.metrics_path
     }
     queryLog = {
-      type              = var.query_log_mode
-      target            = var.query_log_target
-      logRetentionDays  = var.query_log_retention_days
-      logRetentionCount = var.query_log_retention_count
-      flushInterval     = var.query_log_flush_interval
+      type             = var.query_log_mode
+      target           = var.query_log_target
+      logRetentionDays = var.query_log_retention_days
+      flushInterval    = var.query_log_flush_interval
     }
     log = {
       level   = "info"

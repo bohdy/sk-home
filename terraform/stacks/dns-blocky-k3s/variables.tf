@@ -60,7 +60,7 @@ variable "log_pvc_size" {
 variable "blocky_image" {
   description = "Blocky container image pin used by the DaemonSet."
   type        = string
-  default     = "spx01/blocky:v0.25"
+  default     = "spx01/blocky:v0.29.0"
 }
 
 variable "blocky_timezone" {
@@ -106,19 +106,13 @@ variable "query_log_mode" {
 }
 
 variable "query_log_target" {
-  description = "Blocky query log output target path when file-based logging is used."
+  description = "Blocky query log output target directory used by csv-client logging."
   type        = string
-  default     = "/logs/query-log.csv"
+  default     = "/logs"
 }
 
 variable "query_log_retention_days" {
   description = "Retention period in days for CSV query logs."
-  type        = number
-  default     = 14
-}
-
-variable "query_log_retention_count" {
-  description = "Maximum number of rotated query-log files to keep."
   type        = number
   default     = 14
 }
