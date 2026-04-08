@@ -179,6 +179,8 @@ resource "routeros_routing_bgp_connection" "bgp_connection" {
   instance         = try(each.value.instance, null) == null ? null : routeros_routing_bgp_instance.bgp_instance[each.value.instance].name
   routing_table    = each.value.routing_table
   vrf              = each.value.vrf
+  hold_time        = try(each.value.hold_time, null)
+  keepalive_time   = try(each.value.keepalive_time, null)
   address_families = try(each.value.address_families, null)
   connect          = try(each.value.connect, null)
   multihop         = try(each.value.multihop, null)

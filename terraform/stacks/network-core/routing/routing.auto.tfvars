@@ -12,9 +12,9 @@ additional_tags = {
   owner = "home-lab"
 }
 
-# Point Terraform at the RouterOS HTTPS endpoint backed by the `www-ssl`
-# certificate so the provider can use the TLS-secured REST/API transport.
-mikrotik_gw_hosturl = "https://10.1.100.1"
+# Point Terraform at the live RouterOS REST endpoint for the gateway.
+# The current GW API is reachable on plain HTTP while `www-ssl` is unavailable.
+mikrotik_gw_hosturl = "http://10.1.100.1"
 
 # Reuse the gateway automation account already used by the other MikroTik
 # stacks so CI and local workflows share one credential model.
@@ -81,10 +81,12 @@ bgp_templates = {
     disabled = false
   }
   "k8s-cluster" = {
-    as            = "65001"
-    disabled      = false
-    multihop      = false
-    routing_table = "main"
+    as             = "65001"
+    disabled       = false
+    keepalive_time = "30s"
+    hold_time      = "1m30s"
+    multihop       = false
+    routing_table  = "main"
   }
 }
 
@@ -143,13 +145,15 @@ bgp_connections = {
     }
   }
   "bgp-sk-k3s-master01" = {
-    as            = "65001"
-    comment       = "legacy-k8s-connection"
-    disabled      = false
-    instance      = "bgp-instance"
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "legacy-k8s-connection"
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role = "ibgp"
     }
@@ -159,15 +163,17 @@ bgp_connections = {
     }
   }
   "bgp-sk-k3s-worker01" = {
-    as            = "65001"
-    comment       = "k3s-connection"
-    connect       = true
-    disabled      = false
-    instance      = "bgp-instance"
-    multihop      = false
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "k3s-connection"
+    connect        = true
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    multihop       = false
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role    = "ibgp"
       address = "10.1.20.1"
@@ -187,14 +193,16 @@ bgp_connections = {
     }
   }
   "bgp-sk-k3s-worker02" = {
-    as            = "65001"
-    comment       = "legacy-k8s-connection"
-    disabled      = false
-    instance      = "bgp-instance"
-    multihop      = false
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "legacy-k8s-connection"
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    multihop       = false
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role = "ibgp"
     }
@@ -207,13 +215,15 @@ bgp_connections = {
   # application migration so traffic can shift incrementally before legacy peer
   # cleanup.
   "bgp-sk-k3s-new-server01" = {
-    as            = "65001"
-    comment       = "k3s-parallel-cutover"
-    disabled      = false
-    instance      = "bgp-instance"
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "k3s-parallel-cutover"
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role = "ibgp"
     }
@@ -223,15 +233,17 @@ bgp_connections = {
     }
   }
   "bgp-sk-k3s-new-worker01" = {
-    as            = "65001"
-    comment       = "k3s-parallel-cutover"
-    connect       = true
-    disabled      = false
-    instance      = "bgp-instance"
-    multihop      = false
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "k3s-parallel-cutover"
+    connect        = true
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    multihop       = false
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role    = "ibgp"
       address = "10.1.20.1"
@@ -251,14 +263,16 @@ bgp_connections = {
     }
   }
   "bgp-sk-k3s-new-worker02" = {
-    as            = "65001"
-    comment       = "k3s-parallel-cutover"
-    disabled      = false
-    instance      = "bgp-instance"
-    multihop      = false
-    routing_table = "main"
-    vrf           = "main"
-    templates     = ["k8s-cluster"]
+    as             = "65001"
+    comment        = "k3s-parallel-cutover"
+    disabled       = false
+    hold_time      = "1m30s"
+    instance       = "bgp-instance"
+    keepalive_time = "30s"
+    multihop       = false
+    routing_table  = "main"
+    vrf            = "main"
+    templates      = ["k8s-cluster"]
     local = {
       role = "ibgp"
     }

@@ -147,6 +147,8 @@ variable "bgp_connections" {
     instance         = optional(string)
     routing_table    = optional(string, "main")
     vrf              = optional(string, "main")
+    hold_time        = optional(string)
+    keepalive_time   = optional(string)
     address_families = optional(string)
     connect          = optional(bool)
     multihop         = optional(bool)

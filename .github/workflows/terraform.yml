@@ -353,12 +353,12 @@ jobs:
 
           case "${{ matrix.stack_name }}" in
             network-core)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-interfaces-gw)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-interfaces-switch-1pp)
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
@@ -367,10 +367,10 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-routing)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
           esac
 
@@ -415,7 +415,32 @@ jobs:
       - name: Terraform plan
         if: matrix.enable_plan
         timeout-minutes: 20
-        run: terraform plan -lock=false -no-color -out=tfplan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          plan_args=(-lock=false -no-color -out=tfplan)
+          if [[ "${{ matrix.stack_name }}" == "network-core-routing" ]]; then
+            # The MikroTik REST API is sensitive to refresh burst load, so
+            # serialize provider refreshes for this stack to reduce transient
+            # timeout failures in CI while preserving a real refreshed plan.
+            plan_args+=(-parallelism=1)
+          fi
+
+          for attempt in 1 2 3; do
+            if terraform plan "${plan_args[@]}"; then
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 15))
+              echo "Terraform plan failed on attempt ${attempt}; retrying in ${sleep_seconds}s"
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "Terraform plan failed after 3 attempts"
+          exit 1
 
       # Convert the binary plan to plain text so it can be reviewed from CI
       # without rerunning Terraform locally.
@@ -491,12 +516,12 @@ jobs:
 
           case "${{ matrix.stack_name }}" in
             network-core)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-interfaces-gw)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-interfaces-switch-1pp)
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
@@ -505,10 +530,10 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-routing)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
           esac
 
