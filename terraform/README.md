@@ -23,6 +23,7 @@ The bootstrap is intentionally minimal. It provides:
 - `stacks/network-core/dhcp/`: MikroTik gateway DHCP scopes, reservations, and DHCP options
 - `stacks/network-core/routing/`: MikroTik gateway static routing and BGP configuration
 - `stacks/cluster-core/`: Kubernetes platform foundations migrated from the old Pulumi `k8s` stack
+- `stacks/cluster-core-k3s/`: Kubernetes platform foundations for the new k3s cluster in a separate migration state root
 - `stacks/dns-blocky/`: Blocky DNS workload migrated from the old Pulumi `blocky` stack
 - `stacks/apps-unifi/`: UniFi application workload migrated from the old Pulumi app stack
 - `stacks/observability/`: observability destination stack for the old Pulumi `metrics` domain
