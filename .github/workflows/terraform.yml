@@ -353,12 +353,12 @@ jobs:
 
           case "${{ matrix.stack_name }}" in
             network-core)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-interfaces-gw)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-interfaces-switch-1pp)
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
@@ -367,7 +367,7 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-routing)
               nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
@@ -516,12 +516,12 @@ jobs:
 
           case "${{ matrix.stack_name }}" in
             network-core)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-interfaces-gw)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-interfaces-switch-1pp)
               nc -zvw5 10.1.100.2 443 || { echo "Cannot reach MikroTik Switch 1PP on port 443"; exit 1; }
@@ -530,7 +530,7 @@ jobs:
               nc -zvw5 10.1.100.3 443 || { echo "Cannot reach MikroTik Switch 1NP on port 443"; exit 1; }
               ;;
             network-core-dhcp)
-              nc -zvw5 10.1.100.1 443 || { echo "Cannot reach MikroTik GW on port 443"; exit 1; }
+              nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
               ;;
             network-core-routing)
               nc -zvw5 10.1.100.1 443 || nc -zvw5 10.1.100.1 80 || { echo "Cannot reach MikroTik GW on port 443 or 80"; exit 1; }
