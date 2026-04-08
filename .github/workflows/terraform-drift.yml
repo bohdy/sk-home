@@ -47,6 +47,8 @@ jobs:
             stack_name: network-core-routing
           - stack: terraform/stacks/platform-k3s
             stack_name: platform-k3s
+          - stack: terraform/stacks/dns-blocky-k3s
+            stack_name: dns-blocky-k3s
 
     defaults:
       run:
