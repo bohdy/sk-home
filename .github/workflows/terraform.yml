@@ -273,7 +273,7 @@ jobs:
       # by JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc flock
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
@@ -392,12 +392,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Isolate plugin cache writes per stack so parallel matrix jobs do not
-          # race on the same provider binary path and hit ETXTBSY errors.
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
+          # Use one shared cache to avoid duplicating provider archives per stack
+          # and exhausting runner disk space during wide matrix runs.
+          plugin_cache_root="${HOME}/.terraform.d/plugin-cache"
+          plugin_cache_dir="${plugin_cache_root}/shared"
           mkdir -p "${plugin_cache_dir}"
           chmod 700 "${HOME}/.terraform.d"
-          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
+          # Remove older per-stack cache directories left by prior workflow
+          # revisions so the persistent runner can reclaim disk space safely.
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d ! -name shared -exec rm -rf {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Keep formatting enforcement simple and consistent across all stacks.
@@ -409,7 +413,13 @@ jobs:
       # against the same remote-state backend used outside CI.
       - name: Terraform init
         timeout-minutes: 10
-        run: terraform init -reconfigure
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Serialize init across concurrent matrix jobs on the same runner so
+          # provider cache writes stay consistent without forcing max-parallel=1.
+          lock_file="${HOME}/.terraform.d/plugin-cache/.terraform-init.lock"
+          flock -w 600 "${lock_file}" terraform init -reconfigure
 
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate
@@ -507,7 +517,7 @@ jobs:
       # to execute Terraform applies consistently.
       - name: Preflight runner tools
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc flock
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
@@ -560,19 +570,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Keep apply jobs aligned with validate jobs by using isolated per
-          # stack cache paths under the same persistent runner directory.
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
+          # Keep apply jobs on the same shared cache path used by validation so
+          # provider downloads are reused and disk usage stays bounded.
+          plugin_cache_root="${HOME}/.terraform.d/plugin-cache"
+          plugin_cache_dir="${plugin_cache_root}/shared"
           mkdir -p "${plugin_cache_dir}"
           chmod 700 "${HOME}/.terraform.d"
-          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d ! -name shared -exec rm -rf {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Reinitialize the backend in the apply job so state operations use fresh
       # provider and backend configuration.
       - name: Terraform init
         timeout-minutes: 10
-        run: terraform init -reconfigure
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock_file="${HOME}/.terraform.d/plugin-cache/.terraform-init.lock"
+          flock -w 600 "${lock_file}" terraform init -reconfigure
 
       # Apply the committed desired state for CI-ready stacks after validation
       # succeeds on the same revision.

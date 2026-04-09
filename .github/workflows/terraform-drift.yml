@@ -73,7 +73,7 @@ jobs:
       # JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws curl git node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws curl git node unzip nc flock
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
@@ -139,19 +139,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Avoid cross-stack cache write races between concurrent drift jobs by
-          # isolating provider cache directories per Terraform stack.
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
+          # Keep drift runs on a shared plugin cache so provider binaries are not
+          # duplicated per stack and the runner disk stays within safe bounds.
+          plugin_cache_root="${HOME}/.terraform.d/plugin-cache"
+          plugin_cache_dir="${plugin_cache_root}/shared"
           mkdir -p "${plugin_cache_dir}"
           chmod 700 "${HOME}/.terraform.d"
-          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d ! -name shared -exec rm -rf {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Reinitialize the backend so the drift check uses the same remote state
       # configuration as interactive Terraform runs.
       - name: Terraform init
         timeout-minutes: 10
-        run: terraform init -reconfigure
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Serialize init so parallel drift jobs do not race while extracting
+          # providers into the shared runner cache directory.
+          lock_file="${HOME}/.terraform.d/plugin-cache/.terraform-init.lock"
+          flock -w 600 "${lock_file}" terraform init -reconfigure
 
       # Use Terraform's detailed exit codes so the workflow can distinguish
       # between a clean state, detected drift, and a real execution failure.
