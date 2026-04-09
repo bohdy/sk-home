@@ -139,9 +139,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          # Avoid cross-stack cache write races between concurrent drift jobs by
+          # isolating provider cache directories per Terraform stack.
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
           mkdir -p "${plugin_cache_dir}"
-          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d"
+          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Reinitialize the backend so the drift check uses the same remote state

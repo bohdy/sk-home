@@ -392,9 +392,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          # Isolate plugin cache writes per stack so parallel matrix jobs do not
+          # race on the same provider binary path and hit ETXTBSY errors.
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
           mkdir -p "${plugin_cache_dir}"
-          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d"
+          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Keep formatting enforcement simple and consistent across all stacks.
@@ -557,9 +560,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          # Keep apply jobs aligned with validate jobs by using isolated per
+          # stack cache paths under the same persistent runner directory.
+          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache/${{ matrix.stack_name }}"
           mkdir -p "${plugin_cache_dir}"
-          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d"
+          find "${HOME}/.terraform.d/plugin-cache" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Reinitialize the backend in the apply job so state operations use fresh
