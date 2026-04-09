@@ -88,9 +88,9 @@ jobs:
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
             "cluster-core:terraform/stacks/cluster-core:true:false"
-            "cluster-core-k3s:terraform/stacks/cluster-core-k3s:true:false"
+            "cluster-core-k3s:terraform/stacks/cluster-core-k3s:true:false:K3S_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_K3S,KUBECONFIG_CONTENT"
             "dns-blocky:terraform/stacks/dns-blocky:true:false"
-            "dns-blocky-k3s:terraform/stacks/dns-blocky-k3s:true:true"
+            "dns-blocky-k3s:terraform/stacks/dns-blocky-k3s:true:true:K3S_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_K3S,KUBECONFIG_CONTENT"
             "apps-unifi:terraform/stacks/apps-unifi:true:false"
             "observability:terraform/stacks/observability:true:false"
             "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
@@ -101,6 +101,7 @@ jobs:
             "identity-edge:terraform/stacks/identity-edge:true:false"
             "overlay:terraform/stacks/overlay:true:false"
           )
+          default_kubeconfig_secret_names="KUBECONFIG_CONTENT,HOME_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_HOME"
 
           workflow_changed="false"
           modules_changed="false"
@@ -180,7 +181,8 @@ jobs:
           fi
 
           for stack_definition in "${STACK_DEFINITIONS[@]}"; do
-            IFS=":" read -r stack_name stack_path enable_plan enable_apply <<<"${stack_definition}"
+            IFS=":" read -r stack_name stack_path enable_plan enable_apply kubeconfig_secret_names <<<"${stack_definition}"
+            kubeconfig_secret_names="${kubeconfig_secret_names:-${default_kubeconfig_secret_names}}"
 
             stack_selected="false"
 
@@ -198,7 +200,7 @@ jobs:
               continue
             fi
 
-            validate_entry="{\"stack\":\"${stack_path}\",\"stack_name\":\"${stack_name}\",\"enable_plan\":${enable_plan},\"enable_apply\":${enable_apply}}"
+            validate_entry="{\"stack\":\"${stack_path}\",\"stack_name\":\"${stack_name}\",\"enable_plan\":${enable_plan},\"enable_apply\":${enable_apply},\"kubeconfig_secret_names\":\"${kubeconfig_secret_names}\"}"
             if [[ -z "${validate_include}" ]]; then
               validate_include="${validate_entry}"
             else
@@ -277,7 +279,7 @@ jobs:
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env --kubeconfig-secret-names "${{ matrix.kubeconfig_secret_names }}" terraform
 
       # Some imported stacks still preserve sensitive live inputs in Kubernetes
       # rather than Bitwarden. Hydrate only the values needed for read-only
@@ -421,7 +423,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          plan_args=(-lock=false -no-color -out=tfplan)
+          # Force non-interactive plans so missing inputs fail quickly instead of
+          # blocking the self-hosted runner waiting for a prompt.
+          plan_args=(-input=false -lock=false -no-color -out=tfplan)
           if [[ "${{ matrix.stack_name }}" == "network-core-routing" ]]; then
             # The MikroTik REST API is sensitive to refresh burst load, so
             # serialize provider refreshes for this stack to reduce transient
@@ -506,7 +510,7 @@ jobs:
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env --kubeconfig-secret-names "${{ matrix.kubeconfig_secret_names }}" terraform
 
       # Verify network reachability again in the deployment job so apply fails
       # fast before touching remote state or device APIs.

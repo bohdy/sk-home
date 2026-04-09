@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 usage() {
   cat <<'EOF' >&2
 Usage:
-  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] [--kubeconfig-dir <path>] <profile>
+  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] [--kubeconfig-dir <path>] [--kubeconfig-secret-names <csv>] <profile>
 
 Profiles:
   terraform             Export Terraform and backend credentials.
@@ -35,6 +35,7 @@ profile=""
 project_id="${BITWARDEN_PROJECT_ID:-}"
 ssh_dir=""
 kubeconfig_dir=""
+kubeconfig_secret_names="KUBECONFIG_CONTENT"
 github_env_file="${GITHUB_ENV:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -58,6 +59,11 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || usage
       kubeconfig_dir="$1"
+      ;;
+    --kubeconfig-secret-names)
+      shift
+      [[ $# -gt 0 ]] || usage
+      kubeconfig_secret_names="$1"
       ;;
     -h|--help)
       usage
@@ -156,12 +162,44 @@ emit_optional_value() {
   fi
 }
 
+resolve_first_present_secret() {
+  local secret_names_csv="$1"
+  local secret_name=""
+  local secret_value=""
+  local -a secret_candidates=()
+
+  IFS=',' read -r -a secret_candidates <<< "${secret_names_csv}"
+  for secret_name in "${secret_candidates[@]}"; do
+    # Trim surrounding whitespace so callers can format the CSV for readability.
+    secret_name="${secret_name#"${secret_name%%[![:space:]]*}"}"
+    secret_name="${secret_name%"${secret_name##*[![:space:]]}"}"
+    [[ -n "${secret_name}" ]] || continue
+
+    if [[ ! "${secret_name}" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+      echo "Invalid kubeconfig secret name: ${secret_name}" >&2
+      exit 1
+    fi
+
+    secret_value="${!secret_name:-}"
+    if [[ -n "${secret_value}" ]]; then
+      printf '%s\n' "${secret_value}"
+      return 0
+    fi
+  done
+
+  return 0
+}
+
 materialize_kubeconfig() {
   local runtime_state_dir
   local resolved_kubeconfig_dir
   local kubeconfig_file
+  local kubeconfig_content
 
-  if [[ -z "${KUBECONFIG_CONTENT:-}" ]]; then
+  # Support multiple candidate secret names so CI can choose between kubeconfig
+  # materials for legacy and k3s-managed clusters without duplicating loaders.
+  kubeconfig_content="$(resolve_first_present_secret "${kubeconfig_secret_names}")"
+  if [[ -z "${kubeconfig_content}" ]]; then
     return 0
   fi
 
@@ -169,7 +207,7 @@ materialize_kubeconfig() {
   resolved_kubeconfig_dir="${kubeconfig_dir:-${runtime_state_dir}/kubeconfig}"
   kubeconfig_file="${resolved_kubeconfig_dir}/config"
 
-  write_file "${kubeconfig_file}" 600 "${KUBECONFIG_CONTENT}"
+  write_file "${kubeconfig_file}" 600 "${kubeconfig_content}"
   chmod 700 "${resolved_kubeconfig_dir}"
 
   emit_value "TF_VAR_kubeconfig_path" "${kubeconfig_file}"
