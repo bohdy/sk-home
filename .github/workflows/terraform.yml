@@ -88,9 +88,9 @@ jobs:
             "network-core-dhcp:terraform/stacks/network-core/dhcp:true:true"
             "network-core-routing:terraform/stacks/network-core/routing:true:true"
             "cluster-core:terraform/stacks/cluster-core:true:false"
-            "cluster-core-k3s:terraform/stacks/cluster-core-k3s:true:false"
+            "cluster-core-k3s:terraform/stacks/cluster-core-k3s:true:false:K3S_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_K3S,KUBECONFIG_CONTENT"
             "dns-blocky:terraform/stacks/dns-blocky:true:false"
-            "dns-blocky-k3s:terraform/stacks/dns-blocky-k3s:true:true"
+            "dns-blocky-k3s:terraform/stacks/dns-blocky-k3s:true:true:K3S_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_K3S,KUBECONFIG_CONTENT"
             "apps-unifi:terraform/stacks/apps-unifi:true:false"
             "observability:terraform/stacks/observability:true:false"
             "platform-proxmox:terraform/stacks/platform-proxmox:true:false"
@@ -101,6 +101,7 @@ jobs:
             "identity-edge:terraform/stacks/identity-edge:true:false"
             "overlay:terraform/stacks/overlay:true:false"
           )
+          default_kubeconfig_secret_names="KUBECONFIG_CONTENT,HOME_KUBECONFIG_CONTENT,KUBECONFIG_CONTENT_HOME"
 
           workflow_changed="false"
           modules_changed="false"
@@ -180,7 +181,8 @@ jobs:
           fi
 
           for stack_definition in "${STACK_DEFINITIONS[@]}"; do
-            IFS=":" read -r stack_name stack_path enable_plan enable_apply <<<"${stack_definition}"
+            IFS=":" read -r stack_name stack_path enable_plan enable_apply kubeconfig_secret_names <<<"${stack_definition}"
+            kubeconfig_secret_names="${kubeconfig_secret_names:-${default_kubeconfig_secret_names}}"
 
             stack_selected="false"
 
@@ -198,7 +200,7 @@ jobs:
               continue
             fi
 
-            validate_entry="{\"stack\":\"${stack_path}\",\"stack_name\":\"${stack_name}\",\"enable_plan\":${enable_plan},\"enable_apply\":${enable_apply}}"
+            validate_entry="{\"stack\":\"${stack_path}\",\"stack_name\":\"${stack_name}\",\"enable_plan\":${enable_plan},\"enable_apply\":${enable_apply},\"kubeconfig_secret_names\":\"${kubeconfig_secret_names}\"}"
             if [[ -z "${validate_include}" ]]; then
               validate_include="${validate_entry}"
             else
@@ -271,13 +273,13 @@ jobs:
       # by JavaScript-based GitHub Actions and Terraform setup.
       - name: Preflight runner tools
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git kubectl node unzip nc flock
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env --kubeconfig-secret-names "${{ matrix.kubeconfig_secret_names }}" terraform
 
       # Some imported stacks still preserve sensitive live inputs in Kubernetes
       # rather than Bitwarden. Hydrate only the values needed for read-only
@@ -390,9 +392,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          # Use one shared cache to avoid duplicating provider archives per stack
+          # and exhausting runner disk space during wide matrix runs.
+          plugin_cache_root="${HOME}/.terraform.d/plugin-cache"
+          plugin_cache_dir="${plugin_cache_root}/shared"
           mkdir -p "${plugin_cache_dir}"
-          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d"
+          # Remove older per-stack cache directories left by prior workflow
+          # revisions so the persistent runner can reclaim disk space safely.
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d ! -name shared -exec rm -rf {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Keep formatting enforcement simple and consistent across all stacks.
@@ -404,7 +413,13 @@ jobs:
       # against the same remote-state backend used outside CI.
       - name: Terraform init
         timeout-minutes: 10
-        run: terraform init -reconfigure
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Serialize init across concurrent matrix jobs on the same runner so
+          # provider cache writes stay consistent without forcing max-parallel=1.
+          lock_file="${HOME}/.terraform.d/plugin-cache/.terraform-init.lock"
+          flock -w 600 "${lock_file}" terraform init -reconfigure
 
       # Validate the selected stack structure and provider configuration.
       - name: Terraform validate
@@ -421,7 +436,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          plan_args=(-lock=false -no-color -out=tfplan)
+          # Force non-interactive plans so missing inputs fail quickly instead of
+          # blocking the self-hosted runner waiting for a prompt.
+          plan_args=(-input=false -lock=false -no-color -out=tfplan)
           if [[ "${{ matrix.stack_name }}" == "network-core-routing" ]]; then
             # The MikroTik REST API is sensitive to refresh burst load, so
             # serialize provider refreshes for this stack to reduce transient
@@ -500,13 +517,13 @@ jobs:
       # to execute Terraform applies consistently.
       - name: Preflight runner tools
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc
+        run: ${{ github.workspace }}/scripts/require-runner-tools.sh bash bws git node unzip nc flock
 
       # Load the exact Terraform env vars expected by provider and backend
       # configuration from Bitwarden instead of GitHub repository secrets.
       - name: Load Bitwarden secrets
         timeout-minutes: 5
-        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env terraform
+        run: ${{ github.workspace }}/scripts/load-bitwarden-secrets.sh --format github-env --kubeconfig-secret-names "${{ matrix.kubeconfig_secret_names }}" terraform
 
       # Verify network reachability again in the deployment job so apply fails
       # fast before touching remote state or device APIs.
@@ -553,16 +570,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          plugin_cache_dir="${HOME}/.terraform.d/plugin-cache"
+          # Keep apply jobs on the same shared cache path used by validation so
+          # provider downloads are reused and disk usage stays bounded.
+          plugin_cache_root="${HOME}/.terraform.d/plugin-cache"
+          plugin_cache_dir="${plugin_cache_root}/shared"
           mkdir -p "${plugin_cache_dir}"
-          chmod 700 "${HOME}/.terraform.d" "${plugin_cache_dir}"
+          chmod 700 "${HOME}/.terraform.d"
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d ! -name shared -exec rm -rf {} \;
+          find "${plugin_cache_root}" -mindepth 1 -maxdepth 1 -type d -exec chmod 700 {} \;
           echo "TF_PLUGIN_CACHE_DIR=${plugin_cache_dir}" >> "${GITHUB_ENV}"
 
       # Reinitialize the backend in the apply job so state operations use fresh
       # provider and backend configuration.
       - name: Terraform init
         timeout-minutes: 10
-        run: terraform init -reconfigure
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock_file="${HOME}/.terraform.d/plugin-cache/.terraform-init.lock"
+          flock -w 600 "${lock_file}" terraform init -reconfigure
 
       # Apply the committed desired state for CI-ready stacks after validation
       # succeeds on the same revision.

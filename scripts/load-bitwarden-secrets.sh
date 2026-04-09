@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 usage() {
   cat <<'EOF' >&2
 Usage:
-  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] [--kubeconfig-dir <path>] <profile>
+  load-bitwarden-secrets.sh [--format export|github-env] [--project-id <id>] [--ssh-dir <path>] [--kubeconfig-dir <path>] [--kubeconfig-secret-names <csv>] <profile>
 
 Profiles:
   terraform             Export Terraform and backend credentials.
@@ -35,6 +35,7 @@ profile=""
 project_id="${BITWARDEN_PROJECT_ID:-}"
 ssh_dir=""
 kubeconfig_dir=""
+kubeconfig_secret_names="KUBECONFIG_CONTENT"
 github_env_file="${GITHUB_ENV:-}"
 
 while [[ $# -gt 0 ]]; do
@@ -58,6 +59,11 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || usage
       kubeconfig_dir="$1"
+      ;;
+    --kubeconfig-secret-names)
+      shift
+      [[ $# -gt 0 ]] || usage
+      kubeconfig_secret_names="$1"
       ;;
     -h|--help)
       usage
@@ -156,12 +162,110 @@ emit_optional_value() {
   fi
 }
 
+resolve_first_present_secret() {
+  local secret_names_csv="$1"
+  local secret_name=""
+  local secret_value=""
+  local -a secret_candidates=()
+  local prefer_k3s="false"
+
+  IFS=',' read -r -a secret_candidates <<< "${secret_names_csv}"
+  for secret_name in "${secret_candidates[@]}"; do
+    # Trim surrounding whitespace so callers can format the CSV for readability.
+    secret_name="${secret_name#"${secret_name%%[![:space:]]*}"}"
+    secret_name="${secret_name%"${secret_name##*[![:space:]]}"}"
+    [[ -n "${secret_name}" ]] || continue
+
+    if [[ ! "${secret_name}" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+      echo "Invalid kubeconfig secret name: ${secret_name}" >&2
+      exit 1
+    fi
+
+    secret_value="${!secret_name:-}"
+    if [[ -n "${secret_value}" ]]; then
+      printf '%s\n' "${secret_value}"
+      return 0
+    fi
+  done
+
+  # Fall back to kubeconfig content autodiscovery so operators do not need to
+  # rename Bitwarden keys when migrating between cluster naming conventions.
+  if [[ "${secret_names_csv}" == *"K3S"* ]]; then
+    prefer_k3s="true"
+  fi
+
+  discover_kubeconfig_secret "${prefer_k3s}"
+
+  return 0
+}
+
+looks_like_kubeconfig_content() {
+  local value="$1"
+
+  [[ "${value}" == *"apiVersion:"* ]] || return 1
+  [[ "${value}" == *"clusters:"* ]] || return 1
+  [[ "${value}" == *"contexts:"* ]] || return 1
+  [[ "${value}" == *"users:"* ]] || return 1
+  return 0
+}
+
+discover_kubeconfig_secret() {
+  local prefer_k3s="$1"
+  local env_name=""
+  local env_value=""
+  local -a env_names=()
+
+  mapfile -t env_names < <(compgen -A variable | sort)
+
+  # Prefer explicit cluster-tagged keys first when the caller indicates that a
+  # stack should target k3s kubeconfig material.
+  if [[ "${prefer_k3s}" == "true" ]]; then
+    for env_name in "${env_names[@]}"; do
+      [[ "${env_name}" == *"KUBECONFIG"* || "${env_name}" == *"KUBE_CONFIG"* ]] || continue
+      [[ "${env_name}" == *"K3S"* ]] || continue
+      env_value="${!env_name:-}"
+      if looks_like_kubeconfig_content "${env_value}"; then
+        printf '%s\n' "${env_value}"
+        return 0
+      fi
+    done
+  fi
+
+  # For non-k3s stacks, prefer keys that explicitly reference the existing
+  # primary/home cluster before trying generic kubeconfig secret names.
+  if [[ "${prefer_k3s}" != "true" ]]; then
+    for env_name in "${env_names[@]}"; do
+      [[ "${env_name}" == *"KUBECONFIG"* || "${env_name}" == *"KUBE_CONFIG"* ]] || continue
+      [[ "${env_name}" == *"HOME"* || "${env_name}" == *"PRIMARY"* || "${env_name}" == *"DEFAULT"* || "${env_name}" == *"LEGACY"* ]] || continue
+      env_value="${!env_name:-}"
+      if looks_like_kubeconfig_content "${env_value}"; then
+        printf '%s\n' "${env_value}"
+        return 0
+      fi
+    done
+  fi
+
+  # Finally, use any kubeconfig-shaped value emitted by Bitwarden.
+  for env_name in "${env_names[@]}"; do
+    [[ "${env_name}" == *"KUBECONFIG"* || "${env_name}" == *"KUBE_CONFIG"* ]] || continue
+    env_value="${!env_name:-}"
+    if looks_like_kubeconfig_content "${env_value}"; then
+      printf '%s\n' "${env_value}"
+      return 0
+    fi
+  done
+}
+
 materialize_kubeconfig() {
   local runtime_state_dir
   local resolved_kubeconfig_dir
   local kubeconfig_file
+  local kubeconfig_content
 
-  if [[ -z "${KUBECONFIG_CONTENT:-}" ]]; then
+  # Support multiple candidate secret names so CI can choose between kubeconfig
+  # materials for legacy and k3s-managed clusters without duplicating loaders.
+  kubeconfig_content="$(resolve_first_present_secret "${kubeconfig_secret_names}")"
+  if [[ -z "${kubeconfig_content}" ]]; then
     return 0
   fi
 
@@ -169,7 +273,7 @@ materialize_kubeconfig() {
   resolved_kubeconfig_dir="${kubeconfig_dir:-${runtime_state_dir}/kubeconfig}"
   kubeconfig_file="${resolved_kubeconfig_dir}/config"
 
-  write_file "${kubeconfig_file}" 600 "${KUBECONFIG_CONTENT}"
+  write_file "${kubeconfig_file}" 600 "${kubeconfig_content}"
   chmod 700 "${resolved_kubeconfig_dir}"
 
   emit_value "TF_VAR_kubeconfig_path" "${kubeconfig_file}"
