@@ -31,3 +31,10 @@ Recommended sensitive input handling:
 
 - This root manages objects that already exist on the live gateway. Import the existing bridge, bridge ports, bridge VLANs, VLAN interfaces, `sit1`, and any pre-existing interface addresses before the first apply.
 - Keep gateway bridge port VLAN membership and `bridge_vlan_keys` changes synchronized in the same change whenever a port role changes.
+
+## Key Outputs
+
+- `ipv4_interface_addresses`: IPv4 addresses keyed by logical address key.
+- `ipv6_interface_addresses`: IPv6 addresses keyed by logical address key.
+- `ipv4_addresses_by_interface`: IPv4 addresses grouped by interface name.
+- `ipv6_addresses_by_interface`: IPv6 addresses grouped by interface name.
