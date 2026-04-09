@@ -4,7 +4,7 @@ This directory groups the per-device Terraform roots that manage MikroTik interf
 
 ## Per-Device Roots
 
-- [`gw`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/gw/README.md): gateway bridge, VLAN, tunnel, and physical interface state
+- [`gw`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/gw/README.md): gateway bridge, VLAN, tunnel, physical interface, and interface address state
 - [`switch-1pp`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/switch-1pp/README.md): Switch 1PP bridge, VLAN, and physical interface state
 - [`switch-1np`](/Users/bohdy/git/sk-home/terraform/stacks/network-core/interfaces/switch-1np/README.md): Switch 1NP bridge, VLAN, and physical interface state
 
@@ -36,7 +36,7 @@ Recommended sensitive input handling:
 
 ## Rollout Notes
 
-- The current `gw`, `switch-1pp`, and `switch-1np` roots were imported from the live devices before review so Terraform state already matches the existing bridge, bridge port, bridge VLAN, VLAN interface, tunnel, and physical interface objects tracked by this repo.
+- The current `gw`, `switch-1pp`, and `switch-1np` roots were imported from the live devices before review so Terraform state already matches the existing bridge, bridge port, bridge VLAN, VLAN interface, tunnel, physical interface, and gateway interface address objects tracked by this repo.
 - The per-device roots are now CI-ready for validate, apply, and scheduled drift checks because their existing live objects have already been imported into the matching remote states.
 - If future work adds pre-existing live RouterOS objects that are not yet in state, import them into the matching per-device root before the first apply that manages them.
 - The per-device split is intentionally more import-friendly than the old shared interfaces root because each state now mirrors one actual device.

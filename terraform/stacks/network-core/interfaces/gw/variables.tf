@@ -131,3 +131,35 @@ variable "six_to_four_interfaces" {
   }))
   default = {}
 }
+
+# Keep gateway IPv4 addresses in committed data so per-interface L3 identity
+# is managed in the same root as bridge and VLAN interface topology.
+variable "ipv4_interface_addresses" {
+  description = "Gateway IPv4 interface addresses keyed by a stable logical address key."
+  type = map(object({
+    interface = string
+    address   = string
+    comment   = optional(string)
+    disabled  = optional(bool, false)
+    vrf       = optional(string)
+  }))
+  default = {}
+}
+
+# Keep gateway IPv6 addresses in committed data so dual-stack interface
+# behavior is explicit and importable in this per-device state.
+variable "ipv6_interface_addresses" {
+  description = "Gateway IPv6 interface addresses keyed by a stable logical address key."
+  type = map(object({
+    interface       = string
+    address         = string
+    comment         = optional(string)
+    disabled        = optional(bool, false)
+    advertise       = optional(bool)
+    auto_link_local = optional(bool)
+    eui_64          = optional(bool)
+    from_pool       = optional(string)
+    no_dad          = optional(bool)
+  }))
+  default = {}
+}

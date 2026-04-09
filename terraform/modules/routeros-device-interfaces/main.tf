@@ -49,6 +49,20 @@ locals {
     interface_name => merge(interface, { name = interface_name })
   }
 
+  # Keep IPv4 address definitions keyed and normalized so static interface
+  # addresses can be imported and managed predictably per device root.
+  ipv4_interface_address_inventory = {
+    for address_key, address in var.ipv4_interface_addresses :
+    address_key => merge(address, { key = address_key })
+  }
+
+  # Keep IPv6 address definitions keyed and normalized so dual-stack interface
+  # addressing is reviewable in the same source of truth as L2 interfaces.
+  ipv6_interface_address_inventory = {
+    for address_key, address in var.ipv6_interface_addresses :
+    address_key => merge(address, { key = address_key })
+  }
+
   # Normalize bridge ports from keyed data so symbolic VLAN references can be
   # resolved before RouterOS resources consume them.
   bridge_port_inventory = {
@@ -154,6 +168,48 @@ resource "routeros_interface_6to4" "this" {
   clamp_tcp_mss  = each.value.clamp_tcp_mss
   comment        = try(each.value.comment, null)
   disabled       = each.value.disabled
+}
+
+# Manage one IPv4 address per committed address key so per-interface L3
+# identities stay in Terraform state with explicit import addresses.
+resource "routeros_ip_address" "this" {
+  for_each = local.ipv4_interface_address_inventory
+
+  interface = each.value.interface
+  address   = each.value.address
+  comment   = try(each.value.comment, null)
+  disabled  = each.value.disabled
+  vrf       = try(each.value.vrf, null)
+
+  depends_on = [
+    routeros_interface_bridge.this,
+    routeros_interface_vlan.this,
+    routeros_interface_6to4.this,
+    routeros_interface_ethernet.this,
+  ]
+}
+
+# Manage one IPv6 address per committed address key so interface dual-stack
+# ownership and advertisement intent remain explicit and reviewable.
+resource "routeros_ipv6_address" "this" {
+  for_each = local.ipv6_interface_address_inventory
+
+  interface       = each.value.interface
+  address         = each.value.address
+  comment         = try(each.value.comment, null)
+  disabled        = each.value.disabled
+  advertise       = try(each.value.advertise, null)
+  auto_link_local = try(each.value.auto_link_local, null)
+  eui_64          = try(each.value.eui_64, null)
+  from_pool       = try(each.value.from_pool, null)
+  no_dad          = try(each.value.no_dad, null)
+
+  depends_on = [
+    routeros_interface_bridge.this,
+    routeros_interface_vlan.this,
+    routeros_interface_6to4.this,
+    routeros_interface_ethernet.this,
+  ]
 }
 
 # Manage bridge membership and ingress behavior per port so access, trunk, and
