@@ -190,13 +190,13 @@ ipv4_interface_addresses = {
 ipv6_interface_addresses = {
   vlan20-gateway = {
     interface = "vlan20"
-    address   = "2a02:768:e915:a28e::1/64"
+    address   = "2001:470:59cf:20::1/64"
     comment   = "Gateway IPv6 for VLAN Servers"
     advertise = true
   }
-  sit1-bgp-local = {
-    interface = "sit1"
-    address   = "fd00:12::1/64"
+  wireguard1-bgp-local = {
+    interface = "wireguard1"
+    address   = "fd00:12::1/126"
     comment   = "BGP local IPv6 for SH peering"
     advertise = false
   }
