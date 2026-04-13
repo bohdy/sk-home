@@ -22,19 +22,21 @@ module "interfaces" {
     routeros = routeros
   }
 
-  project_name           = var.project_name
-  environment            = var.environment
-  site_name              = var.site_name
-  stack_name             = "network-core-interfaces-gw"
-  device_key             = local.mikrotik_device.key
-  device_name            = local.mikrotik_device.name
-  device_role            = local.mikrotik_device.role
-  additional_tags        = var.additional_tags
-  ethernet_interfaces    = var.ethernet_interfaces
-  bridge                 = var.bridge
-  vlan_catalog           = local.vlan_catalog
-  bridge_ports           = var.bridge_ports
-  bridge_vlan_keys       = var.bridge_vlan_keys
-  device_vlans           = var.device_vlans
-  six_to_four_interfaces = var.six_to_four_interfaces
+  project_name             = var.project_name
+  environment              = var.environment
+  site_name                = var.site_name
+  stack_name               = "network-core-interfaces-gw"
+  device_key               = local.mikrotik_device.key
+  device_name              = local.mikrotik_device.name
+  device_role              = local.mikrotik_device.role
+  additional_tags          = var.additional_tags
+  ethernet_interfaces      = var.ethernet_interfaces
+  bridge                   = var.bridge
+  vlan_catalog             = local.vlan_catalog
+  bridge_ports             = var.bridge_ports
+  bridge_vlan_keys         = var.bridge_vlan_keys
+  device_vlans             = var.device_vlans
+  six_to_four_interfaces   = var.six_to_four_interfaces
+  ipv4_interface_addresses = var.ipv4_interface_addresses
+  ipv6_interface_addresses = var.ipv6_interface_addresses
 }

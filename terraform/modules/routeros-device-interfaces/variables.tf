@@ -139,3 +139,35 @@ variable "six_to_four_interfaces" {
   }))
   default = {}
 }
+
+# Keep IPv4 interface addresses in committed data so L3 gateway or switch
+# interface identities are managed alongside the L2 interface topology.
+variable "ipv4_interface_addresses" {
+  description = "IPv4 interface addresses keyed by a stable logical address key."
+  type = map(object({
+    interface = string
+    address   = string
+    comment   = optional(string)
+    disabled  = optional(bool, false)
+    vrf       = optional(string)
+  }))
+  default = {}
+}
+
+# Keep IPv6 interface addresses in committed data so dual-stack interface
+# ownership is reviewable and importable through the same per-device root.
+variable "ipv6_interface_addresses" {
+  description = "IPv6 interface addresses keyed by a stable logical address key."
+  type = map(object({
+    interface       = string
+    address         = string
+    comment         = optional(string)
+    disabled        = optional(bool, false)
+    advertise       = optional(bool)
+    auto_link_local = optional(bool)
+    eui_64          = optional(bool)
+    from_pool       = optional(string)
+    no_dad          = optional(bool)
+  }))
+  default = {}
+}

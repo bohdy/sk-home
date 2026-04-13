@@ -154,3 +154,50 @@ six_to_four_interfaces = {
     clamp_tcp_mss  = true
   }
 }
+
+# Keep IPv4 gateway interface addresses committed so DHCP gateways, router ID
+# reachability, and per-VLAN L3 ownership are managed in this root.
+ipv4_interface_addresses = {
+  vlan10-gateway = {
+    interface = "vlan10"
+    address   = "10.1.10.1/24"
+    comment   = "Gateway IPv4 for VLAN Users"
+  }
+  vlan20-gateway = {
+    interface = "vlan20"
+    address   = "10.1.20.1/24"
+    comment   = "Gateway IPv4 for VLAN Servers"
+  }
+  vlan100-gateway = {
+    interface = "vlan100"
+    address   = "10.1.100.1/24"
+    comment   = "Gateway IPv4 for VLAN Management"
+  }
+  vlan101-gateway = {
+    interface = "vlan101"
+    address   = "10.1.101.1/24"
+    comment   = "Gateway IPv4 for VLAN Cameras"
+  }
+  vlan102-gateway = {
+    interface = "vlan102"
+    address   = "10.1.102.1/24"
+    comment   = "Gateway IPv4 for VLAN APs"
+  }
+}
+
+# Keep IPv6 gateway interface addresses in committed data so dual-stack
+# interface identity is managed in Terraform when values are defined.
+ipv6_interface_addresses = {
+  vlan20-gateway = {
+    interface = "vlan20"
+    address   = "2001:470:59cf:20::1/64"
+    comment   = "Gateway IPv6 for VLAN Servers"
+    advertise = true
+  }
+  wireguard1-bgp-local = {
+    interface = "wireguard1"
+    address   = "fd00:12::1/126"
+    comment   = "BGP local IPv6 for SH peering"
+    advertise = false
+  }
+}
