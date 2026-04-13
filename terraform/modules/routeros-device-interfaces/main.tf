@@ -179,7 +179,9 @@ resource "routeros_ip_address" "this" {
   address   = each.value.address
   comment   = try(each.value.comment, null)
   disabled  = each.value.disabled
-  vrf       = try(each.value.vrf, null)
+  # RouterOS REST rejects a vrf field for /ip/address PATCH on current
+  # devices, so keep IPv4 address management limited to fields accepted by
+  # both plan and apply paths.
 
   depends_on = [
     routeros_interface_bridge.this,

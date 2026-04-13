@@ -161,27 +161,27 @@ ipv4_interface_addresses = {
   vlan10-gateway = {
     interface = "vlan10"
     address   = "10.1.10.1/24"
-    comment   = "Gateway IPv4 for VLAN Users"
+    comment   = "VLAN10 - Users"
   }
   vlan20-gateway = {
     interface = "vlan20"
     address   = "10.1.20.1/24"
-    comment   = "Gateway IPv4 for VLAN Servers"
+    comment   = "VLAN20 SERVERS"
   }
   vlan100-gateway = {
     interface = "vlan100"
     address   = "10.1.100.1/24"
-    comment   = "Gateway IPv4 for VLAN Management"
+    comment   = "MGMT"
   }
   vlan101-gateway = {
     interface = "vlan101"
     address   = "10.1.101.1/24"
-    comment   = "Gateway IPv4 for VLAN Cameras"
+    comment   = "CAM"
   }
   vlan102-gateway = {
     interface = "vlan102"
     address   = "10.1.102.1/24"
-    comment   = "Gateway IPv4 for VLAN APs"
+    comment   = "AP Unifi MGMT"
   }
 }
 
