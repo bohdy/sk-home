@@ -18,6 +18,7 @@ override.tf.json
 .env
 .env.*
 .tmp/
+__pycache__/
 
 # Local git worktrees are useful during larger tasks but should remain untracked.
 .worktrees/

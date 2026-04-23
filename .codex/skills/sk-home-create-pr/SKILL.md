@@ -67,6 +67,8 @@ Before creating or updating a pull request, identify the repo-defined commands t
 
 Use committed repo entrypoints when they exist, such as project scripts, `Makefile` targets, `pre-commit`, language-native task runners, or documented commands in the repo.
 
+For the current scaffold, prefer the canonical commands `make format`, `make lint`, and `make validate` when the PR touches repo docs, repo-local skills, or other files covered by the scaffold checks.
+
 Apply this order:
 
 1. run the relevant formatter or formatter wrapper for the changed code

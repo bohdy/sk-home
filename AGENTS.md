@@ -63,11 +63,23 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
-- Repo-local Codex skills live under `.codex/skills/` and should be kept aligned with the current repository workflow when they are added or changed.
 - For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
 - For Terraform-managed infrastructure, prefer per-device stack roots when the operational blast radius maps cleanly to one live device.
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
 - Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
+
+## Repo Skills
+
+- Repo-local Codex skills live under `.codex/skills/`.
+- Mention repo-local skills in `AGENTS.md` when they materially affect repository workflow, tooling expectations, or agent behavior.
+- Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
+- Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
+
+## Repo Checks
+
+- The canonical repo-native pre-PR commands are `make format`, `make lint`, and `make validate`.
+- When the changed files are covered by the scaffold tooling, use those commands before creating or updating a pull request.
+- If future tooling replaces the current implementation, preserve these command names as the stable interface unless repo policy is intentionally changed and documented.
 
 ## Pull Request Workflow
 
