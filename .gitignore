@@ -1,62 +1,27 @@
-# Local .terraform directories
+# Local Terraform working directories and generated state should stay out of Git.
 .terraform/
-
-# Local git worktrees used to isolate tasks without touching an in-progress tree.
-.worktrees/
-
-# .tfstate files
 *.tfstate
 *.tfstate.*
-
-# Crash log files
-crash.log
-crash.*.log
-
-# Exclude all .tfvars files, which are likely to contain sensitive data, such as
-# password, private keys, and other secrets. These should not be part of version 
-# control as they are data points which are potentially sensitive and subject 
-# to change depending on the environment.
-*.tfvars
-*.tfvars.json
-!terraform/stacks/network-core/network-core.auto.tfvars
-!terraform/stacks/network-core/dhcp/dhcp.auto.tfvars
-!terraform/stacks/network-core/routing/routing.auto.tfvars
-!terraform/stacks/network-core/interfaces/gw/interfaces.auto.tfvars
-!terraform/stacks/network-core/interfaces/switch-1pp/interfaces.auto.tfvars
-!terraform/stacks/network-core/interfaces/switch-1np/interfaces.auto.tfvars
-!terraform/stacks/identity-edge/identity-edge.auto.tfvars
-!terraform/stacks/overlay/overlay.auto.tfvars
-!terraform/stacks/cluster-core/cluster-core.auto.tfvars
-!terraform/stacks/cluster-core-k3s/cluster-core.auto.tfvars
-!terraform/stacks/dns-blocky/dns-blocky.auto.tfvars
-!terraform/stacks/observability/observability.auto.tfvars
-!terraform/stacks/apps-unifi/apps-unifi.auto.tfvars
-!terraform/stacks/platform-proxmox/platform-proxmox.auto.tfvars
-
-# Ignore override files as they are usually used to override resources locally and so
-# are not checked in
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-
-# Ignore transient lock info files created by terraform apply
 .terraform.tfstate.lock.info
-
-# Include override files you do wish to add to version control using negated pattern
-# !example_override.tf
-
-# Ignore local Terraform plan output files because they are generated artifacts that
-# may describe infrastructure changes and should not be committed or kept as noise.
 tfplan
 tfplan.*
 *.tfplan
 *.tfplan.*
 
-# Ignore CLI configuration files
+# Local override files are for machine-specific experimentation, not shared state.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep local credentials, shell overrides, and generated scratch space out of Git.
+.env
+.env.*
+.tmp/
+
+# Local git worktrees are useful during larger tasks but should remain untracked.
+.worktrees/
+
+# Local Terraform CLI configuration files may contain machine-specific settings.
 .terraformrc
 terraform.rc
-
-# Keep local environment files out of version control because they contain
-# credentials and machine-specific overrides.
-.env

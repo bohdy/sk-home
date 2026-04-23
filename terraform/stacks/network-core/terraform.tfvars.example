@@ -1,9 +1,0 @@
-# The live non-secret network-core configuration is committed in
-# `network-core.auto.tfvars`.
-#
-# Use this example file only for local overrides or temporary experiments that
-# should not become part of the shared infrastructure source of truth.
-#
-# The parent root no longer carries RouterOS providers or credentials.
-# See the nested dhcp, routing, and interfaces roots for device-specific
-# credential handling.

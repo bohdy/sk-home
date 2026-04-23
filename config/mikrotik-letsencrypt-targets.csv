@@ -1,6 +1,0 @@
-# Keep the shared MikroTik certificate inventory in version control so the
-# GitHub Actions workflow and local operators act on the same desired state.
-# Columns: fqdn,management_host,service_name,certificate_name
-gw.bohdal.name,10.1.100.1,www-ssl,letsencrypt-www-ssl
-sw-1pp.bohdal.name,10.1.100.2,www-ssl,letsencrypt-www-ssl
-sw-1np.bohdal.name,10.1.100.3,www-ssl,letsencrypt-www-ssl

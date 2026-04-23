@@ -1,8 +1,0 @@
-project_name = "sk-home"
-environment  = "home"
-
-# Provide the kubeconfig path materialized by the shared Bitwarden helper.
-kubeconfig_path = ".tmp/terraform-runtime/kubeconfig/config"
-
-# The shared Bitwarden helper exports TF_VAR_unpoller_username and
-# TF_VAR_unpoller_password, so no secret values belong in this file.

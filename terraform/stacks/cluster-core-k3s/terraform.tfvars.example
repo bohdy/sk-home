@@ -1,9 +1,0 @@
-project_name = "sk-home"
-environment  = "home"
-
-# Provide the kubeconfig path generated from platform-k3s outputs. The value is
-# resolved from this stack directory when Terraform runs here directly.
-kubeconfig_path = "../../../.tmp/platform-k3s/kubeconfig"
-
-# Provide the ACME account email used by the k3s cluster issuers.
-email = "replace-me@example.com"

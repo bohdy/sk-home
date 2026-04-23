@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository contains home network and lab automation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
+This repository is now a learning-first home lab scaffold. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -42,6 +42,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
 - New functions, features, workflows, and dependencies MUST use the latest stable versions available when they are introduced. Upgrades to existing components must be evaluated and planned carefully instead of being changed automatically.
+- Rebuild the repository in small steps. Prefer one clearly scoped learning change per task instead of restoring large operational batches.
 
 ## Documentation Standards
 
@@ -61,6 +62,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
+- The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
 - For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
 - For Terraform-managed infrastructure, prefer per-device stack roots when the operational blast radius maps cleanly to one live device.
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
@@ -69,7 +71,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## Terraform Credentials
 
 - Terraform stacks that manage live infrastructure require backend (R2/S3) and provider credentials that are stored in Bitwarden Secrets Manager.
-- Before running `terraform init`, `terraform plan`, or `terraform apply`, load credentials into the current shell by running `eval "$(./scripts/load-bitwarden-secrets.sh terraform)"` from the repository root.
+- Before reintroducing live Terraform workflows, document the current secret-loading entrypoint in the repo and use that documented path consistently.
 - The loader requires `BWS_ACCESS_TOKEN` to be set in the environment. This token must stay outside the repository and must never appear in commits, logs, or command output.
 - The `terraform` profile exports `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TF_VAR_mikrotik_password`, and other provider-specific variables. Agents must never read, echo, or log the values of these variables.
 - The loader may materialize temporary files such as a kubeconfig under `.tmp/`. These files must not be committed. Verify staged files before committing after any session that loaded secrets.

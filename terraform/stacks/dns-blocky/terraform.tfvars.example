@@ -1,3 +1,0 @@
-project_name    = "sk-home"
-environment     = "home"
-kubeconfig_path = ".tmp/terraform-runtime/kubeconfig/config"
