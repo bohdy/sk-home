@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository is now a learning-first home lab scaffold. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
+This repository is now an almost-empty learning repo. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -43,6 +43,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
 - New functions, features, workflows, and dependencies MUST use the latest stable versions available when they are introduced. Upgrades to existing components must be evaluated and planned carefully instead of being changed automatically.
 - Rebuild the repository in small steps. Prefer one clearly scoped learning change per task instead of restoring large operational batches.
+- Keep the default committed surface minimal. Unless a task requires more, keep only `README.md`, `.gitignore`, and Codex-related files such as `AGENTS.md` and `.codex/`.
 
 ## Documentation Standards
 
@@ -63,10 +64,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
-- For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
-- For Terraform-managed infrastructure, prefer per-device stack roots when the operational blast radius maps cleanly to one live device.
-- Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
-- Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
+- Remove placeholder directories and helper files when they are no longer actively serving the current learning task.
 
 ## Repo Skills
 
@@ -74,12 +72,6 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Mention repo-local skills in `AGENTS.md` when they materially affect repository workflow, tooling expectations, or agent behavior.
 - Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
 - Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
-
-## Repo Checks
-
-- The canonical repo-native pre-PR commands are `make format`, `make lint`, and `make validate`.
-- When the changed files are covered by the scaffold tooling, use those commands before creating or updating a pull request.
-- If future tooling replaces the current implementation, preserve these command names as the stable interface unless repo policy is intentionally changed and documented.
 
 ## Pull Request Workflow
 
@@ -90,14 +82,6 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Before creating or updating a pull request, run all repo-defined formatting, linting, and validation steps that apply to the changed code and stop if any of them fail.
 - Do not create or update a pull request when the repo does not yet define the required checks for the changed code; add or document those checks first.
 - Pull request bodies must include a short summary plus a longer description that covers every changed file or logical change area.
-
-## Terraform Credentials
-
-- Terraform stacks that manage live infrastructure require backend (R2/S3) and provider credentials that are stored in Bitwarden Secrets Manager.
-- Before reintroducing live Terraform workflows, document the current secret-loading entrypoint in the repo and use that documented path consistently.
-- The loader requires `BWS_ACCESS_TOKEN` to be set in the environment. This token must stay outside the repository and must never appear in commits, logs, or command output.
-- The `terraform` profile exports `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `TF_VAR_mikrotik_password`, and other provider-specific variables. Agents must never read, echo, or log the values of these variables.
-- The loader may materialize temporary files such as a kubeconfig under `.tmp/`. These files must not be committed. Verify staged files before committing after any session that loaded secrets.
 
 ## Verification
 
