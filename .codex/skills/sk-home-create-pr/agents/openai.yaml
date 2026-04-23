@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create sk-home PR"
+  short_description: "Format, lint, validate, then open a fully documented sk-home PR."
+  default_prompt: "Create a pull request for my current sk-home changes following repo workflow rules, including required formatting, linting, validation, and a PR body that summarizes and explains all changed code."

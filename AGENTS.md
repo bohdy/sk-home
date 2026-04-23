@@ -68,6 +68,29 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
 - Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
 
+## Repo Skills
+
+- Repo-local Codex skills live under `.codex/skills/`.
+- Mention repo-local skills in `AGENTS.md` when they materially affect repository workflow, tooling expectations, or agent behavior.
+- Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
+- Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
+
+## Repo Checks
+
+- The canonical repo-native pre-PR commands are `make format`, `make lint`, and `make validate`.
+- When the changed files are covered by the scaffold tooling, use those commands before creating or updating a pull request.
+- If future tooling replaces the current implementation, preserve these command names as the stable interface unless repo policy is intentionally changed and documented.
+
+## Pull Request Workflow
+
+- `main` is the production branch.
+- New work should be published through pull requests that target `main`.
+- Do not keep feature work on `main`; create or move it onto a descriptive branch before pushing.
+- When creating pull requests, prefer a draft PR by default unless the user explicitly asks for ready review.
+- Before creating or updating a pull request, run all repo-defined formatting, linting, and validation steps that apply to the changed code and stop if any of them fail.
+- Do not create or update a pull request when the repo does not yet define the required checks for the changed code; add or document those checks first.
+- Pull request bodies must include a short summary plus a longer description that covers every changed file or logical change area.
+
 ## Terraform Credentials
 
 - Terraform stacks that manage live infrastructure require backend (R2/S3) and provider credentials that are stored in Bitwarden Secrets Manager.

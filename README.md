@@ -16,8 +16,9 @@ The active working tree is now optimized for rebuilding the lab from scratch in 
 The repository keeps only a few documented placeholders:
 
 - [`terraform/README.md`](terraform/README.md) for future infrastructure notes and stack conventions
-- [`scripts/README.md`](scripts/README.md) for future helper scripts
+- [`scripts/README.md`](scripts/README.md) for future helper scripts and repo-native check entrypoints
 - [`config/README.md`](config/README.md) for future non-secret committed configuration
+- [`.codex/skills/sk-home-create-pr/SKILL.md`](.codex/skills/sk-home-create-pr/SKILL.md) for the repo-specific pull request workflow skill, including required pre-PR checks and full PR walkthroughs
 
 ## Rebuild Rules
 
@@ -25,6 +26,17 @@ The repository keeps only a few documented placeholders:
 - Prefer committed non-secret desired state over undocumented local setup.
 - Keep secrets outside the repo and load them through the shared secret-management approach when automation returns.
 - Update documentation in the same task whenever behavior or layout changes.
+- Keep production on `main` and publish new work through pull requests from descriptive branches.
+
+## Repo Checks
+
+The current scaffold exposes canonical pre-PR commands through the top-level [`Makefile`](Makefile):
+
+- `make format`
+- `make lint`
+- `make validate`
+
+These commands currently run the stdlib-only [`scripts/repo_checks.py`](scripts/repo_checks.py) helper. Use those entrypoints for repo-local skill updates, Markdown/YAML changes, and other scaffold maintenance work. As the repo grows, keep the command names stable even if their implementation changes.
 
 ## Suggested First Steps
 
