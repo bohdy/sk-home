@@ -1,28 +1,7 @@
-# Local Terraform working directories and generated state should stay out of Git.
-.terraform/
-*.tfstate
-*.tfstate.*
-.terraform.tfstate.lock.info
-tfplan
-tfplan.*
-*.tfplan
-*.tfplan.*
-
-# Local override files are for machine-specific experimentation, not shared state.
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-
-# Keep local credentials, shell overrides, and generated scratch space out of Git.
-.env
-.env.*
+# Keep local scratch space and auxiliary worktrees out of Git in the minimal repo.
 .tmp/
-__pycache__/
-
-# Local git worktrees are useful during larger tasks but should remain untracked.
 .worktrees/
 
-# Local Terraform CLI configuration files may contain machine-specific settings.
-.terraformrc
-terraform.rc
+# Ignore Python cache files created by local helper tooling.
+__pycache__/
+*.pyc
