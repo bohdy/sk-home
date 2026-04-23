@@ -63,10 +63,21 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer maintainable solutions over clever shortcuts.
 - If introducing a new configurable value, document how it is set and why it exists.
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
+- Repo-local Codex skills live under `.codex/skills/` and should be kept aligned with the current repository workflow when they are added or changed.
 - For Terraform, prefer separate stack roots when a concern can be managed independently with separate state.
 - For Terraform-managed infrastructure, prefer per-device stack roots when the operational blast radius maps cleanly to one live device.
 - Nested stack roots are acceptable when they keep a broader domain organized, such as `terraform/stacks/network-core/dhcp`.
 - Do not let `network-core` become a catch-all Terraform root for adjacent concerns that can live in their own stack.
+
+## Pull Request Workflow
+
+- `main` is the production branch.
+- New work should be published through pull requests that target `main`.
+- Do not keep feature work on `main`; create or move it onto a descriptive branch before pushing.
+- When creating pull requests, prefer a draft PR by default unless the user explicitly asks for ready review.
+- Before creating or updating a pull request, run all repo-defined formatting, linting, and validation steps that apply to the changed code and stop if any of them fail.
+- Do not create or update a pull request when the repo does not yet define the required checks for the changed code; add or document those checks first.
+- Pull request bodies must include a short summary plus a longer description that covers every changed file or logical change area.
 
 ## Terraform Credentials
 
