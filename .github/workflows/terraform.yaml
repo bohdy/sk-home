@@ -33,6 +33,8 @@ jobs:
           secrets: |
             f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4.0.0
@@ -50,6 +52,10 @@ jobs:
 
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v7
+        env:
+          TF_VAR_mikrotik_hosturl: "https://gw.bohdal.name/"
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
         with:
           name: tfplan
           path: terraform/gw/tfplan.txt
