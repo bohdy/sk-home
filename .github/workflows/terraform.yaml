@@ -2,13 +2,14 @@ name: Terraform
 
 on:
     push:
-        branches: [ main ]
+        branches-ignore:
+            - "main"
 
 jobs:
     detect-changes:
         name: Detect changed Terraform stacks
         runs-on: self-hosted
-        
+
         steps:
             # Check out the repository with full history so the workflow can compare
             # the current revision against the correct pull request or push base.
