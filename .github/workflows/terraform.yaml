@@ -1,0 +1,18 @@
+name: Terraform
+
+on:
+    push:
+        branches: [ main ]
+
+jobs:
+    detect-changes:
+        name: Detect changed Terraform stacks
+        runs-on: self-hosted
+        
+        steps:
+            # Check out the repository with full history so the workflow can compare
+            # the current revision against the correct pull request or push base.
+            - name: Checkout repository
+              uses: actions/checkout@v6.0.2
+              with:
+                  fetch-depth: 0
