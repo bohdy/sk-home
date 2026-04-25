@@ -72,6 +72,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Mention repo-local skills in `AGENTS.md` when they materially affect repository workflow, tooling expectations, or agent behavior.
 - Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
 - Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
+- The repo-local skill `sk-home-write-comments` defines how agents should add, refresh, and review code comments in this repository when comment quality is part of the task.
 
 ## Pull Request Workflow
 
