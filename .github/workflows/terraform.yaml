@@ -49,13 +49,13 @@ jobs:
 
       - name: Terraform plan
         run: terraform -chdir=terraform/gw plan -out=tfplan
-
-      - name: Upload Terraform plan artifact
-        uses: actions/upload-artifact@v7
         env:
           TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+
+      - name: Upload Terraform plan artifact
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan
           path: terraform/gw/tfplan.txt
