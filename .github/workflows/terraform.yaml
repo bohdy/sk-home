@@ -28,7 +28,7 @@ jobs:
       - name: Get Secrets
         uses: bitwarden/sm-action@v2
         with:
-          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
           base_url: https://vault.bitwarden.com
           secrets: |
             535c2d90-8239-4f6b-a70f-b41b00c9d06c > TF_VAR_cloudflare_api_token
