@@ -15,5 +15,3 @@ jobs:
             # the current revision against the correct pull request or push base.
             - name: Checkout repository
               uses: actions/checkout@v6.0.2
-              with:
-                  fetch-depth: 0
