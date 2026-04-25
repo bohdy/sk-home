@@ -28,9 +28,42 @@ The currently intended committed surface is:
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
 - Do not keep placeholder project directories when they are not actively used.
 
-## Suggested First Steps
+## Local Development
 
-1. Define the first learning target.
-2. Add only the minimum files needed for that target.
-3. Update `README.md`, `AGENTS.md`, or `.codex/` files when the task changes workflow or expectations.
-4. Verify the new piece in isolation before adding the next one.
+### Prerequisites
+
+- [act](https://github.com/nektos/act) - Run GitHub Actions locally
+- Docker - Required by act
+- Bitwarden account with access to repository secrets
+
+### Environment Setup
+
+1. Create a `.env` file in the repository root with your Bitwarden access token:
+   ```bash
+   BWS_ACCESS_TOKEN="your_bitwarden_access_token_here"
+   ```
+
+2. Get your Bitwarden access token from: Account Settings → Security → API Key
+
+### Testing Workflows Locally
+
+To test GitHub Actions workflows locally using act:
+
+```bash
+# Load environment variables and run Terraform workflow
+source .env && act --workflows .github/workflows/terraform.yaml \
+  -P self-hosted=node:18-bookworm \
+  --container-architecture linux/amd64 \
+  --secret BWS_ACCESS_TOKEN="$BWS_ACCESS_TOKEN"
+```
+
+**Important notes:**
+- Uses `node:18-bookworm` Docker image (required for Bitwarden action compatibility)
+- Secrets are retrieved from Bitwarden using the access token
+- This ensures local testing matches CI/CD behavior exactly
+
+### Troubleshooting
+
+- **OpenSSL errors**: Ensure you're using `node:18-bookworm` (not `node:18-bullseye`)
+- **Access token errors**: Verify your Bitwarden access token is valid and has proper permissions
+- **Docker issues**: Make sure Docker is running and you have sufficient permissions
