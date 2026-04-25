@@ -62,6 +62,25 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 - Secrets are retrieved from Bitwarden using the access token
 - This ensures local testing matches CI/CD behavior exactly
 
+### Running Terraform Plan Locally
+
+To run only the gateway Terraform plan outside GitHub Actions, install Terraform, the Bitwarden Secrets Manager CLI (`bws`), and `jq`, then load the same Bitwarden token from `.env`:
+
+```bash
+source .env
+
+export AWS_ACCESS_KEY_ID="$(bws secret get f1a17686-db90-4ae0-80aa-b43701584bab -o json | jq -r .value)"
+export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586360 -o json | jq -r .value)"
+export TF_VAR_mikrotik_gw_hosturl="https://gw.bohdal.name/"
+export TF_VAR_mikrotik_username="$(bws secret get 519790de-c23d-41f7-a838-b41b00c9444d -o json | jq -r .value)"
+export TF_VAR_mikrotik_password="$(bws secret get 6b950dde-8f31-4d7b-9fdc-b41b00c993ca -o json | jq -r .value)"
+
+terraform -chdir=terraform/gw init
+terraform -chdir=terraform/gw plan -out=tfplan
+```
+
+Keep shell tracing disabled while running these commands, and do not echo the exported values. Remove `terraform/gw/tfplan` after inspection if you do not need to keep the binary plan file.
+
 ### Troubleshooting
 
 - **OpenSSL errors**: Ensure you're using `node:18-bookworm` (not `node:18-bullseye`)
