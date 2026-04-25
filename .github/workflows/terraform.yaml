@@ -1,49 +1,64 @@
 name: Terraform
 
 on:
-    push:
-        branches-ignore:
-            - "main"
+  push:
+    branches-ignore:
+      - "main"
 
 jobs:
-    detect-changes:
-        name: Detect changed Terraform stacks
-        runs-on: self-hosted
+  detect-changes:
+    name: Detect changed Terraform stacks
+    runs-on: self-hosted
 
-        steps:
-            # Check out the repository with full history so the workflow can compare
-            # the current revision against the correct pull request or push base.
-            - name: Checkout repository
-              uses: actions/checkout@v6.0.2
+    steps:
+      # Check out the repository with full history so the workflow can compare
+      # the current revision against the correct pull request or push base.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
 
-    tf-plan:
-        name: Terraform plan
-        runs-on: self-hosted
-        needs: detect-changes
+  tf-plan:
+    name: Terraform plan
+    runs-on: self-hosted
+    needs: detect-changes
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v6.0.2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
 
-            - name: Set up Terraform
-              uses: hashicorp/setup-terraform@v4.0.0
-              with:
-                  terraform_version: 1.14.9
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.9
 
-            - name: Terraform init
-              run: terraform -chdir=terraform/gw init
+      - name: Terraform init
+        run: terraform -chdir=terraform/gw init
 
-            - name: Terraform plan
-              run: terraform -chdir=terraform/gw plan -out=tfplan
+      - name: Terraform plan
+        run: terraform -chdir=terraform/gw plan -out=tfplan
 
-            - name: Upload Terraform plan artifact
-              uses: actions/upload-artifact@v7.0.1
-              with:
-                  name: tfplan
-                  path: terraform/gw/tfplan.txt
+      - name: Upload Terraform plan artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tfplan
+          path: terraform/gw/tfplan.txt
+          retention-days: 7
 
-    tf-apply:
-        name: Terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        runs-on: self-hosted
-        needs: tf-plan
+  tf-apply:
+    name: Terraform apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    needs: tf-plan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.9
+
+      - name: Download Terraform plan artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: tfplan
+          path: terraform/gw/tfplan.txt
