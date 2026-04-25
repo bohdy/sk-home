@@ -41,6 +41,9 @@ jobs:
 
       - name: Terraform init
         run: terraform -chdir=terraform/gw init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.TF_VAR_cloudflare_account_id }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.TF_VAR_cloudflare_api_token }}
 
       - name: Terraform plan
         run: terraform -chdir=terraform/gw plan -out=tfplan
