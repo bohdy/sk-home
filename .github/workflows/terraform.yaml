@@ -25,6 +25,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
+      - name: Get Secrets
+        uses: bitwarden/sm-action@v2
+        with:
+          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            535c2d90-8239-4f6b-a70f-b41b00c9d06c > TF_VAR_cloudflare_api_token
+            34461539-ca00-4f0b-b7e0-b41b00c9c243 > TF_VAR_cloudflare_account_id
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4.0.0
         with:
