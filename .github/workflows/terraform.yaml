@@ -31,7 +31,7 @@ jobs:
     name: Terraform plan
     runs-on: self-hosted
     needs: detect-changes
-    if: needs.detect-changes.outputs.changed == 'true'
+    #if: needs.detect-changes.outputs.changed == 'true'
 
     steps:
       - name: Checkout repository
