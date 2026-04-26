@@ -5,6 +5,10 @@ on:
     branches-ignore:
       - "main"
 
+concurrency:
+  group: terraform
+  cancel-in-progress: true
+
 jobs:
   detect-changes:
     name: Detect changed Terraform stacks
