@@ -69,7 +69,7 @@ resource "routeros_ip_address" "ip_address_vlan" {
   }
   provider  = routeros.gw
   address   = each.value.ip_address
-  interface = each.key
+  interface = "vlan${each.key}"
   comment   = each.value.name
 }
 
