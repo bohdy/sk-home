@@ -45,3 +45,23 @@ resource "routeros_interface_bridge_vlan" "bridge_vlan" {
   untagged = each.value.untagged
   comment  = each.value.name
 }
+
+resource "routeros_ip_address" "ip_address" {
+  for_each = {
+    for k, v in var.interfaces : k => v if v.ip_address != null
+  }
+  provider  = routeros.gw
+  address   = each.value.ip_address
+  interface = each.value.name
+  comment   = each.value.comment
+}
+
+resource "routeros_ip_address" "ip_address_vlan" {
+  for_each = {
+    for k, v in var.vlans : k => v if v.ip_address != null
+  }
+  provider  = routeros.gw
+  address   = each.value.ip_address
+  interface = each.key
+  comment   = each.value.name
+}

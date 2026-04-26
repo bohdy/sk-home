@@ -31,9 +31,10 @@ variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.
   type = map(object({
-    name    = string
-    comment = string
-    pvid    = optional(number, null)
+    name       = string
+    comment    = string
+    pvid       = optional(number, null)
+    ip_address = optional(string, null)
   }))
 }
 
@@ -44,5 +45,7 @@ variable "vlans" {
     name     = string
     tagged   = optional(set(string), null)
     untagged = optional(set(string), null)
+    //ip_address = optional(set(string), null)
+    ip_address = optional(string, null)
   }))
 }

@@ -29,7 +29,8 @@ interfaces = {
     pvid    = 102
   }
   "ether8" = {
-    name    = "ether8"
-    comment = "WAN (to antenna)"
+    name       = "ether8"
+    comment    = "WAN (to antenna)"
+    ip_address = "10.21.162.142/30"
   }
 }
