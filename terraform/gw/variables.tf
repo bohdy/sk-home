@@ -26,3 +26,21 @@ variable "mikrotik_insecure" {
   type        = bool
   default     = true
 }
+
+variable "interfaces" {
+  type = map(object({
+    name           = string
+    comment        = string
+    pvid           = number
+    tagged_vlans   = optional(set(number), null)
+    untagged_vlans = optional(set(number), null)
+  }))
+}
+
+variable "vlans" {
+  type = map(object({
+    name     = string
+    tagged   = optional(set(string), null)
+    untagged = optional(set(string), null)
+  }))
+}
