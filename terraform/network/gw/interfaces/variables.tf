@@ -3,6 +3,7 @@
 variable "mikrotik_gw_hosturl" {
   description = "RouterOS provider URL for the MikroTik gateway device."
   type        = string
+  default     = "https://gw.bohdal.name/"
 }
 
 # Use a dedicated automation account for Terraform rather than the main admin
