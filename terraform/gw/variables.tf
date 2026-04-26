@@ -33,7 +33,7 @@ variable "interfaces" {
   type = map(object({
     name    = string
     comment = string
-    pvid    = number
+    pvid    = optional(number, null)
   }))
 }
 
