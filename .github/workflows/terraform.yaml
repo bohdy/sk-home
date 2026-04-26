@@ -31,6 +31,9 @@ jobs:
     name: Terraform plan
     runs-on: self-hosted
     needs: detect-changes
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     steps:
