@@ -16,6 +16,9 @@ jobs:
   detect-changes:
     name: Detect changed Terraform stacks
     runs-on: self-hosted
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
 
     steps:
       # Check out the repository with full history so the workflow can compare
@@ -23,23 +26,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      - name: Detect changes in Terraform stacks
-        id: detect-changes
-        run: |
-          # Determine the base revision to compare against
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BASE_REF=$(jq -r .pull_request.base.sha < "$GITHUB_EVENT_PATH")
-          else
-            BASE_REF=$(git rev-parse HEAD^)
-          fi
-          echo "Base revision: $BASE_REF"
-          # Check for changes in the terraform/gw directory
-          if git diff --name-only "$BASE_REF" HEAD | grep -q '^terraform/gw/'; then
-            echo "Changes detected in terraform/gw"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No changes detected in terraform/gw"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
 
   tf-plan:
     name: Terraform plan
@@ -68,7 +54,7 @@ jobs:
           terraform_version: 1.14.9
 
       - name: Terraform init
-        run: terraform -chdir=terraform/gw init
+        run: terraform -chdir=${{ matrix.stacks }} init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -77,7 +63,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=terraform/gw plan -out=tfplan
+        run: terraform -chdir=${{ matrix.stacks }} plan -out=tfplan
         env:
           TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
@@ -87,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tfplan
-          path: terraform/gw/tfplan
+          path: ${{ matrix.stacks }}/tfplan
           retention-days: 7
 
   tf-apply:
