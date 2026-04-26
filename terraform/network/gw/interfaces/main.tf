@@ -35,10 +35,11 @@ resource "routeros_interface_ethernet" "ethernet" {
 }
 
 resource "routeros_interface_vlan" "iface_vlan" {
-  for_each  = var.vlans
-  provider  = routeros.gw
-  name      = "vlan${each.key}"
-  interface = "vlan${each.key}"
+  for_each = var.vlans
+  provider = routeros.gw
+  name     = "vlan${each.key}"
+  // interface = "vlan${each.key}"
+  interface = routeros_interface_bridge.bridge.name
 }
 
 // Materialize the VLAN inventory onto the bridge from one source of truth,
