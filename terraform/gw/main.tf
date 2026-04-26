@@ -34,6 +34,13 @@ resource "routeros_interface_ethernet" "ethernet" {
   comment      = each.value.comment
 }
 
+resource "routeros_interface_vlan" "iface_vlan" {
+  for_each  = var.vlans
+  provider  = routeros.gw
+  name      = "vlan${each.key}"
+  interface = "vlan${each.key}"
+}
+
 // Materialize the VLAN inventory onto the bridge from one source of truth,
 // ensuring trunk membership and access-port exposure can be reviewed in code.
 resource "routeros_interface_bridge_vlan" "bridge_vlan" {
