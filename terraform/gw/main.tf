@@ -72,3 +72,31 @@ resource "routeros_ip_address" "ip_address_vlan" {
   interface = each.key
   comment   = each.value.name
 }
+
+resource "routeros_interface_list" "list_lan" {
+  provider = routeros.gw
+  name     = "LAN"
+}
+
+resource "routeros_interface_list" "list_wan" {
+  provider = routeros.gw
+  name     = "WAN"
+}
+
+resource "routeros_interface_list_member" "list_member_ether" {
+  provider = routeros.gw
+  for_each = {
+    for k, v in var.interfaces : k => v if v.iface_list != null
+  }
+  interface = each.key
+  list      = each.value.iface_list
+}
+
+resource "routeros_interface_list_member" "list_member_vlan" {
+  provider = routeros.gw
+  for_each = {
+    for k, v in var.vlans : k => v if v.iface_list != null
+  }
+  interface = "vlan${each.key}"
+  list      = each.value.iface_list
+}

@@ -35,6 +35,7 @@ variable "interfaces" {
     comment    = string
     pvid       = optional(number, null)
     ip_address = optional(string, null)
+    iface_list = optional(string, null)
   }))
 }
 
@@ -47,5 +48,6 @@ variable "vlans" {
     untagged = optional(set(string), null)
     //ip_address = optional(set(string), null)
     ip_address = optional(string, null)
+    iface_list = optional(string, null)
   }))
 }

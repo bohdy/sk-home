@@ -32,5 +32,6 @@ interfaces = {
     name       = "ether8"
     comment    = "WAN (to antenna)"
     ip_address = "10.21.162.142/30"
+    iface_list = "WAN"
   }
 }
