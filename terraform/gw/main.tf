@@ -73,14 +73,23 @@ resource "routeros_ip_address" "ip_address_vlan" {
   comment   = each.value.name
 }
 
-resource "routeros_interface_list" "list_lan" {
-  provider = routeros.gw
-  name     = "LAN"
+// Collect all unique interface list names referenced across interfaces and vlans
+// to ensure all required lists are created before members are assigned.
+locals {
+  interface_lists = {
+    for name in distinct(concat(
+      [for v in var.interfaces : v.iface_list if v.iface_list != null],
+      [for v in var.vlans : v.iface_list if v.iface_list != null]
+    )) : name => true
+  }
 }
 
-resource "routeros_interface_list" "list_wan" {
+// Create all required interface lists dynamically from the merged local to ensure
+// they exist before members are assigned.
+resource "routeros_interface_list" "lists" {
+  for_each = local.interface_lists
   provider = routeros.gw
-  name     = "WAN"
+  name     = each.key
 }
 
 resource "routeros_interface_list_member" "list_member_ether" {
