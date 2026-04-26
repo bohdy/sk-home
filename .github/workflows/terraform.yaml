@@ -55,7 +55,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=terraform/gw plan -var-file=*.tfvars -out=tfplan
+        run: terraform -chdir=terraform/gw plan -out=tfplan
         env:
           TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
