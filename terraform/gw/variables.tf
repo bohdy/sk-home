@@ -28,16 +28,18 @@ variable "mikrotik_insecure" {
 }
 
 variable "interfaces" {
+  # Model each managed port once so bridge membership, comments, and VLAN-facing
+  # access settings can be derived from the same inventory entry.
   type = map(object({
-    name           = string
-    comment        = string
-    pvid           = number
-    tagged_vlans   = optional(set(number), null)
-    untagged_vlans = optional(set(number), null)
+    name    = string
+    comment = string
+    pvid    = number
   }))
 }
 
 variable "vlans" {
+  # Each map key is the VLAN ID string and each value describes which bridge
+  # members should carry it tagged or expose it untagged.
   type = map(object({
     name     = string
     tagged   = optional(set(string), null)

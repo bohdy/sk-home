@@ -1,3 +1,5 @@
+// Keep provider credentials and transport settings driven by variables so the
+// module can reuse the repo's external secret-management flow.
 provider "routeros" {
   alias    = "gw"
   hosturl  = var.mikrotik_gw_hosturl
