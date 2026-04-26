@@ -54,7 +54,7 @@ jobs:
           terraform_version: 1.14.9
 
       - name: Terraform init
-        run: terraform -chdir=${{ matrix.stacks }} init
+        run: terraform -chdir=terraform/${{ matrix.stacks }} init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -63,7 +63,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=${{ matrix.stacks }} plan -out=tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=tfplan
         env:
           TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tfplan
-          path: ${{ matrix.stacks }}/tfplan
+          path: terraform/${{ matrix.stacks }}/tfplan
           retention-days: 7
 
   tf-apply:
