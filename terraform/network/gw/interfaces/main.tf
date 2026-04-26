@@ -38,6 +38,8 @@ resource "routeros_interface_vlan" "iface_vlan" {
   for_each = var.vlans
   provider = routeros.gw
   name     = "vlan${each.key}"
+  // Terminate each VLAN on the shared bridge so Layer 3 services can bind to
+  // the logical VLAN interface rather than to a specific access port.
   // interface = "vlan${each.key}"
   interface = routeros_interface_bridge.bridge.name
   comment   = each.value.name
@@ -59,6 +61,9 @@ resource "routeros_ip_address" "ip_address" {
   for_each = {
     for k, v in var.interfaces : k => v if v.ip_address != null
   }
+  // Only interfaces with explicit Layer 3 addresses participate here; pure
+  // switchports stay absent so the inventory can represent both routed and
+  // bridged ports in one map.
   provider  = routeros.gw
   address   = each.value.ip_address
   interface = each.value.name
@@ -69,6 +74,8 @@ resource "routeros_ip_address" "ip_address_vlan" {
   for_each = {
     for k, v in var.vlans : k => v if v.ip_address != null
   }
+  // Bind IP addresses to the generated VLAN interfaces so gateway subnets are
+  // managed from the same VLAN inventory that drives bridge tagging rules.
   provider  = routeros.gw
   address   = each.value.ip_address
   interface = "vlan${each.key}"
@@ -99,6 +106,8 @@ resource "routeros_interface_list_member" "list_member_ether" {
   for_each = {
     for k, v in var.interfaces : k => v if v.iface_list != null
   }
+  // Use the map key as the member name so the list membership stays aligned
+  // with the same stable identifier used throughout the interface inventory.
   interface = each.key
   list      = each.value.iface_list
 }
@@ -108,6 +117,8 @@ resource "routeros_interface_list_member" "list_member_vlan" {
   for_each = {
     for k, v in var.vlans : k => v if v.iface_list != null
   }
+  // VLAN-backed interface lists are derived from the VLAN ID key because the
+  // RouterOS interface name is generated deterministically as vlan<ID>.
   interface = "vlan${each.key}"
   list      = each.value.iface_list
 }
