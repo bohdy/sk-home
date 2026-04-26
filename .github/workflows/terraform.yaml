@@ -31,6 +31,8 @@ jobs:
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v2
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true
         with:
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
           base_url: https://vault.bitwarden.com
