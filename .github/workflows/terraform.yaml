@@ -84,6 +84,10 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     needs: tf-plan
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
@@ -97,4 +101,4 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: tfplan
-          path: terraform/gw/tfplan.txt
+          path: terraform/${{ matrix.stacks }}/tfplan
