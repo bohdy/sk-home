@@ -2,8 +2,11 @@ name: Terraform
 
 on:
   push:
-    branches-ignore:
-      - "main"
+    paths:
+      - 'terraform/**'
+  pull_request:
+    paths:
+      - 'terraform/**'
 
 concurrency:
   group: terraform
