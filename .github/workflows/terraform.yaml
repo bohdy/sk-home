@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: Get Secrets
-        uses: bitwarden/sm-action@v2
+        uses: bitwarden/sm-action@v3
         with:
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
           base_url: https://vault.bitwarden.com
