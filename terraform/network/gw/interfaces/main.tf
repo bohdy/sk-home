@@ -40,6 +40,7 @@ resource "routeros_interface_vlan" "iface_vlan" {
   name     = "vlan${each.key}"
   // interface = "vlan${each.key}"
   interface = routeros_interface_bridge.bridge.name
+  comment   = each.value.name
 }
 
 // Materialize the VLAN inventory onto the bridge from one source of truth,
