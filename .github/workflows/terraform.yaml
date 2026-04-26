@@ -85,7 +85,7 @@ jobs:
 
   tf-apply:
     name: Terraform apply
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: self-hosted
     needs: tf-plan
     strategy:
