@@ -5,3 +5,12 @@
 # Ignore Python cache files created by local helper tooling.
 __pycache__/
 *.pyc
+
+.env
+
+# Local .terraform directories
+.terraform/
+
+# .tfstate files
+*.tfstate
+*.tfstate.*

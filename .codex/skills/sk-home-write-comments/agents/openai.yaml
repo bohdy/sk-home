@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write sk-home comments"
+  short_description: "Add or refresh high-signal code comments that match sk-home repo rules."
+  default_prompt: "Review the selected sk-home files and add, refresh, or remove comments so they explain intent, assumptions, behavior, and non-obvious logic without narrating trivial syntax."

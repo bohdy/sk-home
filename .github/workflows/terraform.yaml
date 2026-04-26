@@ -1,0 +1,104 @@
+name: Terraform
+
+on:
+  push:
+    branches-ignore:
+      - "main"
+
+concurrency:
+  group: terraform
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  detect-changes:
+    name: Detect changed Terraform stacks
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
+
+    steps:
+      # Check out the repository with full history so the workflow can compare
+      # the current revision against the correct pull request or push base.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+
+  tf-plan:
+    name: Terraform plan
+    runs-on: self-hosted
+    needs: detect-changes
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
+    #if: needs.detect-changes.outputs.changed == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Get Secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.9
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/${{ matrix.stacks }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+
+      - name: Terraform plan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=tfplan
+        env:
+          TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+
+      - name: Upload Terraform plan artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tfplan
+          path: terraform/${{ matrix.stacks }}/tfplan
+          retention-days: 7
+
+  tf-apply:
+    name: Terraform apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    needs: tf-plan
+    strategy:
+      matrix:
+        stacks: [network/gw/interfaces]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.0
+        with:
+          terraform_version: 1.14.9
+
+      - name: Download Terraform plan artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: tfplan
+          path: terraform/${{ matrix.stacks }}/tfplan
