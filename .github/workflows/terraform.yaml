@@ -58,7 +58,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=terraform/gw plan -out=terraform/gw/tfplan.txt
+        run: terraform -chdir=terraform/gw plan -out=tfplan
         env:
           TF_VAR_mikrotik_gw_hosturl: "https://gw.bohdal.name/"
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
@@ -68,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: tfplan
-          path: terraform/gw/tfplan.txt
+          path: terraform/gw/tfplan
           retention-days: 7
 
   tf-apply:
