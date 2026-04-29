@@ -22,7 +22,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, k3s/cluster]
 
     steps:
       # Check out the repository with full history so the workflow can compare
@@ -37,7 +37,7 @@ jobs:
     needs: detect-changes
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, k3s/cluster]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     steps:
@@ -54,6 +54,10 @@ jobs:
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            704a25a3-5cb3-41a5-a0a1-b41c00c83189 > PROXMOX_VE_ENDPOINT
+            bec590dc-5777-441f-8f4b-b41c00c84280 > PROXMOX_VE_API_TOKEN
+            f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
+            a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4.0.0
@@ -73,11 +77,14 @@ jobs:
         env:
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_proxmox_endpoint: ${{ env.PROXMOX_VE_ENDPOINT }}
+          TF_VAR_proxmox_api_token: ${{ env.PROXMOX_VE_API_TOKEN }}
+          TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
 
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v7
         with:
-          name: tfplan
+          name: ${{ matrix.stacks }}.tfplan
           path: terraform/${{ matrix.stacks }}/tfplan
           retention-days: 7
 
@@ -88,7 +95,7 @@ jobs:
     needs: tf-plan
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, k3s/cluster]
 
     steps:
       - name: Checkout repository
@@ -102,8 +109,8 @@ jobs:
       - name: Download Terraform plan artifact
         uses: actions/download-artifact@v8
         with:
-          name: tfplan
-          path: terraform/${{ matrix.stacks }}/tfplan
+          name: ${{ matrix.stacks }}.tfplan
+          path: terraform/${{ matrix.stacks }}.tfplan
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -115,11 +122,18 @@ jobs:
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            704a25a3-5cb3-41a5-a0a1-b41c00c83189 > PROXMOX_VE_ENDPOINT
+            bec590dc-5777-441f-8f4b-b41c00c84280 > PROXMOX_VE_API_TOKEN
+            f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
+            a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
       - name: Terraform apply
-        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve terraform/${{ matrix.stacks }}.tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_proxmox_endpoint: ${{ env.PROXMOX_VE_ENDPOINT }}
+          TF_VAR_proxmox_api_token: ${{ env.PROXMOX_VE_API_TOKEN }}
+          TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
