@@ -3,10 +3,10 @@ name: Terraform
 on:
   push:
     paths:
-      - 'terraform/**'
+      - "terraform/**"
   pull_request:
     paths:
-      - 'terraform/**'
+      - "terraform/**"
   workflow_dispatch:
 
 concurrency:
@@ -29,7 +29,6 @@ jobs:
       # the current revision against the correct pull request or push base.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
-
 
   tf-plan:
     name: Terraform plan
@@ -55,10 +54,10 @@ jobs:
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v4.0.0
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
         with:
-          terraform_version: 1.14.9
+          install: true
 
       - name: Terraform init
         run: terraform -chdir=terraform/${{ matrix.stacks }} init
