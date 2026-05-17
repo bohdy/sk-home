@@ -59,6 +59,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 
 - Inspect the repository before making changes.
 - Keep edits focused on the current task.
+- Prefer the repository devcontainer for local development, Terraform work, workflow testing, and validation so tool versions and environment behavior stay close to automation.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
