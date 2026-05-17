@@ -49,6 +49,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
+      - name: Configure Terraform plan artifact
+        run: |
+          # Convert stack paths like network/gw/interfaces into artifact names
+          # like network-gw-interfaces-tfplan without duplicating matrix data.
+          plan_artifact="${STACK_PATH//\//-}-tfplan"
+          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+        env:
+          STACK_PATH: ${{ matrix.stacks }}
+
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
         with:
@@ -78,7 +87,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=${{ matrix.stacks }}.tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=tfplan
         env:
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
@@ -90,8 +99,9 @@ jobs:
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.stacks }}.tfplan
-          path: .
+          name: ${{ env.TF_PLAN_ARTIFACT }}
+          path: terraform/${{ matrix.stacks }}/tfplan
+          if-no-files-found: error
           retention-days: 7
 
   tf-apply:
@@ -112,6 +122,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
+      - name: Configure Terraform plan artifact
+        run: |
+          # Keep artifact naming derived from the stack path so adding stacks
+          # only requires extending the matrix list.
+          plan_artifact="${STACK_PATH//\//-}-tfplan"
+          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+        env:
+          STACK_PATH: ${{ matrix.stacks }}
+
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
         with:
@@ -120,8 +139,8 @@ jobs:
       - name: Download Terraform plan artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.stacks }}.tfplan
-          path: .
+          name: ${{ env.TF_PLAN_ARTIFACT }}
+          path: terraform/${{ matrix.stacks }}
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -139,7 +158,7 @@ jobs:
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
       - name: Terraform apply
-        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve ${{ matrix.stacks }}.tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
