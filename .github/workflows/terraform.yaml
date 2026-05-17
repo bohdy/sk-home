@@ -35,14 +35,14 @@ jobs:
     runs-on: self-hosted
     needs: detect-changes
     strategy:
+      max-parallel: 1
       matrix:
-        max-parallel: 1
         stacks: [network/gw/interfaces, proxmox/images]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
-      MISE_DATA_DIR: ${{ runner.temp }}/mise-data
-      MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
 
     steps:
       - name: Checkout repository
@@ -99,13 +99,13 @@ jobs:
     runs-on: self-hosted
     needs: tf-plan
     strategy:
+      max-parallel: 1
       matrix:
-        max-parallel: 1
         stacks: [network/gw/interfaces, proxmox/images]
 
     env:
-      MISE_DATA_DIR: ${{ runner.temp }}/mise-data
-      MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
 
     steps:
       - name: Checkout repository
