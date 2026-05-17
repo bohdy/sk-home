@@ -7,7 +7,7 @@ resource "proxmox_virtual_environment_vm" "test_server" {
   tags = ["terraform", "k3s", "master"]
 
   agent {
-    enabled = false
+    enabled = true
   }
 
   cpu {
