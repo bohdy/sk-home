@@ -22,7 +22,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, proxmox/images]
 
     steps:
       # Check out the repository with full history so the workflow can compare
