@@ -14,3 +14,5 @@ __pycache__/
 # .tfstate files
 *.tfstate
 *.tfstate.*
+
+.terraform.lock.hcl
