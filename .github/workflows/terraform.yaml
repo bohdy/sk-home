@@ -138,7 +138,7 @@ jobs:
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
       - name: Terraform apply
-        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve ${{ matrix.stacks }}.tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
