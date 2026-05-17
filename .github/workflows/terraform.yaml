@@ -112,7 +112,9 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, proxmox/images]
+        stacks: [proxmox/images]
+        # TMP workaround: Provider / RouterOS API fails due to missing VRF attribute
+        #stacks: [network/gw/interfaces, proxmox/images]
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -156,6 +158,12 @@ jobs:
             bec590dc-5777-441f-8f4b-b41c00c84280 > PROXMOX_VE_API_TOKEN
             f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
+
+      - name: Terraform init
+        run: terraform -chdir=terraform/${{ matrix.stacks }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform apply
         run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tfplan
