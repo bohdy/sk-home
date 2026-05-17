@@ -16,3 +16,4 @@ __pycache__/
 *.tfstate.*
 
 .terraform.lock.hcl
+.local.auto.tfvars
