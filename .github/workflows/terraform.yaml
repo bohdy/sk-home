@@ -79,6 +79,7 @@ jobs:
           TF_VAR_proxmox_endpoint: ${{ env.PROXMOX_VE_ENDPOINT }}
           TF_VAR_proxmox_api_token: ${{ env.PROXMOX_VE_API_TOKEN }}
           TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
+          TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
 
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v7
@@ -136,3 +137,4 @@ jobs:
           TF_VAR_proxmox_endpoint: ${{ env.PROXMOX_VE_ENDPOINT }}
           TF_VAR_proxmox_api_token: ${{ env.PROXMOX_VE_API_TOKEN }}
           TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
+          TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
