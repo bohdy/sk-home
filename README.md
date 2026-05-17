@@ -41,7 +41,7 @@ The preferred local development environment is the repository devcontainer. It k
 
 ### Devcontainer
 
-Open the repository in the devcontainer before running Terraform, `act`, or repository validation commands. From a shell with the Dev Containers CLI installed, the container can be started with:
+Open the repository in the devcontainer before running Terraform, `act`, or repository validation commands. Run the commands below from the repository root inside that container. From a host shell with the Dev Containers CLI installed, the container can be started with:
 
 ```bash
 devcontainer up --workspace-folder .
@@ -75,7 +75,7 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 
 ### Running Terraform Locally
 
-To run Terraform outside GitHub Actions, install Terraform, the Bitwarden Secrets Manager CLI (`bws`), and `jq`, then load the same Bitwarden token from `.env`. Use `set -a` while sourcing `.env` so child processes such as `bws` and Terraform can read the exported environment variables:
+To run Terraform outside GitHub Actions, use the devcontainer or install Terraform, the Bitwarden Secrets Manager CLI (`bws`), and `jq` on the host. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:
 
 ```bash
 set -a
@@ -86,6 +86,8 @@ export AWS_ACCESS_KEY_ID="$(bws secret get f1a17686-db90-4ae0-80aa-b43701584bab 
 export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586360 -o json | jq -r .value)"
 ```
 
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by Terraform's S3-compatible backend. If they are missing from the shell environment, `terraform init` and `terraform plan` will fail before evaluating stack resources with `No valid credential sources found`.
+
 Choose the stack directory once, then reuse it for Terraform commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
 ```bash
@@ -93,6 +95,8 @@ export TF_STACK="k3s/cluster"
 
 terraform -chdir="terraform/${TF_STACK}" init
 ```
+
+Terraform may create or update `.terraform.lock.hcl` for the selected stack during `init`; review and commit that lock file when the provider selection is intentional. Do not commit the generated `.terraform/` directory.
 
 Load any stack-specific provider variables before planning. For MikroTik-backed stacks:
 
@@ -117,7 +121,7 @@ Run the plan for the selected stack:
 terraform -chdir="terraform/${TF_STACK}" plan -out=tfplan
 ```
 
-Keep shell tracing disabled while running these commands, and do not echo the exported values. Remove any generated `tfplan` file after inspection if you do not need to keep the binary plan file.
+Keep shell tracing disabled while running these commands, and do not echo the exported values. A successful backend initialization only proves Terraform can access state; `plan` can still fail if the selected stack has missing or invalid resource arguments. Remove any generated `tfplan` file after inspection if you do not need to keep the binary plan file.
 
 ### Troubleshooting
 
