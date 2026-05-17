@@ -78,7 +78,7 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
 
       - name: Terraform plan
-        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=terraform/tfplan/${{ matrix.stacks }}.tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=${{ matrix.stacks }}.tfplan
         env:
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
@@ -91,7 +91,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.stacks }}.tfplan
-          path: terraform/tfplan
+          path: .
           retention-days: 7
 
   tf-apply:
@@ -121,7 +121,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.stacks }}.tfplan
-          path: terraform/tfplan
+          path: .
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -139,7 +139,7 @@ jobs:
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
       - name: Terraform apply
-        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve terraform/tfplan/${{ matrix.stacks }}.tfplan
+        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve ${{ matrix.stacks }}.tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
