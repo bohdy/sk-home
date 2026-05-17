@@ -39,6 +39,10 @@ jobs:
         stacks: [network/gw/interfaces, proxmox/images]
     #if: needs.detect-changes.outputs.changed == 'true'
 
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
@@ -96,6 +100,10 @@ jobs:
     strategy:
       matrix:
         stacks: [network/gw/interfaces, proxmox/images]
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
 
     steps:
       - name: Checkout repository
