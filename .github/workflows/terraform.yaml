@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "terraform/**"
+      - ".github/workflows/terraform.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -47,6 +48,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+
+      - name: Configure Terraform plan artifact
+        run: |
+          # Convert stack paths like network/gw/interfaces into artifact names
+          # like network-gw-interfaces-tfplan without duplicating matrix data.
+          plan_artifact="${STACK_PATH//\//-}-tfplan"
+          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+        env:
+          STACK_PATH: ${{ matrix.stacks }}
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -89,8 +99,9 @@ jobs:
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v7
         with:
-          name: tfplan
+          name: ${{ env.TF_PLAN_ARTIFACT }}
           path: terraform/${{ matrix.stacks }}/tfplan
+          if-no-files-found: error
           retention-days: 7
 
   tf-apply:
@@ -111,6 +122,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
+      - name: Configure Terraform plan artifact
+        run: |
+          # Keep artifact naming derived from the stack path so adding stacks
+          # only requires extending the matrix list.
+          plan_artifact="${STACK_PATH//\//-}-tfplan"
+          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+        env:
+          STACK_PATH: ${{ matrix.stacks }}
+
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
         with:
@@ -119,8 +139,8 @@ jobs:
       - name: Download Terraform plan artifact
         uses: actions/download-artifact@v8
         with:
-          name: tfplan
-          path: terraform/${{ matrix.stacks }}/tfplan
+          name: ${{ env.TF_PLAN_ARTIFACT }}
+          path: terraform/${{ matrix.stacks }}
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
