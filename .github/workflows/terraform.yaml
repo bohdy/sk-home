@@ -2,8 +2,8 @@ name: Terraform
 
 on:
   push:
-    paths:
-      - "terraform/**"
+    branches:
+      - main
   pull_request:
     paths:
       - "terraform/**"
