@@ -36,7 +36,7 @@ jobs:
     needs: detect-changes
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, proxmox/images]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     steps:
@@ -87,16 +87,16 @@ jobs:
     needs: tf-plan
     strategy:
       matrix:
-        stacks: [network/gw/interfaces]
+        stacks: [network/gw/interfaces, proxmox/images]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v4.0.0
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
         with:
-          terraform_version: 1.14.9
+          install: true
 
       - name: Download Terraform plan artifact
         uses: actions/download-artifact@v8
