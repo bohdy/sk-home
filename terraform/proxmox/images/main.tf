@@ -3,7 +3,7 @@ resource "proxmox_download_file" "ubuntu_server_resolute_image" {
   # downloaded bytes move together only during an intentional image upgrade.
   content_type       = "import"
   datastore_id       = "local"
-  file_name          = "resolute-server-cloudimg-amd64.qcow2"
+  file_name          = "resolute-server-cloudimg-amd64.img"
   node_name          = "pve"
   url                = "https://cloud-images.ubuntu.com/resolute/20260421/resolute-server-cloudimg-amd64.img"
   checksum           = "8ed228c9f08a50122fa72307623d9f88d9209ba26e7e849edd584fa675e34863"
