@@ -16,7 +16,8 @@ RUN apt install -y \
     curl \
     sudo \
     npm \
-    mise
+    mise \
+    jq
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 

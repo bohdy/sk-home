@@ -23,7 +23,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        stacks: [network/gw/interfaces, proxmox/images]
+        stacks: [network/gw/interfaces, proxmox/images, k3s/cluster, k3s/talos-cluster]
 
     steps:
       # Check out the repository with full history so the workflow can compare
@@ -38,7 +38,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, proxmox/images]
+        stacks: [network/gw/interfaces, proxmox/images, k3s/cluster, k3s/talos-cluster]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -112,7 +112,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [proxmox/images]
+        stacks: [proxmox/images, k3s/cluster, k3s/talos-cluster]
         # TMP workaround: Provider / RouterOS API fails due to missing VRF attribute
         #stacks: [network/gw/interfaces, proxmox/images]
 

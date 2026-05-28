@@ -1,0 +1,49 @@
+variant: flatcar
+version: 1.0.0
+passwd:
+  users:
+    - name: bohdy
+      ssh_authorized_keys:
+        - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFB0Ql0coSrrDTpGmN7BDs9GtxHk0RX4HX8bQNmF+hQb viktor@bohdal.name
+
+storage:
+  files:
+    - path: /etc/sudoers.d/bohdy
+      mode: 0440
+      contents:
+        inline: |
+          # Allow the primary lab operator to perform administrative tasks
+          # without embedding or managing a local password on the node.
+          bohdy ALL=(ALL) NOPASSWD:ALL
+    - path: /etc/systemd/network/10-static-ethernet.network
+      contents:
+        inline: |
+          [Match]
+          # Match the Proxmox virtio NIC without relying on Flatcar's runtime
+          # interface name, which may appear as eth0, ens18, or another
+          # predictable-name variant depending on image and boot metadata.
+          Type=ether
+
+          [Network]
+          Address=10.1.20.31/24
+          Gateway=10.1.20.1
+          DNS=8.8.8.8
+
+systemd:
+  units:
+    - name: coreos-metadata-sshkeys@core.service
+      # Proxmox does not provide the cloud metadata source this unit expects,
+      # and SSH keys are provisioned directly through Ignition instead.
+      mask: true
+    - name: sshkeys.service
+      # This compatibility unit depends on metadata-provided keys; mask it so
+      # Flatcar boots cleanly when keys come from the Ignition passwd section.
+      mask: true
+    - name: systemd-networkd.service
+      dropins:
+        - name: 10-debug.conf
+          contents: |
+            [Service]
+            Environment=SYSTEMD_LOG_LEVEL=debug
+    - name: qemu-guest-agent.service
+      enabled: true
