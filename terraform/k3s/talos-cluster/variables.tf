@@ -43,7 +43,7 @@ variable "talos_version" {
   # and generated machine configuration move together during upgrades.
   description = "Talos Linux version for the VM image and generated configs."
   type        = string
-  default     = "v1.13.1"
+  default     = "v1.13.0"
 }
 
 variable "kubernetes_version" {
