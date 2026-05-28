@@ -38,7 +38,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, proxmox/images, k3s/cluster, k3s/talos-cluster]
+        stacks: [network/gw/interfaces, proxmox/images, k3s/talos-cluster]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -113,8 +113,8 @@ jobs:
       max-parallel: 1
       matrix:
         # Apply only the stacks that are part of the active rebuild path; the
-        # legacy Flatcar-backed `k3s/cluster` stack is still planned for
-        # visibility, but it is intentionally excluded from production apply.
+        # legacy Flatcar-backed `k3s/cluster` stack stays out of both planning
+        # and applying on main because it still holds a stale state lock.
         stacks: [proxmox/images, k3s/talos-cluster]
 
     env:
