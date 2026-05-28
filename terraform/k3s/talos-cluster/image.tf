@@ -15,12 +15,16 @@ locals {
 
   # Collapse duplicate downloads per Proxmox host/image pair so three VMs on
   # the same host reuse one Image Factory artifact in the local datastore.
-  talos_images_by_proxmox_node = {
+  talos_image_groups_by_proxmox_node = {
     for node_key, node in var.nodes : "${node.host_node}-${node.update ? local.update_image_id : local.image_id}" => {
       node_name    = node.host_node
       schematic_id = node.update ? local.update_schematic_id : local.schematic_id
       version      = node.update ? local.update_version : local.image_version
-    }
+    }...
+  }
+
+  talos_images_by_proxmox_node = {
+    for image_key, image_group in local.talos_image_groups_by_proxmox_node : image_key => image_group[0]
   }
 
   node_image_keys = {
