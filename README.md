@@ -32,6 +32,8 @@ The currently intended committed surface is:
 
 The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and Terraform-managed Talos bootstrap state.
 
+The `main` Terraform workflow applies the active rebuild path only: `proxmox/images` and `k3s/talos-cluster`. The legacy Flatcar-backed `k3s/cluster` stack remains in the tree for reference and planning visibility, but it is intentionally excluded from production applies.
+
 ## Local Development
 
 The preferred local development environment is the repository devcontainer. It keeps Terraform, CI helper tools, and shell behavior closer to the environment used by automation, so use it for Terraform and workflow work unless a task specifically requires running on the host.
