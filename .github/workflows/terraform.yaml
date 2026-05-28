@@ -38,7 +38,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, proxmox/images, k3s/cluster, k3s/talos-cluster]
+        stacks: [network/gw/interfaces, proxmox/images, k3s/talos-cluster]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -112,9 +112,10 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [proxmox/images, k3s/cluster, k3s/talos-cluster]
-        # TMP workaround: Provider / RouterOS API fails due to missing VRF attribute
-        #stacks: [network/gw/interfaces, proxmox/images]
+        # Apply only the stacks that are part of the active rebuild path; the
+        # legacy Flatcar-backed `k3s/cluster` stack stays out of both planning
+        # and applying on main because it still holds a stale state lock.
+        stacks: [proxmox/images, k3s/talos-cluster]
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
