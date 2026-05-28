@@ -61,7 +61,7 @@ data "proxmox_file" "cloud_init_iso" {
   node_name    = "pve"
   datastore_id = "local"
   content_type = "import"
-  file_name    = "flatcar_production_proxmoxve_image.qcow2"
+  file_name    = "flatcar_production_proxmoxve_image.raw"
 }
 
 
