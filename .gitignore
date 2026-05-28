@@ -15,6 +15,10 @@ __pycache__/
 *.tfstate
 *.tfstate.*
 
+# Terraform binary plans can include sensitive values and should stay local.
+tfplan
+tfplan-*
+*.tfplan
+
 .terraform.lock.hcl
 .local.auto.tfvars
-

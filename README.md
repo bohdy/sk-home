@@ -28,6 +28,10 @@ The currently intended committed surface is:
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
 - Do not keep placeholder project directories when they are not actively used.
 
+## Active Terraform Stacks
+
+The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and Terraform-managed Talos bootstrap state.
+
 ## Local Development
 
 The preferred local development environment is the repository devcontainer. It keeps Terraform, CI helper tools, and shell behavior closer to the environment used by automation, so use it for Terraform and workflow work unless a task specifically requires running on the host.
