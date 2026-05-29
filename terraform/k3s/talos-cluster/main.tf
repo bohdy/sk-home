@@ -97,21 +97,6 @@ resource "proxmox_virtual_environment_file" "talos_user_data" {
   }
 }
 
-resource "proxmox_virtual_environment_file" "talos_meta_data" {
-  for_each = var.nodes
-
-  # The noCloud metadata file carries the hostname separately from Talos user
-  # data so Proxmox and Talos agree on the guest identity during first boot.
-  node_name    = each.value.host_node
-  datastore_id = var.image.proxmox_snippet_datastore
-  content_type = "snippets"
-
-  source_raw {
-    data      = "local-hostname: ${each.value.hostname}\n"
-    file_name = "${each.value.hostname}-talos-meta-data.yaml"
-  }
-}
-
 resource "proxmox_virtual_environment_file" "talos_network_data" {
   for_each = var.nodes
 
@@ -187,7 +172,6 @@ resource "proxmox_virtual_environment_vm" "control_plane" {
     # ordinary Linux user-account settings.
     datastore_id         = each.value.cloud_init_datastore_id
     user_data_file_id    = proxmox_virtual_environment_file.talos_user_data[each.key].id
-    meta_data_file_id    = proxmox_virtual_environment_file.talos_meta_data[each.key].id
     network_data_file_id = proxmox_virtual_environment_file.talos_network_data[each.key].id
   }
 
