@@ -1,0 +1,64 @@
+# These values install Cilium as the first Kubernetes network component on the
+# Talos cluster. Flux takes over the Cilium custom resources after the CNI is up.
+ipam:
+  # Talos exposes Kubernetes pod CIDRs, so Cilium can use host-scope Kubernetes
+  # IPAM without adding a separate IPAM backend.
+  mode: kubernetes
+
+# Cilium replaces kube-proxy; the Talos machine config disables kube-proxy so
+# only one service datapath implementation is active.
+kubeProxyReplacement: true
+
+# Talos exposes the local API proxy through KubePrism on each node, avoiding a
+# bootstrap dependency on the external Kubernetes API VIP while Cilium starts.
+k8sServiceHost: localhost
+k8sServicePort: 7445
+
+bgpControlPlane:
+  # BGP is enabled at install time; Flux later reconciles the peer and
+  # advertisement CRDs under kubernetes/flux/infrastructure/cilium.
+  enabled: true
+  secretsNamespace:
+    # The BGP auth secret is created manually from Bitwarden before Flux applies
+    # the peer config, so keep the secret in the Cilium namespace.
+    name: kube-system
+
+cgroup:
+  # Talos already mounts cgroupv2 for the host; Cilium should reuse that mount
+  # instead of trying to mount it inside the agent pod.
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup
+
+securityContext:
+  capabilities:
+    # Talos requires the Cilium-recommended capability set with SYS_MODULE
+    # omitted because Talos does not allow loading arbitrary kernel modules.
+    ciliumAgent:
+      - CHOWN
+      - KILL
+      - NET_ADMIN
+      - NET_RAW
+      - IPC_LOCK
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    cleanCiliumState:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RESOURCE
+
+tolerations:
+  # The learning cluster is control-plane only, so system networking pods must
+  # tolerate control-plane taints until worker nodes are introduced.
+  - operator: Exists
+
+operator:
+  # One operator replica is enough for the current three-node learning cluster
+  # and avoids scheduling a redundant operator during early bootstrap.
+  replicas: 1
+  tolerations:
+    - operator: Exists

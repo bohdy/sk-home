@@ -65,6 +65,18 @@ data "talos_machine_configuration" "control_plane" {
         }
       }
       cluster = {
+        network = {
+          # Cilium is bootstrapped after Talos forms the control plane, so Talos
+          # must not install its default CNI manifest during cluster creation.
+          cni = {
+            name = "none"
+          }
+        }
+        proxy = {
+          # Cilium runs kube-proxy replacement for this cluster, so Talos should
+          # not deploy kube-proxy into the bootstrap manifests.
+          disabled = true
+        }
         apiServer = {
           certSANs = local.api_server_cert_sans
         }
