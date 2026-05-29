@@ -25,8 +25,8 @@ resource "talos_machine_secrets" "cluster" {
 data "talos_machine_configuration" "control_plane" {
   for_each = var.nodes
 
-  # Render one control-plane configuration per VM so host identity, static
-  # networking, and install target are all explicit in the noCloud user data.
+  # Render one control-plane configuration per VM so static networking and the
+  # install target are explicit while Proxmox continues to supply hostname.
   cluster_name       = var.cluster_name
   cluster_endpoint   = "https://${var.cluster_endpoint_vip}:6443"
   machine_type       = "controlplane"
@@ -44,7 +44,6 @@ data "talos_machine_configuration" "control_plane" {
           image = "${var.image.factory_url}/installer/${each.value.update ? local.update_schematic_id : local.schematic_id}:${each.value.update ? local.update_version : local.image_version}"
         }
         network = {
-          hostname    = each.value.hostname
           nameservers = var.cluster_dns_servers
           interfaces = [
             {
