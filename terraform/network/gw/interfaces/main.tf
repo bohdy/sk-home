@@ -91,6 +91,10 @@ locals {
       [for v in var.vlans : v.iface_list if v.iface_list != null]
     )) : name => true
   }
+
+  # Expand the optional BGP node inventory only when Kubernetes peering is
+  # enabled so disabling the feature removes all BGP resources in one place.
+  kubernetes_bgp_nodes = var.kubernetes_bgp.enabled ? var.kubernetes_bgp.nodes : {}
 }
 
 // Create all required interface lists dynamically from the merged local to ensure
@@ -121,4 +125,81 @@ resource "routeros_interface_list_member" "list_member_vlan" {
   // RouterOS interface name is generated deterministically as vlan<ID>.
   interface = "vlan${each.key}"
   list      = each.value.iface_list
+}
+
+resource "routeros_ip_firewall_addr_list" "kubernetes_service_vips" {
+  count    = var.kubernetes_bgp.enabled ? 1 : 0
+  provider = routeros.gw
+
+  # RouterOS can pre-filter received BGP NLRIs against this list before normal
+  # route-filter evaluation, which keeps unexpected Kubernetes routes out early.
+  list    = var.kubernetes_bgp.service_vip_address_list
+  address = var.kubernetes_bgp.service_vip_cidr
+  comment = "Kubernetes LoadBalancer VIPs advertised by Cilium"
+}
+
+resource "routeros_routing_filter_rule" "kubernetes_bgp_in" {
+  count    = var.kubernetes_bgp.enabled ? 1 : 0
+  provider = routeros.gw
+
+  # Cilium advertises LoadBalancer VIPs as host routes by default. Rejecting
+  # everything else makes route leaks fail closed even when a node is mis-set.
+  chain   = var.kubernetes_bgp.input_filter_chain
+  rule    = "if (dst in ${var.kubernetes_bgp.service_vip_cidr} && dst-len == 32) { accept } else { reject }"
+  comment = "Accept only Kubernetes LoadBalancer VIP host routes"
+}
+
+resource "routeros_routing_bgp_connection" "kubernetes_node" {
+  for_each = local.kubernetes_bgp_nodes
+  provider = routeros.gw
+
+  # Each Talos node runs Cilium's BGP control plane and peers directly with the
+  # gateway over VLAN 20 using iBGP in the homelab private ASN.
+  name             = "kubernetes-${each.key}"
+  as               = tostring(var.kubernetes_bgp.local_asn)
+  address_families = "ip"
+  comment          = "Kubernetes BGP peer ${each.value.comment}"
+  connect          = true
+  listen           = true
+  multihop         = false
+  tcp_md5_key      = var.kubernetes_bgp_tcp_md5_key
+
+  local {
+    address = var.kubernetes_bgp.local_address
+    role    = "ibgp"
+  }
+
+  remote {
+    address = each.value.address
+    as      = tostring(var.kubernetes_bgp.remote_asn)
+  }
+
+  input {
+    accept_nlri               = var.kubernetes_bgp.service_vip_address_list
+    filter                    = var.kubernetes_bgp.input_filter_chain
+    limit_process_routes_ipv4 = 256
+  }
+
+  output {
+    default_originate = "never"
+  }
+
+  lifecycle {
+    # RouterOS 7.22.1 exposes these defaults through REST in a shape that the
+    # Terraform provider cannot round-trip without sending unsupported fields.
+    # Ignore them so Terraform can track the imported peers without rewriting
+    # otherwise-correct BGP sessions on every plan.
+    ignore_changes = [
+      add_path_out,
+      keepalive_time,
+      nexthop_choice,
+      local[0].port,
+      remote[0].port,
+    ]
+  }
+
+  depends_on = [
+    routeros_ip_firewall_addr_list.kubernetes_service_vips,
+    routeros_routing_filter_rule.kubernetes_bgp_in,
+  ]
 }

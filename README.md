@@ -32,6 +32,8 @@ The currently intended committed surface is:
 
 The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and Terraform-managed Talos bootstrap state.
 
+Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
+
 The `main` Terraform workflow targets only the active rebuild path: `proxmox/images` and `k3s/talos-cluster`. The legacy Flatcar-backed `k3s/cluster` stack remains in the tree for reference, but it is intentionally excluded from the main workflow until the state lock and legacy path are retired.
 
 ## Local Development
@@ -110,7 +112,10 @@ Load any stack-specific provider variables before planning. For MikroTik-backed 
 export TF_VAR_mikrotik_gw_hosturl="https://gw.bohdal.name/"
 export TF_VAR_mikrotik_username="$(bws secret get 519790de-c23d-41f7-a838-b41b00c9444d -o json | jq -r .value)"
 export TF_VAR_mikrotik_password="$(bws secret get 6b950dde-8f31-4d7b-9fdc-b41b00c993ca -o json | jq -r .value)"
+export TF_VAR_kubernetes_bgp_tcp_md5_key="$(bws secret get 2c67255f-36f4-4344-b94d-b459014e9249 -o json | jq -r .value)"
 ```
+
+`TF_VAR_kubernetes_bgp_tcp_md5_key` is the shared TCP MD5 key used by Cilium and the MikroTik gateway for Kubernetes BGP sessions. Create the Bitwarden item before planning the gateway stack and keep the secret ID out of command history when possible.
 
 For Proxmox-backed stacks:
 

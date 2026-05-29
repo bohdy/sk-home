@@ -1,0 +1,17 @@
+# This peer config is shared by every Talos node peering with the MikroTik
+# gateway. The referenced secret is created from Bitwarden and is not committed.
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: mikrotik-gw
+spec:
+  authSecretRef: sk-kubernetes-bgp-auth
+  timers:
+    holdTimeSeconds: 90
+    keepAliveTimeSeconds: 30
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: bgp
