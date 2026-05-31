@@ -210,6 +210,15 @@ resource "talos_machine_bootstrap" "cluster" {
   endpoint             = local.bootstrap_node_ip
   client_configuration = talos_machine_secrets.cluster.client_configuration
 
+  lifecycle {
+    # Bootstrap is a one-shot Talos operation. If Terraform replaces the
+    # control-plane VMs, replace this resource too so the rebuilt nodes form a
+    # fresh etcd cluster instead of inheriting stale bootstrap state.
+    replace_triggered_by = [
+      proxmox_virtual_environment_vm.control_plane,
+    ]
+  }
+
   timeouts = {
     create = "10m"
   }
