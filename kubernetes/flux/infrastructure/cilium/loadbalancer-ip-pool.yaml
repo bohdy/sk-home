@@ -1,0 +1,9 @@
+# Cilium allocates LoadBalancer service addresses from a routed subnet that is
+# separate from the node VLAN and advertised to the gateway through BGP.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: sk-service-vips
+spec:
+  blocks:
+    - cidr: 10.1.30.0/24

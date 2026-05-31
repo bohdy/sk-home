@@ -28,6 +28,52 @@ variable "mikrotik_insecure" {
   default     = true
 }
 
+variable "kubernetes_bgp" {
+  # Keep the Kubernetes peering policy together so RouterOS accepts only the
+  # dedicated service VIP routes expected from the Talos nodes.
+  description = "BGP settings for peering the MikroTik gateway with Kubernetes nodes."
+  type = object({
+    enabled                  = optional(bool, true)
+    local_asn                = optional(number, 65001)
+    remote_asn               = optional(number, 65001)
+    local_address            = optional(string, "10.1.20.1")
+    service_vip_cidr         = optional(string, "10.1.30.0/24")
+    service_vip_address_list = optional(string, "sk-kubernetes-service-vips")
+    input_filter_chain       = optional(string, "sk-kubernetes-bgp-in")
+    nodes = optional(map(object({
+      address = string
+      comment = string
+      })), {
+      cp1 = {
+        address = "10.1.20.41"
+        comment = "sk-talos-cp-1"
+      }
+      cp2 = {
+        address = "10.1.20.42"
+        comment = "sk-talos-cp-2"
+      }
+      cp3 = {
+        address = "10.1.20.43"
+        comment = "sk-talos-cp-3"
+      }
+    })
+  })
+  default = {}
+}
+
+variable "kubernetes_bgp_tcp_md5_key" {
+  # RouterOS and Cilium both use this shared RFC 2385 key for the BGP sessions;
+  # source it from Bitwarden and never commit the plaintext value.
+  description = "Shared TCP MD5 key used to authenticate Kubernetes BGP sessions."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.kubernetes_bgp_tcp_md5_key) > 0
+    error_message = "The Kubernetes BGP TCP MD5 key must be provided from the secret store."
+  }
+}
+
 variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.

@@ -1,0 +1,15 @@
+# Advertise only LoadBalancer service VIPs. Pod CIDRs, ClusterIPs, and
+# ExternalIPs stay internal to the Kubernetes cluster for this first peering.
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: loadbalancer-vips
+  labels:
+    advertise: bgp
+spec:
+  advertisements:
+    - advertisementType: Service
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector: {}

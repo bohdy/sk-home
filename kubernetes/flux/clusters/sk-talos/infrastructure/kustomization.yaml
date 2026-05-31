@@ -1,0 +1,6 @@
+# Cluster infrastructure add-ons are grouped here so future add-ons can be added
+# without changing the Flux bootstrap path.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../infrastructure/cilium
