@@ -34,7 +34,7 @@ The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The `main` Terraform workflow targets only the active rebuild path: `proxmox/images` and `k3s/talos-cluster`. The legacy Flatcar-backed `k3s/cluster` stack remains in the tree for reference, but it is intentionally excluded from the main workflow until the state lock and legacy path are retired.
+The `main` Terraform workflow targets only the active rebuild path: `k3s/talos-cluster`. The legacy Flatcar-backed `k3s/cluster` stack remains in the tree for reference, but it is intentionally excluded from the main workflow until the state lock and legacy path are retired.
 
 ## Local Development
 
