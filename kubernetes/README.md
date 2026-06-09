@@ -2,6 +2,8 @@
 
 This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
+Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, and DNS depends on both before publishing the Blocky resolver VIP.
+
 ## Bootstrap order
 
 Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwarden Secrets Manager CLI, and `jq`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
@@ -66,3 +68,20 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig get service lb-smoke
 ```
 
 The service should receive a `10.1.30.x` external IP and be reachable from a LAN client routed through the MikroTik gateway.
+
+## DNS
+
+The DNS stack lives in `kubernetes/flux/infrastructure/dns`. Blocky is exposed through Cilium LB IPAM at `10.1.30.53` and forwards to a dedicated internal CoreDNS instance. CoreDNS serves the internal `bohdal.name` split-DNS zone and forwards public recursion to DNS4EU Protective + Ad Blocking over DNS-over-TLS.
+
+The detailed decision record is `docs/dns-design.md`. The DNS component README at `kubernetes/flux/infrastructure/dns/README.md` documents source versus rendered files, record updates, smoke tests, and rollback.
+
+Render and validate DNS manifests from the repository root:
+
+```bash
+mise run dns-render
+mise run dns-check
+```
+
+Flux applies the committed rendered manifests from `kubernetes/flux/infrastructure/dns/rendered`. Do not edit rendered DNS files directly.
+
+Before MikroTik DHCP hands out `10.1.30.53`, validate the VIP with direct `dig @10.1.30.53` tests from LAN clients on each relevant VLAN. DHCP changes should be a follow-up after the Kubernetes DNS path is healthy.

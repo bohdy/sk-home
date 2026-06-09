@@ -1,0 +1,16 @@
+# Shared cluster-scoped policy must exist before add-ons reference those
+# scheduling primitives.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cluster-policy
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./kubernetes/flux/infrastructure/cluster-policy
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

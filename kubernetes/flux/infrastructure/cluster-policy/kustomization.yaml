@@ -1,0 +1,6 @@
+# Cluster-scoped policy primitives live outside individual add-ons so shared
+# scheduling behavior can be reused without copying manifests between stacks.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - priorityclass.yaml

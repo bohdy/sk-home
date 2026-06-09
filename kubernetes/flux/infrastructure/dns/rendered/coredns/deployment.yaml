@@ -1,0 +1,127 @@
+# This CoreDNS deployment is separate from the cluster DNS add-on in kube-system.
+# It serves LAN/internal DNS only and has no Kubernetes plugin or API access.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: dns-system
+  labels:
+    app.kubernetes.io/name: coredns
+    app.kubernetes.io/component: dns-authority
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: coredns
+      app.kubernetes.io/component: dns-authority
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: coredns
+        app.kubernetes.io/component: dns-authority
+      annotations:
+        sk-home/corefile-checksum: "633f76607fd46a17ae942c55ccdaf6cc81159ce494547b10383d14ff388f51d6"
+        sk-home/zones-checksum: "8437708a733196ab36d56a1e4c36bc8554c946df16884306fecad38a6352cb62"
+    spec:
+      serviceAccountName: coredns
+      automountServiceAccountToken: false
+      priorityClassName: sk-home-critical
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: coredns
+              app.kubernetes.io/component: dns-authority
+      containers:
+        - name: coredns
+          # CoreDNS v1.13.1 linux/amd64 manifest.
+          image: registry.k8s.io/coredns/coredns:v1.13.1@sha256:246e7333fde10251c693b68f13d21d6d64c7dbad866bbfa11bd49315e3f725a7
+          imagePullPolicy: IfNotPresent
+          args:
+            - -conf
+            - /etc/coredns/Corefile
+          ports:
+            - name: dns
+              containerPort: 1053
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 1053
+              protocol: TCP
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+            - name: ready
+              containerPort: 8181
+              protocol: TCP
+            - name: metrics
+              containerPort: 9153
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: ready
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: coredns-corefile
+              mountPath: /etc/coredns/Corefile
+              subPath: Corefile
+              readOnly: true
+            - name: coredns-zones
+              mountPath: /zones
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: coredns-corefile
+          configMap:
+            name: coredns-corefile
+        - name: coredns-zones
+          configMap:
+            name: coredns-zones
+        - name: tmp
+          emptyDir: {}

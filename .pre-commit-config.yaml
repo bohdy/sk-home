@@ -1,5 +1,14 @@
-# Keep local commit-time checks aligned around fast Terraform feedback.
+# Keep local commit-time checks aligned around fast infrastructure feedback.
 repos:
+  - repo: local
+    hooks:
+      - id: dns-check
+        name: dns rendered manifests
+        entry: mise run dns-check
+        language: system
+        pass_filenames: false
+        files: ^(kubernetes/flux/infrastructure/dns/|scripts/render-dns.py|mise.toml)
+
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.105.0
     hooks:
@@ -20,5 +29,7 @@ repos:
 
       - id: check-json
       - id: check-yaml
+        args:
+          - "--allow-multiple-documents"
       - id: trailing-whitespace
       - id: end-of-file-fixer

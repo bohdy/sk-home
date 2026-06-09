@@ -1,0 +1,69 @@
+# Blocky is the client-facing policy and visibility layer. It forwards every
+# query to the dedicated CoreDNS service, which owns split DNS and public
+# recursion.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blocky-config
+  namespace: dns-system
+data:
+  config.yml: |
+    upstreams:
+      strategy: strict
+      groups:
+        default:
+          - tcp+udp://coredns.dns-system.svc.cluster.local:53
+
+    ports:
+      dns: 1053
+      http: 4000
+
+    prometheus:
+      enable: true
+      path: /metrics
+
+    log:
+      level: info
+      format: json
+      timestamp: true
+      privacy: false
+
+    queryLog:
+      type: console
+
+    caching:
+      maxTime: 5m
+      cacheTimeNegative: 1m
+      maxItemsCount: 10000
+      prefetching: false
+
+    blocking:
+      blockType: nxDomain
+      blockTTL: 1m
+      denylists:
+        local-deny:
+          - /config/deny.txt
+      allowlists:
+        local-deny:
+          - /config/allow.txt
+          - |
+            # Keep the split DNS zone out of local deny policy even when future
+            # wildcard rules are added to the local override files.
+            bohdal.name
+            *.bohdal.name
+      clientGroupsBlock:
+        default:
+          - local-deny
+
+  allow.txt: |
+    # Local allow overrides for Blocky.
+    # Use exact domains such as allowed.example.com.
+    # Use wildcards such as *.allowed.example.com only when all subdomains
+    # should bypass local deny rules.
+
+  deny.txt: |
+    # Local deny overrides for Blocky. Denied names return NXDOMAIN.
+    # Use exact domains such as blocked.example.com.
+    # Use wildcards such as *.blocked.example.com only after reviewing the
+    # blast radius. Do not add bohdal.name here; the split DNS zone is allowed
+    # explicitly in config.yml.

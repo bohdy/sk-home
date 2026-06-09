@@ -1,0 +1,110 @@
+# Start from default-deny so every allowed DNS path is visible in Git.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: dns-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# The LAN-facing Blocky DNS service accepts DNS from any routed source; router
+# and firewall policy decide which LANs can reach the advertised VIP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blocky-ingress
+  namespace: dns-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+      app.kubernetes.io/component: dns-front
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: UDP
+          port: 1053
+        - protocol: TCP
+          port: 1053
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4000
+---
+# Blocky needs the cluster DNS service only to resolve the CoreDNS service name
+# in its upstream configuration; recursive client DNS still goes through CoreDNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: blocky-egress
+  namespace: dns-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+      app.kubernetes.io/component: dns-front
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: coredns
+              app.kubernetes.io/component: dns-authority
+      ports:
+        - protocol: UDP
+          port: 1053
+        - protocol: TCP
+          port: 1053
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# CoreDNS serves only Blocky and forwards public recursion to DNS4EU over DoT.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: coredns-policy
+  namespace: dns-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: coredns
+      app.kubernetes.io/component: dns-authority
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: blocky
+              app.kubernetes.io/component: dns-front
+      ports:
+        - protocol: UDP
+          port: 1053
+        - protocol: TCP
+          port: 1053
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 86.54.11.13/32
+        - ipBlock:
+            cidr: 86.54.11.213/32
+      ports:
+        - protocol: TCP
+          port: 853
