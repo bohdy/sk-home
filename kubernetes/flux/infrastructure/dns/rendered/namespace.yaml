@@ -1,10 +1,14 @@
 # Keep DNS isolated so Pod Security Admission, network policy, and future
 # observability rules can be reasoned about without mixing with kube-system.
+# The pinned upstream DNS images ship executables that need their default
+# runtime capability path; restricted PSA with drop ALL/no-new-privileges makes
+# those binaries fail before application startup. Keep the namespace at baseline
+# until a cap-free image path is introduced and validated.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: dns-system
   labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/warn: restricted
-    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/audit: baseline
