@@ -2,7 +2,7 @@
 
 This component deploys the LAN DNS path for the `sk-talos` cluster. Blocky is the only LAN-facing resolver at `10.1.30.53`; CoreDNS stays internal and serves the split `bohdal.name` view plus DNS4EU forwarding.
 
-The detailed design record is [docs/dns-design.md](../../../../docs/dns-design.md).
+The detailed design record is [docs/dns-design.md](../../../../docs/dns-design.md). Operational notes that should inform future work, including observability stack inputs, are kept in [docs/project-memory.md](../../../../docs/project-memory.md).
 
 ## Layout
 
