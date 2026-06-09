@@ -12,6 +12,8 @@ During live bring-up, the pinned upstream Blocky and CoreDNS images failed with 
 
 Blocky v0.29 resolver entries use `[net:]host:[port]` syntax. The CoreDNS upstream must be `tcp+udp:coredns.dns-system.svc.cluster.local:53`, not URL-style `tcp+udp://...`.
 
+Blocky special-use domain blocking must stay disabled while CoreDNS is the only upstream, otherwise private reverse zones return Blocky-generated NXDOMAIN responses before CoreDNS can answer LAN PTR records.
+
 CoreDNS reached healthy state once the runtime constraints were relaxed. Blocky reached healthy state after the runtime fix and corrected upstream syntax; a live test showed successful resolution of `dns.bohdal.name` through CoreDNS.
 
 ## Observability Inputs

@@ -18,6 +18,9 @@ data:
       dns: 1053
       http: 4000
 
+    specialUseDomains:
+      enable: false
+
     prometheus:
       enable: true
       path: /metrics

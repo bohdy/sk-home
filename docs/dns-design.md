@@ -54,7 +54,7 @@ Add a shared cluster-scoped `PriorityClass` named `sk-home-critical` in a cluste
 
 Do not enable session affinity on the Blocky service initially. Blocky and CoreDNS should each use independent per-pod caches rather than shared cache or state.
 
-Containers should run as non-root on high internal ports, with Kubernetes Services mapping client-facing port 53 to the unprivileged container ports. The pod security context should keep `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, and `seccompProfile.type: RuntimeDefault`. Do not set `allowPrivilegeEscalation: false` or `capabilities.drop: ["ALL"]` for the pinned upstream DNS images until a replacement image path is validated, because that combination currently makes the binaries fail with `operation not permitted`. Writable `emptyDir` mounts should be added only where an image needs scratch space.
+Containers should run as non-root on high internal ports, with Kubernetes Services mapping client-facing port 53 to the unprivileged container ports. The pod security context should keep `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, and `seccompProfile.type: RuntimeDefault`. CoreDNS should also set numeric `runAsUser: 65532` because Kubernetes cannot verify the image's named `nonroot` user when `runAsNonRoot` is enabled. Do not set `allowPrivilegeEscalation: false` or `capabilities.drop: ["ALL"]` for the pinned upstream DNS images until a replacement image path is validated, because that combination currently makes the binaries fail with `operation not permitted`. Writable `emptyDir` mounts should be added only where an image needs scratch space.
 
 Use dedicated Kubernetes `ServiceAccount`s with no RBAC for Blocky and CoreDNS. Set `automountServiceAccountToken: false` on pods unless a component proves it needs Kubernetes API access.
 
@@ -77,6 +77,8 @@ Blocky is the front DNS service. It should provide client-facing query handling,
 `bohdal.name` should bypass Blocky ad filtering and local block policies so internal service discovery remains predictable. Any public fallback for `bohdal.name` should also bypass Blocky ad filtering.
 
 Blocky should forward all DNS queries to CoreDNS as its default upstream. Do not add separate Blocky upstream groups for `bohdal.name` or public recursion; CoreDNS owns that split. Blocky should only define the bypass behavior needed to keep `bohdal.name` out of local blocking and deny rules. Blocky resolver entries use `[net:]host:[port]` syntax, so the CoreDNS upstream should be written as `tcp+udp:coredns.dns-system.svc.cluster.local:53`, not URL-style `tcp+udp://...`.
+
+Disable Blocky's special-use domain blocking while CoreDNS is the only upstream. Private reverse zones such as `30.1.10.in-addr.arpa` and `100.1.10.in-addr.arpa` must be forwarded to CoreDNS for LAN PTR records instead of being answered as special-use NXDOMAINs by Blocky.
 
 Local Blocky allow/deny overrides should apply before forwarding to CoreDNS. Deny overrides should return NXDOMAIN initially. Support exact and wildcard override entries if Blocky's config format makes that straightforward, but keep the initial override files empty. Add comments explaining exact versus wildcard syntax and noting that `bohdal.name` is intentionally excluded from deny policy.
 
