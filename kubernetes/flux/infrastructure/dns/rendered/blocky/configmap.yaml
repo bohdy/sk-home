@@ -12,7 +12,7 @@ data:
       strategy: strict
       groups:
         default:
-          - tcp+udp://coredns.dns-system.svc.cluster.local:53
+          - tcp+udp:coredns.dns-system.svc.cluster.local:53
 
     ports:
       dns: 1053

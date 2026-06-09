@@ -26,16 +26,13 @@ spec:
         app.kubernetes.io/name: blocky
         app.kubernetes.io/component: dns-front
       annotations:
-        sk-home/config-checksum: "b8f4ebb0e9ac9f1a8fff0d2f7bc8c6ecdbc8da8caf921883fcf2f5a231dc716f"
+        sk-home/config-checksum: "18c14c1fcd60e05301ce08d3eed9f29506ce3ad5d8a47b0437160755c7d06e27"
     spec:
       serviceAccountName: blocky
       automountServiceAccountToken: false
       priorityClassName: sk-home-critical
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65532
-        runAsGroup: 65532
-        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       tolerations:
@@ -92,11 +89,7 @@ spec:
             limits:
               memory: 128Mi
           securityContext:
-            allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities:
-              drop:
-                - ALL
           volumeMounts:
             - name: blocky-config
               mountPath: /config

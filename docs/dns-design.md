@@ -28,7 +28,7 @@ The DNS stack should be deployed with plain Kubernetes manifests reconciled by F
 
 DNS resources should live in a dedicated `dns-system` namespace.
 
-Label the `dns-system` namespace for restricted Pod Security Admission at enforce, warn, and audit levels if the manifests comply. The DNS stack should treat any required exception as a design issue to review.
+Label the `dns-system` namespace for baseline Pod Security Admission at enforce, warn, and audit levels. Bring-up testing showed the pinned upstream Blocky and CoreDNS images fail before application startup under restricted PSA because `allowPrivilegeEscalation: false` and `capabilities.drop: ["ALL"]` block their packaged executables. Treat returning this namespace to restricted PSA as a follow-up that requires cap-free images or another validated image strategy.
 
 Blocky should expose classic DNS on both UDP/53 and TCP/53 to LAN clients. DoH and DNS-over-TLS should not be exposed to LAN clients in the first version. The encrypted DNS boundary for now is CoreDNS to DNS4EU over DNS-over-TLS.
 
@@ -54,7 +54,7 @@ Add a shared cluster-scoped `PriorityClass` named `sk-home-critical` in a cluste
 
 Do not enable session affinity on the Blocky service initially. Blocky and CoreDNS should each use independent per-pod caches rather than shared cache or state.
 
-Containers should run as non-root on high internal ports, with Kubernetes Services mapping client-facing port 53 to the unprivileged container ports. The baseline pod security context should use `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `capabilities.drop: ["ALL"]`, and `seccompProfile.type: RuntimeDefault`. Writable `emptyDir` mounts should be added only where an image needs scratch space.
+Containers should run as non-root on high internal ports, with Kubernetes Services mapping client-facing port 53 to the unprivileged container ports. The pod security context should keep `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, and `seccompProfile.type: RuntimeDefault`. Do not set `allowPrivilegeEscalation: false` or `capabilities.drop: ["ALL"]` for the pinned upstream DNS images until a replacement image path is validated, because that combination currently makes the binaries fail with `operation not permitted`. Writable `emptyDir` mounts should be added only where an image needs scratch space.
 
 Use dedicated Kubernetes `ServiceAccount`s with no RBAC for Blocky and CoreDNS. Set `automountServiceAccountToken: false` on pods unless a component proves it needs Kubernetes API access.
 
@@ -76,7 +76,7 @@ Blocky is the front DNS service. It should provide client-facing query handling,
 
 `bohdal.name` should bypass Blocky ad filtering and local block policies so internal service discovery remains predictable. Any public fallback for `bohdal.name` should also bypass Blocky ad filtering.
 
-Blocky should forward all DNS queries to CoreDNS as its default upstream. Do not add separate Blocky upstream groups for `bohdal.name` or public recursion; CoreDNS owns that split. Blocky should only define the bypass behavior needed to keep `bohdal.name` out of local blocking and deny rules.
+Blocky should forward all DNS queries to CoreDNS as its default upstream. Do not add separate Blocky upstream groups for `bohdal.name` or public recursion; CoreDNS owns that split. Blocky should only define the bypass behavior needed to keep `bohdal.name` out of local blocking and deny rules. Blocky resolver entries use `[net:]host:[port]` syntax, so the CoreDNS upstream should be written as `tcp+udp:coredns.dns-system.svc.cluster.local:53`, not URL-style `tcp+udp://...`.
 
 Local Blocky allow/deny overrides should apply before forwarding to CoreDNS. Deny overrides should return NXDOMAIN initially. Support exact and wildcard override entries if Blocky's config format makes that straightforward, but keep the initial override files empty. Add comments explaining exact versus wildcard syntax and noting that `bohdal.name` is intentionally excluded from deny policy.
 
