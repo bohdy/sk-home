@@ -1,0 +1,18 @@
+# DNS depends on shared priority policy and Cilium's LoadBalancer/BGP path.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: dns
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./kubernetes/flux/infrastructure/dns/rendered
+  prune: true
+  wait: true
+  dependsOn:
+    - name: cluster-policy
+    - name: cilium
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

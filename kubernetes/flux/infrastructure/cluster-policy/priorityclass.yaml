@@ -1,0 +1,9 @@
+# Give critical home infrastructure a priority above normal workloads while
+# staying below Kubernetes system-critical priority classes.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: sk-home-critical
+value: 1000000
+globalDefault: false
+description: "Critical home infrastructure services such as DNS."

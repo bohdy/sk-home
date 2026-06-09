@@ -1,0 +1,16 @@
+# Cilium owns LoadBalancer IPAM and BGP advertisement before DNS can request a
+# stable service VIP.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cilium
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./kubernetes/flux/infrastructure/cilium
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

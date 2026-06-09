@@ -1,0 +1,27 @@
+# Blocky reaches this internal service for every DNS query. LAN clients should
+# never be pointed directly at this CoreDNS instance.
+apiVersion: v1
+kind: Service
+metadata:
+  name: coredns
+  namespace: dns-system
+  labels:
+    app.kubernetes.io/name: coredns
+    app.kubernetes.io/component: dns-authority
+spec:
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app.kubernetes.io/name: coredns
+    app.kubernetes.io/component: dns-authority
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP

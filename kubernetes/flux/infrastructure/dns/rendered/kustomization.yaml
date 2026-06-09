@@ -1,0 +1,17 @@
+# Source kustomization is rendered before Flux sees it so generated ConfigMaps,
+# SOA serials, and rollout checksums stay deterministic.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - blocky/configmap.yaml
+  - blocky/deployment.yaml
+  - blocky/services.yaml
+  - blocky/pdb.yaml
+  - coredns/corefile-configmap.yaml
+  - coredns/zones-configmap.yaml
+  - coredns/deployment.yaml
+  - coredns/service.yaml
+  - coredns/pdb.yaml
+  - networkpolicy.yaml

@@ -1,0 +1,12 @@
+# Keep at least one Blocky replica available during voluntary disruptions.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blocky
+  namespace: dns-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+      app.kubernetes.io/component: dns-front

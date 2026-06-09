@@ -1,0 +1,40 @@
+name: DNS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "kubernetes/flux/infrastructure/dns/**"
+      - "scripts/render-dns.py"
+      - ".github/workflows/dns.yaml"
+      - "mise.toml"
+  pull_request:
+    paths:
+      - "kubernetes/flux/infrastructure/dns/**"
+      - "scripts/render-dns.py"
+      - ".github/workflows/dns.yaml"
+      - "mise.toml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate DNS manifests
+    runs-on: self-hosted
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+
+    steps:
+      # DNS validation does not need repository secrets; keep it separate from
+      # Terraform so manifest drift checks cannot expose infrastructure values.
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Check DNS rendered manifests
+        run: mise run dns-check

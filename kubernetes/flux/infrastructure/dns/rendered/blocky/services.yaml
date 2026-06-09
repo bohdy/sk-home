@@ -1,0 +1,54 @@
+# This LoadBalancer is the only LAN-facing DNS endpoint. Cilium LB IPAM pins
+# the stable VIP that MikroTik will later hand out via DHCP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: blocky-dns
+  namespace: dns-system
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.53"
+  labels:
+    app.kubernetes.io/name: blocky
+    app.kubernetes.io/component: dns-front
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app.kubernetes.io/name: blocky
+    app.kubernetes.io/component: dns-front
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: dns
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+---
+# Keep Blocky's operational HTTP surface cluster-internal and separate from the
+# DNS VIP so future observability can scrape metrics without exposing them to LAN.
+apiVersion: v1
+kind: Service
+metadata:
+  name: blocky-http
+  namespace: dns-system
+  labels:
+    app.kubernetes.io/name: blocky
+    app.kubernetes.io/component: dns-front
+spec:
+  type: ClusterIP
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  selector:
+    app.kubernetes.io/name: blocky
+    app.kubernetes.io/component: dns-front
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+      protocol: TCP
