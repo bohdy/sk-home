@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    # Store state in Cloudflare R2 so Terraform can coordinate changes without
+    # Store state in Cloudflare R2 so OpenTofu can coordinate changes without
     # keeping local state files on operator machines.
     bucket = "sk-home"
     key    = "sk-home/home/gw/terraform.tfstate"

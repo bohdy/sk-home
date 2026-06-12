@@ -33,7 +33,7 @@ locals {
 }
 
 data "http" "schematic_id" {
-  # The factory returns a stable ID for the submitted schematic; Terraform uses
+  # The factory returns a stable ID for the submitted schematic; OpenTofu uses
   # that ID for both the boot image and installer image references.
   url          = "${var.image.factory_url}/schematics"
   method       = "POST"

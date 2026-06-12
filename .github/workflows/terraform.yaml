@@ -1,4 +1,4 @@
-name: Terraform
+name: OpenTofu
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: terraform
+  group: opentofu
   cancel-in-progress: true
 
 env:
@@ -19,11 +19,11 @@ env:
 
 jobs:
   detect-changes:
-    name: Detect changed Terraform stacks
+    name: Detect changed OpenTofu stacks
     runs-on: self-hosted
     strategy:
       matrix:
-        stacks: [network/gw/interfaces, k3s/cluster, k3s/talos-cluster]
+        stacks: [network/gw/interfaces, k3s/talos-cluster]
 
     steps:
       # Check out the repository with full history so the workflow can compare
@@ -31,8 +31,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-  tf-plan:
-    name: Terraform plan
+  tofu-plan:
+    name: OpenTofu plan
     runs-on: self-hosted
     needs: detect-changes
     strategy:
@@ -49,12 +49,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      - name: Configure Terraform plan artifact
+      - name: Configure OpenTofu plan artifact
         run: |
           # Convert stack paths like network/gw/interfaces into artifact names
-          # like network-gw-interfaces-tfplan without duplicating matrix data.
-          plan_artifact="${STACK_PATH//\//-}-tfplan"
-          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+          # like network-gw-interfaces-tofuplan without duplicating matrix data.
+          plan_artifact="${STACK_PATH//\//-}-tofuplan"
+          echo "TOFU_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
         env:
           STACK_PATH: ${{ matrix.stacks }}
 
@@ -79,8 +79,8 @@ jobs:
         with:
           install: true
 
-      - name: Terraform init
-        run: terraform -chdir=terraform/${{ matrix.stacks }} init
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ matrix.stacks }} init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -88,9 +88,14 @@ jobs:
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
           TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
 
-      - name: Terraform plan
-        run: terraform -chdir=terraform/${{ matrix.stacks }} plan -out=tfplan
+      - name: OpenTofu validate
+        run: tofu -chdir=terraform/${{ matrix.stacks }} validate
+
+      - name: OpenTofu plan
+        run: tofu -chdir=terraform/${{ matrix.stacks }} plan -out=tofuplan
         env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
           TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
@@ -99,25 +104,25 @@ jobs:
           TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
           TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
 
-      - name: Upload Terraform plan artifact
+      - name: Upload OpenTofu plan artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.TF_PLAN_ARTIFACT }}
-          path: terraform/${{ matrix.stacks }}/tfplan
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ matrix.stacks }}/tofuplan
           if-no-files-found: error
           retention-days: 7
 
-  tf-apply:
-    name: Terraform apply
+  tofu-apply:
+    name: OpenTofu apply
     if: github.ref == 'refs/heads/main'
     runs-on: self-hosted
-    needs: tf-plan
+    needs: tofu-plan
     strategy:
       max-parallel: 1
       matrix:
-        # Apply only the stacks that are part of the active rebuild path; the
-        # legacy Flatcar-backed `k3s/cluster` stack stays out of both planning
-        # and applying on main because it still holds a stale state lock.
+        # Apply only the stack whose main-branch changes are safe to automate;
+        # the gateway stack stays plan-only because router changes have higher
+        # operational blast radius.
         stacks: [k3s/talos-cluster]
 
     env:
@@ -128,12 +133,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      - name: Configure Terraform plan artifact
+      - name: Configure OpenTofu plan artifact
         run: |
           # Keep artifact naming derived from the stack path so adding stacks
           # only requires extending the matrix list.
-          plan_artifact="${STACK_PATH//\//-}-tfplan"
-          echo "TF_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
+          plan_artifact="${STACK_PATH//\//-}-tofuplan"
+          echo "TOFU_PLAN_ARTIFACT=${plan_artifact}" >> "$GITHUB_ENV"
         env:
           STACK_PATH: ${{ matrix.stacks }}
 
@@ -142,10 +147,10 @@ jobs:
         with:
           install: true
 
-      - name: Download Terraform plan artifact
+      - name: Download OpenTofu plan artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.TF_PLAN_ARTIFACT }}
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
           path: terraform/${{ matrix.stacks }}
 
       - name: Get Secrets
@@ -164,14 +169,14 @@ jobs:
             f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
-      - name: Terraform init
-        run: terraform -chdir=terraform/${{ matrix.stacks }} init
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ matrix.stacks }} init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Terraform apply
-        run: terraform -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tfplan
+      - name: OpenTofu apply
+        run: tofu -chdir=terraform/${{ matrix.stacks }} apply -auto-approve tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}

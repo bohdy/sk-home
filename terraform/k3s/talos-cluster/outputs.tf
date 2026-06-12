@@ -16,7 +16,7 @@ output "kubeconfig" {
 
 output "control_plane_nodes" {
   # This inventory is safe to print and helps operators verify which Proxmox
-  # guests Terraform created without exposing access credentials.
+  # guests OpenTofu created without exposing access credentials.
   description = "Non-sensitive control-plane node inventory."
   value = {
     for node_key, node in var.nodes : node_key => {

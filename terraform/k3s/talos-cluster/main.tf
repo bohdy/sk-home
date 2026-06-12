@@ -1,5 +1,5 @@
 locals {
-  # Terraform map keys are sorted, so cp1 is the deterministic bootstrap node
+  # OpenTofu map keys are sorted, so cp1 is the deterministic bootstrap node
   # for the default inventory and any future inventory with the same key style.
   bootstrap_node_key = keys(var.nodes)[0]
   bootstrap_node_ip  = split("/", var.nodes[local.bootstrap_node_key].ipv4_address)[0]
@@ -18,7 +18,7 @@ locals {
 }
 
 resource "talos_machine_secrets" "cluster" {
-  # Terraform owns the Talos PKI for this learning cluster. The values are
+  # OpenTofu owns the Talos PKI for this learning cluster. The values are
   # sensitive and live in the configured remote state backend.
 }
 
@@ -111,7 +111,7 @@ resource "proxmox_virtual_environment_file" "talos_user_data" {
 resource "proxmox_virtual_environment_file" "talos_network_data" {
   for_each = var.nodes
 
-  # Static noCloud network data makes each node reachable before Terraform
+  # Static noCloud network data makes each node reachable before OpenTofu
   # calls the Talos API for bootstrap and kubeconfig retrieval.
   node_name    = each.value.host_node
   datastore_id = var.image.proxmox_snippet_datastore
@@ -144,11 +144,11 @@ resource "proxmox_virtual_environment_vm" "control_plane" {
   for_each = var.nodes
 
   # Keep VM identity deterministic so the cluster can be rebuilt without
-  # Terraform inventing new Proxmox names or IDs.
+  # OpenTofu inventing new Proxmox names or IDs.
   name        = each.value.hostname
   node_name   = each.value.host_node
   vm_id       = each.value.vm_id
-  description = "Talos control-plane node for ${var.cluster_name}, managed by Terraform"
+  description = "Talos control-plane node for ${var.cluster_name}, managed by OpenTofu"
   tags        = distinct(concat(var.common_tags, ["control-plane"]))
 
   started         = true
@@ -211,7 +211,7 @@ resource "talos_machine_bootstrap" "cluster" {
   client_configuration = talos_machine_secrets.cluster.client_configuration
 
   lifecycle {
-    # Bootstrap is a one-shot Talos operation. If Terraform replaces the
+    # Bootstrap is a one-shot Talos operation. If OpenTofu replaces the
     # control-plane VMs, replace this resource too so the rebuilt nodes form a
     # fresh etcd cluster instead of inheriting stale bootstrap state.
     replace_triggered_by = [
@@ -225,7 +225,7 @@ resource "talos_machine_bootstrap" "cluster" {
 }
 
 resource "talos_cluster_kubeconfig" "cluster" {
-  # Fetch kubeconfig only after Talos bootstrap completes so Terraform does not
+  # Fetch kubeconfig only after Talos bootstrap completes so OpenTofu does not
   # expose a partial Kubernetes client configuration.
   depends_on = [
     talos_machine_bootstrap.cluster,

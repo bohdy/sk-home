@@ -1,7 +1,7 @@
 terraform {
-  # Pin Terraform and provider versions so the Talos cluster can be rebuilt
+  # Pin OpenTofu and provider versions so the Talos cluster can be rebuilt
   # reproducibly while this repo is being restored in small, reviewable steps.
-  required_version = "1.15.3"
+  required_version = "1.12.1"
 
   required_providers {
     proxmox = {

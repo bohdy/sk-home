@@ -1,0 +1,3 @@
+# Adopt OpenTofu for active infrastructure stacks
+
+The repository will use OpenTofu as the exclusive infrastructure-as-code engine for active stacks. Existing remote state object keys will be adopted in place for the first migration, the top-level `terraform/` directory and `.tf` files will remain to keep the initial change small, and the unused Flatcar-backed `k3s/cluster` stack will be removed instead of preserved as legacy code. This accepts that the first OpenTofu apply makes the retained state objects OpenTofu-owned, keeps the gateway stack plan-only because router changes have higher operational blast radius, and avoids maintaining dual Terraform/OpenTofu compatibility for a small learning repository.

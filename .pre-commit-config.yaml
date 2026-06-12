@@ -9,16 +9,14 @@ repos:
         pass_filenames: false
         files: ^(kubernetes/flux/infrastructure/dns/|scripts/render-dns.py|mise.toml)
 
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.105.0
+  - repo: local
     hooks:
-      - id: terraform_fmt
-        args:
-          - --args=-no-color
-          - --args=-diff
-          - --args=-recursive
-
-      - id: terraform_validate
+      - id: opentofu-fmt
+        name: OpenTofu format
+        entry: tofu fmt -recursive -check -diff
+        language: system
+        pass_filenames: false
+        files: ^terraform/.*\.(tf|tfvars)$
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

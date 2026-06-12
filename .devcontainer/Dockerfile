@@ -2,14 +2,14 @@ FROM ubuntu:latest
 
 ARG TARGETARCH
 
-RUN apt update
-RUN apt install -y curl
+RUN apt-get update
+RUN apt-get install -y ca-certificates curl
 RUN install -dm 755 /etc/apt/keyrings
 RUN curl -fSs https://mise.en.dev/gpg-key.pub | tee /etc/apt/keyrings/mise-archive-keyring.asc 1> /dev/null
 RUN echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.asc] https://mise.en.dev/deb stable main" | tee /etc/apt/sources.list.d/mise.list
 
-RUN apt update
-RUN apt install -y \
+RUN apt-get update
+RUN apt-get install -y \
     unzip \
     gnupg \
     software-properties-common \
@@ -21,7 +21,12 @@ RUN apt install -y \
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Allow devcontainer features to perform root-owned setup from the ubuntu user.
+# Keep the container user stable across Ubuntu base image changes. Some Ubuntu
+# images include this user and others do not, so create it only when needed.
+RUN id -u ubuntu >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ubuntu
+
+# Allow devcontainer features and local workflow tests to perform root-owned
+# setup from the non-root workspace user.
 RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu \
     && chmod 0440 /etc/sudoers.d/ubuntu
 
