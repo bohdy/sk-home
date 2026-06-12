@@ -28,17 +28,19 @@ The currently intended committed surface is:
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
 - Do not keep placeholder project directories when they are not actively used.
 
-## Active Terraform Stacks
+## Active OpenTofu Stacks
 
-The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and Terraform-managed Talos bootstrap state.
+The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and OpenTofu-managed Talos bootstrap state.
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The `main` Terraform workflow targets only the active rebuild path: `k3s/talos-cluster`. The legacy Flatcar-backed `k3s/cluster` stack remains in the tree for reference, but it is intentionally excluded from the main workflow until the state lock and legacy path are retired.
+The `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces` and `k3s/talos-cluster`. It applies only `k3s/talos-cluster` on `main`; `network/gw/interfaces` stays plan-only because gateway changes have higher operational blast radius.
+
+The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys during the first OpenTofu migration. After the first successful OpenTofu apply, treat the retained remote state objects as OpenTofu-owned.
 
 ## Local Development
 
-The preferred local development environment is the repository devcontainer. It keeps Terraform, CI helper tools, and shell behavior closer to the environment used by automation, so use it for Terraform and workflow work unless a task specifically requires running on the host.
+The preferred local development environment is the repository devcontainer. It keeps OpenTofu, CI helper tools, and shell behavior closer to the environment used by automation, so use it for OpenTofu and workflow work unless a task specifically requires running on the host.
 
 ### Prerequisites
 
@@ -49,11 +51,13 @@ The preferred local development environment is the repository devcontainer. It k
 
 ### Devcontainer
 
-Open the repository in the devcontainer before running Terraform, `act`, or repository validation commands. Run the commands below from the repository root inside that container. From a host shell with the Dev Containers CLI installed, the container can be started with:
+Open the repository in the devcontainer before running OpenTofu, `act`, or repository validation commands. Run the commands below from the repository root inside that container. From a host shell with the Dev Containers CLI installed, the container can be started with:
 
 ```bash
 devcontainer up --workspace-folder .
 ```
+
+The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions.
 
 ### Environment Setup
 
@@ -69,7 +73,7 @@ devcontainer up --workspace-folder .
 To test GitHub Actions workflows locally using act:
 
 ```bash
-# Load environment variables and run Terraform workflow
+# Load environment variables and run the OpenTofu workflow
 source .env && act --workflows .github/workflows/terraform.yaml \
   -P self-hosted=node:18-bookworm \
   --container-architecture linux/amd64 \
@@ -81,9 +85,9 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 - Secrets are retrieved from Bitwarden using the access token
 - This ensures local testing matches CI/CD behavior exactly
 
-### Running Terraform Locally
+### Running OpenTofu Locally
 
-To run Terraform outside GitHub Actions, use the devcontainer or install Terraform, the Bitwarden Secrets Manager CLI (`bws`), and `jq` on the host. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:
+To run OpenTofu outside GitHub Actions, use the devcontainer or install OpenTofu, the Bitwarden Secrets Manager CLI (`bws`), and `jq` in an isolated local environment. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:
 
 ```bash
 set -a
@@ -94,17 +98,17 @@ export AWS_ACCESS_KEY_ID="$(bws secret get f1a17686-db90-4ae0-80aa-b43701584bab 
 export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586360 -o json | jq -r .value)"
 ```
 
-`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by Terraform's S3-compatible backend. If they are missing from the shell environment, `terraform init` and `terraform plan` will fail before evaluating stack resources with `No valid credential sources found`.
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by OpenTofu's S3-compatible backend. If they are missing from the shell environment, `tofu init` and `tofu plan` will fail before evaluating stack resources with `No valid credential sources found`.
 
-Choose the stack directory once, then reuse it for Terraform commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
+Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
 ```bash
-export TF_STACK="k3s/cluster"
+export TF_STACK="k3s/talos-cluster"
 
-terraform -chdir="terraform/${TF_STACK}" init
+tofu -chdir="terraform/${TF_STACK}" init
 ```
 
-Terraform may create or update `.terraform.lock.hcl` for the selected stack during `init`; review and commit that lock file when the provider selection is intentional. Do not commit the generated `.terraform/` directory.
+OpenTofu may create or update `.terraform.lock.hcl` for the selected stack during `init`; review and commit that lock file when the provider selection is intentional. Do not commit the generated `.terraform/` directory.
 
 Load any stack-specific provider variables before planning. For MikroTik-backed stacks:
 
@@ -129,10 +133,10 @@ export TF_VAR_proxmox_ssh_private_key="$(bws secret get a64de379-c939-4d47-841e-
 Run the plan for the selected stack:
 
 ```bash
-terraform -chdir="terraform/${TF_STACK}" plan -out=tfplan
+tofu -chdir="terraform/${TF_STACK}" plan -out=tofuplan
 ```
 
-Keep shell tracing disabled while running these commands, and do not echo the exported values. A successful backend initialization only proves Terraform can access state; `plan` can still fail if the selected stack has missing or invalid resource arguments. Remove any generated `tfplan` file after inspection if you do not need to keep the binary plan file.
+Keep shell tracing disabled while running these commands, and do not echo the exported values. A successful backend initialization only proves OpenTofu can access state; `plan` can still fail if the selected stack has missing or invalid resource arguments. Remove any generated `tofuplan` file after inspection if you do not need to keep the binary plan file.
 
 ### Troubleshooting
 

@@ -1,7 +1,7 @@
 [tools]
 kubectl = "latest"
+"aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
-terraform = "1.15.3"
 
 [tasks.dns-render]
 description = "Render generated DNS manifests from the Flux DNS source tree."

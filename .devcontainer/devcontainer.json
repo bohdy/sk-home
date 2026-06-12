@@ -5,6 +5,6 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
-  "name": "Terraform Development Environment",
-  "postCreateCommand": "mise trust && mise install && pre-commit install&& echo 'eval \"$(mise activate bash)\"' >> ~/.bashrc"
+  "name": "OpenTofu Development Environment",
+  "postCreateCommand": ".devcontainer/post-create.sh"
 }

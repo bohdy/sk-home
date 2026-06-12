@@ -1,4 +1,4 @@
-# Point Terraform at the RouterOS HTTPS endpoint backed by `www-ssl`
+# Point OpenTofu at the RouterOS HTTPS endpoint backed by `www-ssl`
 # certificates so the provider can use the TLS-secured REST/API transport.
 mikrotik_gw_hosturl = "https://10.1.100.1"
 

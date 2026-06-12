@@ -6,16 +6,16 @@ variable "mikrotik_gw_hosturl" {
   default     = "https://gw.bohdal.name/"
 }
 
-# Use a dedicated automation account for Terraform rather than the main admin
+# Use a dedicated automation account for OpenTofu rather than the main admin
 # account.
 variable "mikrotik_username" {
-  description = "Username for the RouterOS automation account used by Terraform."
+  description = "Username for the RouterOS automation account used by OpenTofu."
   type        = string
 }
 
-# Keep the RouterOS password out of version control and Terraform plan output.
+# Keep the RouterOS password out of version control and OpenTofu plan output.
 variable "mikrotik_password" {
-  description = "Password for the RouterOS automation account used by Terraform."
+  description = "Password for the RouterOS automation account used by OpenTofu."
   type        = string
   sensitive   = true
 }
@@ -102,7 +102,7 @@ variable "vlans" {
     tagged   = optional(set(string), null)
     untagged = optional(set(string), null)
     //ip_address = optional(set(string), null)
-    # A VLAN IP makes Terraform create a routed SVI-style interface for that
+    # A VLAN IP makes OpenTofu create a routed SVI-style interface for that
     # network on top of the shared bridge.
     ip_address = optional(string, null)
     # Optional interface-list membership is applied to the generated vlan<ID>

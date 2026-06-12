@@ -8,17 +8,20 @@ __pycache__/
 
 .env
 
-# Local .terraform directories
+# Local OpenTofu working directories
 .terraform/
 
 # .tfstate files
 *.tfstate
 *.tfstate.*
 
-# Terraform binary plans can include sensitive values and should stay local.
+# OpenTofu binary plans can include sensitive values and should stay local.
 tfplan
 tfplan-*
 *.tfplan
+tofuplan
+tofuplan-*
+*.tofuplan
 
 .terraform.lock.hcl
 .local.auto.tfvars

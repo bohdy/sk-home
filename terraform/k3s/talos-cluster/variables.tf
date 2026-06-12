@@ -1,6 +1,6 @@
 variable "cluster_name" {
   # Keep the Talos and Kubernetes identity stable so regenerated client
-  # configuration points at the same cluster after routine Terraform changes.
+  # configuration points at the same cluster after routine OpenTofu changes.
   description = "Name used for the Talos and Kubernetes cluster."
   type        = string
   default     = "sk-talos"
@@ -55,8 +55,8 @@ variable "kubernetes_version" {
 }
 
 variable "common_tags" {
-  # Tags make the Terraform-owned cluster easy to identify in Proxmox without
-  # encoding ownership only in the VM name.
+  # Keep the historical Terraform tag during the first OpenTofu migration so
+  # adopting the existing state does not also rename Proxmox inventory tags.
   description = "Common Proxmox tags applied to every Talos VM."
   type        = list(string)
   default     = ["terraform", "talos", "kubernetes"]
@@ -139,7 +139,7 @@ variable "proxmox_endpoint" {
 }
 
 variable "proxmox_api_token" {
-  # API tokens are sensitive because Terraform plans can otherwise expose the
+  # API tokens are sensitive because OpenTofu plans can otherwise expose the
   # credential material used to change the Proxmox cluster.
   description = "Proxmox API token."
   type        = string
