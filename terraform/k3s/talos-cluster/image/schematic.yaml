@@ -3,4 +3,5 @@ customization:
     officialExtensions:
       - siderolabs/i915-ucode
       - siderolabs/intel-ucode
+      - siderolabs/iscsi-tools
       - siderolabs/qemu-guest-agent

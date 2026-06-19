@@ -1,0 +1,92 @@
+# The controller side uses the standard CSI sidecars plus the Synology plugin
+# to create, attach, and resize DSM-backed volumes.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: synology-csi-controller
+  namespace: synology-csi
+spec:
+  replicas: 1
+  serviceName: synology-csi-controller
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: synology-csi
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: synology-csi
+        app.kubernetes.io/component: controller
+    spec:
+      hostNetwork: true
+      serviceAccountName: csi-controller-sa
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v6.3.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --timeout=60s
+            - --csi-address=$(ADDRESS)
+            - --extra-create-metadata
+            - --v=3
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.12.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=3
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v2.2.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --v=3
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-plugin
+          image: ghcr.io/zebernst/synology-csi:v1.2.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --nodeid=NotUsed
+            - --endpoint=$(CSI_ENDPOINT)
+            - --client-info
+            - /etc/synology/client-info.yml
+            - --log-level=info
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+            - name: client-info
+              mountPath: /etc/synology
+              readOnly: true
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        - name: client-info
+          secret:
+            secretName: client-info-secret
