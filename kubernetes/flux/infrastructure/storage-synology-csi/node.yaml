@@ -1,0 +1,103 @@
+# The node plugin needs privileged access to kubelet, /dev, and the Talos host
+# root so the Talos-aware image can use the iSCSI tools extension through chroot.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: synology-csi-node
+  namespace: synology-csi
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: synology-csi
+      app.kubernetes.io/component: node
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: synology-csi
+        app.kubernetes.io/component: node
+    spec:
+      hostNetwork: true
+      hostPID: true
+      serviceAccountName: csi-node-sa
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: csi-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.17.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=$(REGISTRATION_PATH)
+            - --v=3
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: REGISTRATION_PATH
+              value: /var/lib/kubelet/plugins/csi.san.synology.com/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+        - name: csi-plugin
+          image: ghcr.io/zebernst/synology-csi:v1.2.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - --nodeid=$(KUBE_NODE_NAME)
+            - --endpoint=$(CSI_ENDPOINT)
+            - --client-info
+            - /etc/synology/client-info.yml
+            - --log-level=info
+            - --chroot-dir=/host
+          env:
+            - name: CSI_ENDPOINT
+              value: unix://csi/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            - name: plugin-dir
+              mountPath: /csi
+            - name: client-info
+              mountPath: /etc/synology
+              readOnly: true
+            - name: host-root
+              mountPath: /host
+            - name: device-dir
+              mountPath: /dev
+      volumes:
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/csi.san.synology.com/
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: client-info
+          secret:
+            secretName: client-info-secret
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
+            type: Directory

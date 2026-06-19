@@ -2,7 +2,7 @@
 
 This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
-Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, and DNS depends on both before publishing the Blocky resolver VIP.
+Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
 
 ## Bootstrap order
 
@@ -40,7 +40,19 @@ Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwa
    kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n kube-system rollout status deployment/cilium-operator
    ```
 
-5. Bootstrap Flux v2.8.8 to reconcile the cluster path in this repository:
+5. Create the Synology CSI client secret if the storage component should reconcile immediately. Skip this step only if you intentionally want Flux to report the storage component as not ready until the secret is restored.
+
+   ```bash
+   kubectl --kubeconfig /tmp/sk-talos-kubeconfig create namespace synology-csi --dry-run=client -o yaml \
+     | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
+   kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n synology-csi create secret generic client-info-secret \
+     --from-file=client-info.yml=/path/to/client-info.yml \
+     --dry-run=client -o yaml | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
+   ```
+
+   Store the DSM host, port, username, and password in Bitwarden Secrets Manager. Do not commit `client-info.yml` or print it in logs.
+
+6. Bootstrap Flux v2.8.8 to reconcile the cluster path in this repository:
 
    ```bash
    flux bootstrap github \
@@ -54,6 +66,12 @@ Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwa
    ```
 
 Keep shell tracing disabled while the Bitwarden value is present. Do not commit kubeconfig, generated Flux credentials, or plaintext BGP authentication material.
+
+## Storage
+
+Generic cluster storage lives in `kubernetes/flux/infrastructure/storage-synology-csi`. It installs the Talos-compatible Synology CSI driver and the explicit-only `synology-iscsi-retain` StorageClass. The Talos image must include `siderolabs/iscsi-tools`, and the `synology-csi/client-info-secret` secret must exist before the component can become ready.
+
+Use the validation checklist in `kubernetes/flux/infrastructure/storage-synology-csi/README.md` before deploying production stateful workloads on this class.
 
 ## BGP service VIPs
 

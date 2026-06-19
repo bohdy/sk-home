@@ -1,0 +1,89 @@
+# Controller permissions are based on the upstream Synology CSI deployment and
+# allow provisioning, attachment, resize, and event reporting for CSI volumes.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-controller-sa
+  namespace: synology-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: synology-csi-controller-role
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "persistentvolumeclaims/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes", "storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments", "volumeattachments/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots", "volumesnapshotcontents"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: synology-csi-controller-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-controller-sa
+    namespace: synology-csi
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: synology-csi-controller-role
+---
+# Node permissions let the privileged node plugin register itself and update PV
+# attachment state while mounting iSCSI devices through kubelet.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-node-sa
+  namespace: synology-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: synology-csi-node-role
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: synology-csi-node-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-node-sa
+    namespace: synology-csi
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: synology-csi-node-role

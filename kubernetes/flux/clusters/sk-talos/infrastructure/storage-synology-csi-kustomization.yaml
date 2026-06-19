@@ -1,0 +1,20 @@
+# Generic NAS-backed storage is reconciled after shared policy and Cilium so
+# privileged CSI pods have scheduling primitives and node networking in place.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: storage-synology-csi
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./kubernetes/flux/infrastructure/storage-synology-csi
+  prune: true
+  wait: true
+  timeout: 10m
+  dependsOn:
+    - name: cluster-policy
+    - name: cilium
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

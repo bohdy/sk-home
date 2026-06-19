@@ -1,0 +1,11 @@
+# The Synology CSI driver requires controller attach operations and persistent
+# volume lifecycle support.
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: csi.san.synology.com
+spec:
+  attachRequired: true
+  podInfoOnMount: true
+  volumeLifecycleModes:
+    - Persistent
