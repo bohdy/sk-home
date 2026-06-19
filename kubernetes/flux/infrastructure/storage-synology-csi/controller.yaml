@@ -67,7 +67,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-plugin
-          image: ghcr.io/zebernst/synology-csi:v1.2.1
+          image: ghcr.io/zebernst/synology-csi:v1.2.0
           imagePullPolicy: IfNotPresent
           args:
             - --nodeid=NotUsed
