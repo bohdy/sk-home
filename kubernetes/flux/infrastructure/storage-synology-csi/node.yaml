@@ -1,5 +1,5 @@
 # The node plugin needs privileged access to kubelet, /dev, and the Talos host
-# root so the Talos-aware image can use the iSCSI tools extension through chroot.
+# root so the Talos-aware image can discover and mount iSCSI devices on Talos.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -46,7 +46,7 @@ spec:
             - name: registration-dir
               mountPath: /registration
         - name: csi-plugin
-          image: ghcr.io/zebernst/synology-csi:v1.2.1
+          image: ghcr.io/zebernst/synology-csi:v1.2.0
           imagePullPolicy: IfNotPresent
           args:
             - --nodeid=$(KUBE_NODE_NAME)
@@ -54,7 +54,6 @@ spec:
             - --client-info
             - /etc/synology/client-info.yml
             - --log-level=info
-            - --chroot-dir=/host
           env:
             - name: CSI_ENDPOINT
               value: unix://csi/csi.sock
