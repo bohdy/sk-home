@@ -1,0 +1,3 @@
+# Use Synology iSCSI for Kubernetes storage
+
+The first persistent Kubernetes storage backend will be a generic cluster storage capability using Synology CSI with explicit-only, non-default iSCSI-backed `ReadWriteOnce` volumes formatted as `ext4`, `Retain` reclaim policy, `WaitForFirstConsumer` volume binding, and volume expansion enabled for stateful single-writer workloads, while NFS remains reserved for later shared-file or `ReadWriteMany` workloads. This makes the existing Synology NAS the storage anchor, follows Sidero's Talos-specific Synology CSI path with the `siderolabs/iscsi-tools` extension, and requires a live PVC validation before dependent workloads such as VictoriaMetrics, VictoriaLogs, or Grafana are deployed with persistent storage.

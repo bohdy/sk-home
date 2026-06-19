@@ -1,0 +1,11 @@
+# Synology CSI is generic cluster storage, so it lives outside workload-specific
+# stacks such as observability.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - csi-driver.yaml
+  - controller.yaml
+  - node.yaml
+  - storageclass.yaml
