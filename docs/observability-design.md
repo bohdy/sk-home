@@ -1,230 +1,221 @@
 # Observability design
 
-This file records the current implementation plan for Home Infrastructure Observability in the `sk-talos` cluster. It consolidates the settled design decisions before Kubernetes manifests are introduced.
+This document is the implementation contract for Home Infrastructure Observability in the `sk-talos` cluster. It records the decisions agreed before manifests are introduced.
 
-## Goal
+## Goals
 
-Home Infrastructure Observability is one cluster-hosted platform that collects and correlates operational signals from active home infrastructure: Kubernetes workloads, cluster nodes, network devices, and core services.
+Run one Kubernetes-hosted platform that collects and correlates metrics, Kubernetes and Talos logs, network syslog, SNMP data, Kubernetes audit events, and synthetic checks for the active home infrastructure.
 
-The first version should prioritize metrics, logs, syslog, SNMP, and synthetic checks. Traces are deferred until there are instrumented applications producing spans.
+The platform should remain simple enough for a home lab, preserve one year of raw metrics, retain logs for 30 days, provide useful dashboards, and send low-noise actionable alerts.
 
 ## Non-goals
 
-The first implementation does not include application tracing, deep UniFi API integration, per-client DNS analytics, NetFlow or sFlow collection, long-term event correlation, formal SLOs, external alert notifications, or automated backup/snapshot workflows.
+The first release excludes distributed traces, NetFlow or sFlow, the legacy Kubernetes cluster, UniFi controller API polling, Klipper or Moonraker monitoring, raw telemetry backups, automated Bitwarden-to-Kubernetes secret reconciliation, and an external dead-man monitor.
 
-DNS query log shipping is disabled by default because DNS logs expose client behavior.
+Temporary observability downtime during a Kubernetes node, worker, or Synology outage is acceptable. The first release does not provide high availability for storage or Grafana.
+
+## Architecture
+
+Deploy the official `victoria-metrics-k8s-stack` Helm chart through a Flux `HelmRelease`. Use its VictoriaMetrics Operator, `VMSingle`, `VMAgent`, `VMAlert`, Alertmanager, kube-state-metrics, node exporter, scrape resources, and starter dashboards.
+
+Deploy VictoriaLogs Single separately for logs. Run Vector as a DaemonSet and use it as the single collector for Kubernetes container logs, network syslog, Talos service logs, Talos kernel logs, and Kubernetes audit events.
+
+Use Grafana as the only user-facing observability service. Provision VictoriaMetrics and VictoriaLogs data sources, including a pinned `victoriametrics-logs-datasource` plugin. Keep VictoriaMetrics, VictoriaLogs, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
+
+Use Blackbox Exporter for synthetic checks and Prometheus SNMP Exporter for network and hardware polling. Use a dedicated read-only Proxmox exporter identity with the `PVEAuditor` role.
+
+Use single replicas for VictoriaMetrics, VictoriaLogs, Grafana, Alertmanager, and other stateful control-plane components. Vector remains a DaemonSet. Run two replicas of the reusable Cloudflare Tunnel connector.
+
+Use `cluster="sk-talos"` and `site="sk"` as stable global identity labels.
 
 ## Dependencies
 
-Observability storage depends on generic cluster storage being validated first. The storage design is documented in `docs/storage-design.md`.
+The existing `synology-iscsi-retain` StorageClass must pass provisioning, persistence, cross-node reattachment, expansion, and retained-volume validation before any observability PVC is deployed.
 
-The expected storage path is Synology CSI with explicit-only iSCSI `ReadWriteOnce` volumes. VictoriaMetrics, VictoriaLogs, and Grafana should not be deployed with PVCs until the `synology-iscsi-retain` StorageClass passes live bind, mount, read/write, cross-node failover, expansion, and retained-volume validation.
+Add one general-purpose Talos worker with 4 vCPU and 8 GiB RAM before the full stack is installed. Keep ordinary workloads off the control-plane nodes through the existing control-plane taints; the observability workloads do not require a dedicated worker label or taint.
 
-DNS observability also depends on adding an internal CoreDNS metrics `ClusterIP` Service when observability scraping is introduced. CoreDNS metrics must remain cluster-internal and restricted to observability scraping.
+Enable Cilium agent and operator metrics plus a low-cardinality Hubble metric set for DNS, drops, and TCP. Do not enable Hubble UI or broad per-flow labels.
 
-## Components
+Add an internal CoreDNS metrics Service and retain Blocky's existing cluster-internal metrics Service. Monitor Flux controllers and reconciliation state.
 
-Use Grafana as the primary UI with VictoriaMetrics-family backends for v1 storage.
+## Flux and infrastructure ownership
 
-The v1 component set is:
+Use Flux for in-cluster components and configuration. Use Helm releases for vendor stacks and plain manifests for local wiring, inventory, scrape resources, alert rules, dashboards, services, and policies.
 
-- Grafana for dashboards and exploration.
-- VictoriaMetrics Operator for VictoriaMetrics-family resources.
-- `VMSingle` for metrics storage.
-- `VLSingle` for log and syslog storage.
-- `VMAgent` for metrics scraping.
-- `VLAgent` for logs if it handles Kubernetes logs and syslog cleanly.
-- `VMAlert` and `VMRule` for alert evaluation.
-- kube-state-metrics and node exporter for Kubernetes and node visibility.
-- blackbox exporter for synthetic checks.
-- SNMP exporter for MikroTik metrics.
-- A syslog receiver for network-device syslog.
+Manage Cloudflare DNS, Tunnel, Access application, and Access policy with a separate OpenTofu stack. Manage the reusable `cloudflared` deployment with Flux in a dedicated infrastructure namespace. The tunnel is shared infrastructure; Grafana is its first explicit route rather than its owner.
 
-Use VictoriaMetrics-native collection components where they fit. Add Grafana Alloy, OpenTelemetry Collector, Vector, or another collector only for concrete gaps such as syslog parsing, Kubernetes log enrichment, or routing that the Victoria-native agents cannot handle well.
+Use a dependency-ordered rollout:
 
-Use single-node VictoriaMetrics-family storage in v1. Defer clustered VictoriaMetrics or VictoriaLogs until write volume, availability needs, or retention requirements exceed the single-node path.
+1. Add the general-purpose Talos worker.
+2. Validate Synology CSI storage as a hard gate.
+3. Add cert-manager and the reusable Cloudflare Tunnel infrastructure.
+4. Deploy the metrics stack and Grafana.
+5. Deploy VictoriaLogs, Vector, syslog, Talos log forwarding, and audit logging.
+6. Add SNMP, Proxmox, and blackbox targets.
+7. Add reviewed dashboards, alerts, and notification routing.
 
-## Flux layout
+Proceed between stages after automated validation and workload smoke tests pass. A fixed soak period is not required, but stop progression on dropped data, repeated restarts, capacity pressure, or excessive alert noise.
 
-Deploy v1 through Flux with a mixed model: Helm releases for large vendor components or operators when they materially improve lifecycle management, and plain YAML for local wiring, scrape resources, alert rules, dashboards-as-config, exporters, NetworkPolicy, and small services where direct reviewability matters more.
-
-Keep generic storage separate from observability. The intended component order is:
-
-1. `storage-synology-csi` as a generic infrastructure component, after `cluster-policy` and Cilium.
-2. `observability-foundation` for namespace and shared policy.
-3. `victoriametrics-operator` for the operator install.
-4. `observability-storage` for `VMSingle` and `VLSingle`.
-5. `observability-collection` for agents, exporters, scrape configs, syslog receivers, and event collection.
-6. `observability-ui` for Grafana, datasources, and dashboards.
-7. `observability-alerting` for VMAlert rules and alert visibility.
-8. `observability-access` for Cloudflare Tunnel and Access integration when that follow-up starts.
-
-`observability-storage` depends on the generic cluster storage component being validated.
-
-Pin images by immutable digest for plain manifests. For Helm-managed components, pin Helm chart versions and app versions at minimum, and use image digest overrides where the chart supports them cleanly without brittle values.
+Pin exact Helm chart, application, container, and Grafana plugin versions. Review upgrades manually in separate pull requests; do not use floating tags or unattended upgrades.
 
 ## Storage and retention
 
-Use persistent volumes from day one for VictoriaMetrics, VictoriaLogs, and Grafana.
+Use retained Synology iSCSI PVCs with these initial capacities:
 
-Initial PVC sizing:
+- VictoriaMetrics: 100 GiB
+- VictoriaLogs: 50 GiB
+- Grafana: 10 GiB
+- Alertmanager: a small retained volume sized for silences and notification state
 
-- `VMSingle`: 20-50 Gi
-- `VLSingle`: 20-50 Gi
-- Grafana: 2-5 Gi
+Retain raw metrics for one year. VictoriaMetrics OSS does not provide age-based tiered downsampling, so do not add recording-rule aggregates merely to simulate it. Measure actual ingestion for the first month and reassess annual capacity before adding another storage tier or changing editions.
 
-Collectors and exporters should normally stay ephemeral, using only local buffers when needed. Do not introduce shared NFS storage for collectors unless a specific component requires durable shared files.
+Retain all collected logs, including DNS query logs and audit logs, for 30 days. Enforce the retention period with bounded PVC capacity and alerts at 70% and 85% usage.
 
-Retention targets:
+Do not back up raw telemetry in the first release. Reconstruct dashboards, data sources, rules, scrape definitions, and collectors from Git; reconstruct secrets from Bitwarden. Preserve PVCs during rollback and require a separate explicit decision before deleting retained PVs or Synology LUNs.
 
-- Metrics: 30 days
-- General Kubernetes and application logs: 7 days
-- Kubernetes events: 7 days
-- Network-device syslog: 14 days
-- DNS query logs: disabled by default; if enabled later, 24-72 hours unless privacy, access control, and disk sizing are revisited
+Use Grafana's SQLite database on its retained PVC. This is sufficient for one replica and one user because durable dashboards and configuration remain Git-managed.
 
-## Collection scope
+## Metrics collection
 
-The v1 target boundary includes Kubernetes cluster health, Cilium health, DNS metrics and synthetic checks, observability self-monitoring, node and system metrics, MikroTik SNMP plus syslog, UniFi syslog first, and blackbox checks for Grafana, DNS, public recursion, WAN reachability, and selected internal records.
+Use these default scrape intervals:
 
-Kubernetes metrics should start with safe sources: kube-state-metrics, kubelet/cAdvisor where available, node exporter, and Cilium. Defer direct scraping of API server, controller-manager, scheduler, and etcd metrics unless Talos and Kubernetes expose those endpoints cleanly without weakening control-plane security.
+- Kubernetes and general exporters: 30 seconds
+- Network SNMP: 60 seconds
+- APC UPS: 30 seconds
+- Blackbox probes: 30 seconds
 
-Use Kubernetes and node-level exporters for Talos node visibility in v1. Defer Talos API-specific metrics or log collection until a later pass identifies concrete gaps.
+Apply generous per-job sample and label limits. Raise limits only for reviewed exporters so a broken endpoint cannot consume the one-year storage budget.
 
-Include lightweight Kubernetes event collection if the VictoriaLogs or collector path supports it cleanly.
+Collect Kubernetes object state, node metrics, kubelet and cAdvisor metrics where securely available, API server metrics, etcd metrics where securely available, Cilium and limited Hubble metrics, Flux controller metrics, Blocky metrics, CoreDNS metrics, and observability self-metrics.
 
-For MikroTik metrics, prefer SNMPv3. Allow SNMPv2c temporarily only if the community string is secret-managed, access is restricted to observability scraper source addresses, MikroTik firewall policy blocks broad LAN access, and the temporary nature is documented.
+Do not broaden scheduler, controller-manager, or other Talos control-plane listeners solely to fill dashboard gaps. Security takes priority over exhaustive control-plane coverage.
 
-Use SNMP and syslog before credentialed network-device API polling. Avoid UniFi API credentials in v1 unless there is a clear observability gap.
+Commit an explicit external target inventory containing stable device name, management address, exporter type, SNMP module, interval, and availability class. Do not scan subnets for targets.
 
-NetFlow or sFlow collection is a desired future capability, but it is deferred to its own design branch.
+## SNMP and device integrations
+
+Support SNMPv2c and SNMPv3. Prefer SNMPv3 `authPriv`; use v2c for incompatible devices. Store all community strings, usernames, and authentication and privacy keys in Bitwarden-backed Kubernetes Secrets.
+
+Start with standard system and interface objects plus vendor-specific modules for MikroTik, UniFi access points, Synology, APC UPS, and a Brother printer. Perform narrow read-only discovery of `sysName.0`, `sysDescr.0`, and `sysObjectID.0` from a user-confirmed seed list before selecting vendor modules.
+
+Commit the SNMP generator input and generated `snmp.yml`. Do not commit vendor MIB files unless their redistribution licenses permit it; document their sources and versions.
+
+Use SNMP only for MikroTik and Synology initially. Defer RouterOS and DSM API exporters until a concrete SNMP gap exists.
+
+Monitor UniFi access points through SNMP. Add UniFi Poller only after the UniFi controller is migrated from the legacy cluster.
+
+Use a dedicated Proxmox API token with the read-only `PVEAuditor` role at `/`; never reuse the OpenTofu provisioning identity.
+
+The Brother printer and Klipper printer are intermittent devices and must not alert merely because they are powered off. Klipper and Moonraker monitoring is otherwise fully deferred because Moonraker lacks a confirmed endpoint-scoped read-only credential.
+
+Device-side polling ACLs may allow the whole relevant VLAN. This is an accepted home-lab risk even though four explicit Talos node addresses would provide a narrower boundary.
 
 ## Synthetic checks
 
-Use blackbox exporter for v1 synthetic checks, scraped by `VMAgent`.
+Run Blackbox Exporter inside `sk-talos` and probe:
 
-Initial probes should include:
+- MikroTik gateway and internet reachability with ICMP
+- Blocky through a real DNS query
+- Grafana through HTTPS
+- One stable external HTTPS endpoint
 
-- Grafana internal HTTP.
-- DNS VIP UDP/TCP checks where supported cleanly.
-- `dns.bohdal.name`.
-- `gw.bohdal.name`.
-- Reverse PTR checks for `10.1.30.53` and `10.1.100.1`.
-- `www.bohdal.name`.
-- `example.com`.
-- A WAN/public endpoint check.
-- ICMP reachability to `8.8.8.8` as an external network reachability signal, not DNS health.
+Do not monitor Moonraker in the first release. Keep path-specific probes from outside Kubernetes and an external dead-man heartbeat as tracked follow-ups.
 
-Run v1 synthetic checks from inside the cluster only. Keep manual LAN smoke tests for DNS and defer a dedicated LAN probe location until path-specific client reachability checks justify another host or agent lifecycle.
+## Logs and syslog
 
-## Syslog
+Run Vector as a DaemonSet in the shared observability namespace. Collect pod logs by default, support an explicit pod annotation for exclusion, and avoid ingesting Vector output in a way that creates loops.
 
-Syslog ingestion should prefer TCP where network devices support it, with UDP available as a fallback.
+Expose network syslog through a fixed Cilium LoadBalancer IP on UDP/514 and TCP/514. Prefer TCP when a device supports it; retain UDP for compatibility. Do not expose syslog through Cloudflare or the public internet.
 
-Expose syslog ingestion through a stable Cilium LoadBalancer VIP from the `10.1.30.0/24` service pool. Reserve `10.1.30.54` for syslog ingestion if it is free, separate from the DNS VIP at `10.1.30.53`.
+Expose Talos structured log ingestion on a separate TCP port at the same logging VIP. Configure Talos 1.13 service and kernel log forwarding in JSON-lines format. Parse this stream separately from RFC syslog.
 
-Use only `syslog.internal.bohdal.name` as the v1 syslog target name. Do not add `log.internal.bohdal.name` because `log` is ambiguous across syslog, Kubernetes logs, VictoriaLogs, and future flow logs.
+Preserve the original sender address through the LoadBalancer and store it as a normalized field. Original source-IP preservation is a hard requirement.
 
-Restrict syslog access to expected network-device subnets through router/firewall policy and Kubernetes NetworkPolicy where applicable.
+Preserve raw message, sender, receive timestamp, transport, and parse status when syslog parsing fails. Store both sender timestamps and Vector receipt timestamps. Use the sender timestamp only when it is valid and within an allowed clock-skew window.
 
-## DNS and access names
+Use a bounded 1 GiB Vector disk buffer per node. TCP senders may receive backpressure when the buffer fills; UDP messages may be lost. Apply generous per-source flood limits, expose dropped-event counters, and alert when dropping begins.
 
-Use `internal.bohdal.name` as the internal-only DNS namespace for direct LAN service names. Use explicit records only; do not add a wildcard record for `*.internal.bohdal.name` by default.
+Collect Kubernetes API audit events with a security-focused metadata policy covering authentication and authorization failures, RBAC changes, secret access, and workload mutations. Exclude request and response bodies so credentials and secret values cannot enter VictoriaLogs. The implementation must verify Talos 1.13's supported audit delivery path before changing machine configuration.
 
-When the corresponding services exist, add:
+Collect Blocky DNS query logs with full client IP and queried domain for 30 days. Store those values as ordinary log fields, not stream fields; restrict access to Grafana's sole user and never include query details in alert notifications.
 
-- `syslog.internal.bohdal.name A 10.1.30.54`
-- `grafana.internal.bohdal.name A 10.1.30.55`
-- `54.30.1.10.in-addr.arpa PTR syslog.internal.bohdal.name.`
-- `55.30.1.10.in-addr.arpa PTR grafana.internal.bohdal.name.`
+Keep stable log stream fields limited to values such as cluster, site, source type, namespace, workload, pod, container, node, device, facility, and severity. Do not promote messages, URLs, request IDs, filenames, DNS names, client addresses, MAC addresses, or print-job names into stream fields.
 
-Do not add these records before the service VIPs are allocated and reachable.
+## Grafana and access
 
-The final Grafana naming model is:
+Grafana is the only LAN-facing and Cloudflare-published observability service. Disable anonymous access and require Grafana's own login on both paths. Store the administrator credential in Bitwarden.
 
-- `grafana.bohdal.name`: canonical Cloudflare Access protected hostname for normal LAN and remote use.
-- `grafana.internal.bohdal.name`: direct LAN break-glass hostname protected by Grafana login plus trusted-network controls.
+Only one user is expected. Use a single Grafana organization and do not add multi-tenancy.
 
-Use a stable internal Cilium LoadBalancer VIP for the Grafana break-glass path only if it can be secured in the same change. Reserve `10.1.30.55` if it is free.
+Use `grafana.bohdal.name` as the canonical name. Internal split DNS resolves it to a fixed Cilium LoadBalancer VIP; public DNS routes it through the shared Cloudflare Tunnel. Allow direct Grafana ingress from `10.0.0.0/8`, an intentionally broad home-lab trust boundary.
 
-Do not introduce a general ingress controller only for v1 observability. Expose only Grafana, have Cloudflare Tunnel target Grafana's internal HTTP service or a minimal direct service path, and keep VictoriaMetrics, VictoriaLogs, exporters, and collector endpoints cluster-internal.
+Install cert-manager and issue a browser-trusted certificate through ACME DNS-01 using a narrowly scoped Cloudflare token. Grafana serves HTTPS directly, so do not add an ingress controller solely for observability.
+
+Configure Cloudflare Access with Google as the identity provider, allow only the exact approved Gmail account, require Google MFA, and deny all other identities. Cloudflare Access is an additional perimeter and does not replace Grafana authentication.
+
+Keep data sources, folders, dashboards, alert-related data sources, and supported provisioning in Git. UI experiments may live in a scratch folder but must be exported to Git before they become operational dependencies.
+
+Provision official VictoriaMetrics and Kubernetes dashboards, then add focused dashboards for network, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog. Review and pin community dashboards before committing them; do not depend on runtime downloads by dashboard ID.
+
+## Alerting
+
+Use VMAlert and `VMRule` resources for metric and synthetic-probe alerts. Defer log-derived alerts until a specific event cannot be represented reliably as a metric.
+
+Send only sustained, actionable alerts. Classify targets as always-on or intermittent and suppress offline notifications for the Brother and Klipper printers.
+
+Initial alerts cover device or node unreachability, Kubernetes node readiness, repeated pod crashes, PVC capacity, sustained resource pressure, VictoriaMetrics and VictoriaLogs ingestion failures, Vector drops or buffer pressure, scrape failures, VMAlert evaluation failures, Alertmanager delivery errors, interface down or sustained errors, UPS on-battery and low-runtime states, DNS and HTTP probe failures, Flux reconciliation failures, Grafana availability, and expiring TLS certificates.
+
+Route severities as follows:
+
+- `critical`: Telegram and Discord
+- `warning`: Discord only
+- `info`: visible in Alertmanager and Grafana without push delivery unless explicitly opted in
+
+Use a dedicated private Telegram group and bot. Use a Discord webhook for the lower-priority stream. Store both credentials in Bitwarden and use bounded grouping, recovery notifications, and dependency-based inhibition.
+
+Configure inhibition so node failures suppress dependent pod and scrape alerts, device failures suppress interface symptoms, and backend failures suppress downstream ingestion noise. Add Alertmanager to Grafana so planned maintenance uses time-bounded silences rather than alert-rule edits.
 
 ## Security
 
-Use one shared `observability-system` namespace for the v1 observability control plane unless a component has a strong reason to live elsewhere. Scrape targets may remain in their source namespaces.
+Use one shared observability namespace for Vector, Grafana, VictoriaMetrics, VictoriaLogs, exporters, and alerting. Vector's host log mounts weaken namespace-level Pod Security isolation for the other workloads; this is an explicitly accepted tradeoff. Still grant Vector only its required mounts and capabilities and apply hardened security contexts to every component where supported.
 
-Use restricted-by-default Pod Security Admission and pod security settings where images support them. Prefer non-root execution, read-only root filesystems, RuntimeDefault seccomp, dropped capabilities, and no service account token unless a component needs Kubernetes API access.
+Apply namespace-wide resource requests, practical memory limits, and an aggregate quota that leaves worker headroom for eviction and recovery.
 
-Use default-deny NetworkPolicy in `observability-system`, staged with component manifests so the stack does not deadlock. Explicitly allow only required paths:
+Use default-deny policies and explicitly allow required component flows. Use Cilium DNS-aware `toFQDNs` egress policy plus DNS proxy rules for Telegram, Discord, Cloudflare, ACME, and the pinned Grafana plugin source rather than broad outbound HTTPS.
 
-- Scrapers to targets.
-- Grafana to VictoriaMetrics and VictoriaLogs.
-- Collectors to storage endpoints.
-- Syslog ingress from approved network-device subnets to the syslog VIP.
-- Blackbox egress to approved probe targets.
-- DNS egress where needed.
-- Kubernetes API access only for components that need discovery or event collection.
+Keep VictoriaMetrics and VictoriaLogs unauthenticated inside the cluster. Their ClusterIP services remain accessible only to explicitly authorized pods through NetworkPolicy. Revisit `vmauth` if external writers or multiple tenants are introduced.
 
-Secrets such as Grafana admin credentials, SNMP communities, SNMPv3 credentials, and any future device API credentials must come from the repository secret-management path. Do not commit plaintext secrets or expose them in logs.
+Bitwarden Secrets Manager remains the source of truth. For the first release, use a documented non-logging bootstrap procedure to create narrowly scoped Kubernetes Secrets manually. Do not introduce External Secrets Operator and its Bitwarden SDK server or read-write machine token yet.
 
-## Labels and fields
+Collect all Kubernetes namespaces by default, with explicit exclusions. Drop known sensitive structured fields before storage, but treat any secret emitted in application log text as a source defect that must be fixed at the producer.
 
-Use a minimal v1 metrics label policy. Prefer stable labels such as `namespace`, `pod`, `node`, `app`, `service`, `job`, `instance`, `device`, `interface`, `probe`, and `target`.
+## Network addresses
 
-Use a minimal v1 log field taxonomy. Prefer stable fields such as `source_type`, `namespace`, `app`, `pod`, `node`, `device`, `facility`, `severity`, and `collector`.
+Use fixed Cilium LoadBalancer IPs for Grafana and the combined syslog/Talos logging endpoint. Select addresses only after checking live Cilium and MikroTik state; do not rely on the previously proposed unverified reservations.
 
-Avoid using high-cardinality or sensitive values as primary labels, stream fields, or routing fields unless the storage and privacy impact is explicit. Examples include client IP, DNS query name, URL paths with IDs, MAC address, arbitrary client hostname, full message, request ID, and trace ID.
+Commit the selected non-secret addresses and matching internal A/PTR records only after the services are reachable. Preserve source IPs on the logging endpoint.
 
-## Grafana
+## Validation and rollback
 
-Treat Git as the source of truth for Grafana datasources, dashboards, folders, and supported provisioning. Grafana UI edits are acceptable for exploration, but durable dashboards and configuration should be committed back to Git.
+Every deployment PR must define and pass checks appropriate to its manifests. Render Helm and Kustomize output, validate schemas and custom resources, lint YAML and Markdown, scan rendered output for secrets, and use server-side dry-run where installed CRDs are required.
 
-The Grafana PVC should hold runtime state rather than become the authoritative dashboard store.
+Workload acceptance must verify PVC attachment and persistence, Grafana HTTPS and both data sources, the pinned VictoriaLogs plugin, expected scrape targets, one-year and 30-day retention settings, Vector parsing and sender identity, TCP and UDP syslog, Talos service and kernel logs, audit-event delivery without bodies, SNMPv2c and SNMPv3 discovery, synthetic probes, DNS query privacy fields, default-deny policy flows, capacity alerts, and observability self-metrics.
 
-Use a small curated dashboard set in v1 and commit every dashboard JSON that deployment depends on. Upstream or community dashboards may be used as references or imported starting points, but runtime provisioning should not depend on live dashboard IDs.
+Trigger dedicated synthetic alert rules to verify Telegram and Discord routing, grouping, inhibition, recovery messages, and secret masking. Do not break production services for alert tests; remove or disable the test rules after acceptance.
 
-Initial dashboards should cover:
+Rollback by reverting or suspending Flux resources while retaining PVCs. Never delete retained PVs or Synology LUNs as part of routine rollback.
 
-- Kubernetes cluster health.
-- Node resources.
-- Cilium/BGP networking.
-- DNS through Blocky/CoreDNS plus synthetic checks.
-- VictoriaMetrics and VictoriaLogs self-monitoring.
-- MikroTik metrics.
-- Syslog overview.
+## Follow-up debt
 
-## Alerts
+Track these items explicitly after the first release:
 
-Keep v1 alert notifications internal only. Use VMAlert and Grafana dashboards to surface alerts, but do not wire external push, email, or chat notifications until alert rules are proven useful and low-noise.
-
-Initial high-signal alerts:
-
-- VictoriaMetrics or VictoriaLogs unavailable.
-- Grafana unavailable.
-- DNS synthetic check failure.
-- No ready Blocky/CoreDNS pods.
-- Kubernetes node not ready.
-- PVC nearing full.
-- Syslog receiver unavailable.
-- Blackbox WAN ICMP check to `8.8.8.8` failing.
-
-Avoid recording rules in v1 unless a dashboard or alert clearly needs one. Start with raw VictoriaMetrics queries, then add recording rules later for repeated expensive queries or stable SLI-style derived metrics.
-
-## Validation
-
-Before treating v1 observability as ready, validate:
-
-- Generic Synology CSI storage is already validated according to `docs/storage-design.md`.
-- `VMSingle`, `VLSingle`, and Grafana all use explicit PVCs on the validated StorageClass.
-- Grafana can read VictoriaMetrics and VictoriaLogs datasources.
-- kube-state-metrics and node exporter metrics are visible.
-- Cilium metrics are visible where exposed.
-- Blocky metrics are scraped from the internal metrics service.
-- CoreDNS metrics are scraped through the new internal metrics service.
-- DNS synthetic checks pass for internal A records, PTR records, public recursion, and DNS VIP paths.
-- ICMP check to `8.8.8.8` reports WAN reachability.
-- Syslog can be received on `10.1.30.54` over TCP where supported and UDP as fallback.
-- MikroTik SNMP metrics are scraped through the accepted SNMP version and access restrictions.
-- Grafana is reachable through the secured internal break-glass path when that VIP is implemented.
-- Default-deny NetworkPolicy does not block required observability paths.
-- No DNS query logs are shipped unless a later privacy and retention decision explicitly enables them.
+- Raw telemetry backup or snapshot strategy
+- External dead-man heartbeat outside the Kubernetes and home internet failure domains
+- Automated Bitwarden secret reconciliation after its SDK-server and token risks are revisited
+- UniFi Poller after the controller migration
+- Klipper and Moonraker monitoring after exporter and read-only authentication review
+- NetFlow or sFlow design
+- Distributed tracing after applications emit OpenTelemetry spans
+- Pre-bundled Grafana image if runtime plugin installation becomes unreliable
+- Additional workers or clustered VictoriaMetrics-family storage if availability requirements change
+- Path-specific synthetic probes from a LAN host outside Kubernetes
