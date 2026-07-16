@@ -52,8 +52,8 @@ securityContext:
       - SYS_RESOURCE
 
 tolerations:
-  # The learning cluster is control-plane only, so system networking pods must
-  # tolerate control-plane taints until worker nodes are introduced.
+  # System networking must remain schedulable on control planes so adding or
+  # losing the single worker cannot prevent Cilium from running cluster-wide.
   - operator: Exists
 
 operator:

@@ -27,6 +27,19 @@ output "control_plane_nodes" {
   }
 }
 
+output "worker_nodes" {
+  # Expose non-sensitive worker placement for post-apply health and scheduling
+  # checks without requiring operators to parse the input map.
+  description = "Non-sensitive worker node inventory."
+  value = {
+    for node_key, node in var.worker_nodes : node_key => {
+      hostname = node.hostname
+      ip       = split("/", node.ipv4_address)[0]
+      vm_id    = node.vm_id
+    }
+  }
+}
+
 output "cluster_endpoint" {
   # Print the API endpoint separately so follow-up tooling can consume it
   # without parsing kubeconfig content.

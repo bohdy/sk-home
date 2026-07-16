@@ -42,7 +42,7 @@ Blocky should also expose its HTTP/API/metrics listener only inside the cluster 
 
 Prefer metrics-only or read-only HTTP/API exposure if the selected Blocky version supports that cleanly. If the HTTP listener exposes mutable controls without authentication, keep it cluster-internal with NetworkPolicy and revisit auth/RBAC before any broader exposure.
 
-Both Blocky and CoreDNS should run two replicas. Replicas should be spread across nodes with topology spread on `kubernetes.io/hostname`. DNS pods may run on any stable Linux node, including control-plane nodes. If worker nodes are added later, worker preference may be added as a soft preference, but DNS should not require workers unless the availability tradeoff is explicitly accepted.
+Both Blocky and CoreDNS should run two replicas. Replicas should be spread across nodes with topology spread on `kubernetes.io/hostname`. DNS pods may run on any stable Linux node, including the general-purpose worker and control-plane nodes. DNS should not require the worker because losing the cluster's only worker must not also remove the internal DNS path.
 
 DNS pods should explicitly tolerate standard control-plane taints so they can schedule on the current Talos control-plane nodes. Use normal pod networking, not `hostNetwork`; source IP preservation should come from the Blocky LoadBalancer service using `externalTrafficPolicy: Local`.
 

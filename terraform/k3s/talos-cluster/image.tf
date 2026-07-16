@@ -13,10 +13,14 @@ locals {
   image_id        = "${local.schematic_id}_${local.image_version}"
   update_image_id = "${local.update_schematic_id}_${local.update_version}"
 
-  # Collapse duplicate downloads per Proxmox host/image pair so three VMs on
-  # the same host reuse one Image Factory artifact in the local datastore.
+  # Treat both roles as image consumers while keeping their VM and Talos
+  # configuration resources separate for lifecycle safety.
+  all_nodes = merge(var.nodes, var.worker_nodes)
+
+  # Collapse duplicate downloads per Proxmox host/image pair so all VMs on the
+  # same host reuse one Image Factory artifact in the local datastore.
   talos_image_groups_by_proxmox_node = {
-    for node_key, node in var.nodes : "${node.host_node}-${node.update ? local.update_image_id : local.image_id}" => {
+    for node_key, node in local.all_nodes : "${node.host_node}-${node.update ? local.update_image_id : local.image_id}" => {
       node_name    = node.host_node
       schematic_id = node.update ? local.update_schematic_id : local.schematic_id
       version      = node.update ? local.update_version : local.image_version
@@ -28,7 +32,7 @@ locals {
   }
 
   node_image_keys = {
-    for node_key, node in var.nodes : node_key => "${node.host_node}-${node.update ? local.update_image_id : local.image_id}"
+    for node_key, node in local.all_nodes : node_key => "${node.host_node}-${node.update ? local.update_image_id : local.image_id}"
   }
 }
 

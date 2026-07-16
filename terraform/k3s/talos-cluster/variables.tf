@@ -81,9 +81,8 @@ variable "image" {
 }
 
 variable "nodes" {
-  # The initial implementation is intentionally control-plane only. Per-node
-  # entries still carry placement and sizing so future worker additions do not
-  # require reshaping the whole stack.
+  # Keep control-plane inventory separate from workers so adding or replacing a
+  # worker cannot enter the one-shot control-plane bootstrap lifecycle.
   description = "Talos control-plane node inventory."
   type = map(object({
     hostname                = string
@@ -128,6 +127,44 @@ variable "nodes" {
   validation {
     condition     = length(var.nodes) == 3
     error_message = "The first Talos implementation expects exactly three control-plane nodes."
+  }
+}
+
+variable "worker_nodes" {
+  # Workers share the same configurable Proxmox placement and Talos image shape
+  # as control planes while remaining independent of etcd and bootstrap state.
+  description = "Talos worker node inventory."
+  type = map(object({
+    hostname                = string
+    ipv4_address            = string
+    mac_address             = string
+    host_node               = optional(string, "pve")
+    vm_id                   = optional(number)
+    cpu_cores               = optional(number, 4)
+    memory_mb               = optional(number, 8192)
+    disk_size_gb            = optional(number, 32)
+    disk_datastore_id       = optional(string, "local-lvm")
+    cloud_init_datastore_id = optional(string, "local-lvm")
+    bridge                  = optional(string, "vmbr0")
+    vlan_id                 = optional(number, 20)
+    network_interface       = optional(string, "eth0")
+    disk_interface          = optional(string, "virtio0")
+    install_disk            = optional(string, "/dev/vda")
+    update                  = optional(bool, false)
+  }))
+
+  default = {
+    worker1 = {
+      hostname     = "sk-talos-worker-1"
+      ipv4_address = "10.1.20.44/24"
+      mac_address  = "BC:24:11:20:40:44"
+      vm_id        = 1044
+    }
+  }
+
+  validation {
+    condition     = length(var.worker_nodes) >= 1
+    error_message = "The Talos cluster expects at least one general-purpose worker."
   }
 }
 
