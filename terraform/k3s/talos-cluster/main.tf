@@ -85,6 +85,61 @@ data "talos_machine_configuration" "control_plane" {
   ]
 }
 
+data "talos_machine_configuration" "worker" {
+  for_each = var.worker_nodes
+
+  # Workers use the cluster PKI and endpoint but do not carry the API VIP or
+  # control-plane-specific API server configuration.
+  cluster_name       = var.cluster_name
+  cluster_endpoint   = "https://${var.cluster_endpoint_vip}:6443"
+  machine_type       = "worker"
+  machine_secrets    = talos_machine_secrets.cluster.machine_secrets
+  talos_version      = var.talos_version
+  kubernetes_version = var.kubernetes_version
+  docs               = false
+  examples           = false
+
+  config_patches = [
+    yamlencode({
+      machine = {
+        install = {
+          disk  = each.value.install_disk
+          image = "${var.image.factory_url}/installer/${each.value.update ? local.update_schematic_id : local.schematic_id}:${each.value.update ? local.update_version : local.image_version}"
+        }
+        network = {
+          nameservers = var.cluster_dns_servers
+          interfaces = [
+            {
+              interface = each.value.network_interface
+              addresses = [
+                each.value.ipv4_address,
+              ]
+              routes = [
+                {
+                  network = "0.0.0.0/0"
+                  gateway = var.cluster_gateway
+                },
+              ]
+            },
+          ]
+        }
+      }
+      cluster = {
+        network = {
+          # Every node must use the same external CNI ownership model.
+          cni = {
+            name = "none"
+          }
+        }
+        proxy = {
+          # Cilium replaces kube-proxy on workers as well as control planes.
+          disabled = true
+        }
+      }
+    }),
+  ]
+}
+
 data "talos_client_configuration" "cluster" {
   # Generate talosconfig from the same secrets used by the machine configs so
   # recovery operations can target either the VIP or individual control planes.
@@ -113,6 +168,53 @@ resource "proxmox_virtual_environment_file" "talos_network_data" {
 
   # Static noCloud network data makes each node reachable before OpenTofu
   # calls the Talos API for bootstrap and kubeconfig retrieval.
+  node_name    = each.value.host_node
+  datastore_id = var.image.proxmox_snippet_datastore
+  content_type = "snippets"
+
+  source_raw {
+    data = yamlencode({
+      version = 1
+      config = [
+        {
+          type        = "physical"
+          name        = each.value.network_interface
+          mac_address = each.value.mac_address
+          subnets = [
+            {
+              type    = "static"
+              address = split("/", each.value.ipv4_address)[0]
+              netmask = cidrnetmask(each.value.ipv4_address)
+              gateway = var.cluster_gateway
+            },
+          ]
+        },
+      ]
+    })
+    file_name = "${each.value.hostname}-talos-network-data.yaml"
+  }
+}
+
+resource "proxmox_virtual_environment_file" "talos_worker_user_data" {
+  for_each = var.worker_nodes
+
+  # Worker user-data contains a worker machine configuration signed by the same
+  # cluster secrets, allowing the node to join without another bootstrap step.
+  node_name    = each.value.host_node
+  datastore_id = var.image.proxmox_snippet_datastore
+  content_type = "snippets"
+
+  source_raw {
+    data      = data.talos_machine_configuration.worker[each.key].machine_configuration
+    file_name = "${each.value.hostname}-talos-user-data.yaml"
+  }
+}
+
+resource "proxmox_virtual_environment_file" "talos_worker_network_data" {
+  for_each = var.worker_nodes
+
+  # Static noCloud networking makes a new worker deterministic from first boot
+  # and keeps cluster membership independent of DHCP state.
   node_name    = each.value.host_node
   datastore_id = var.image.proxmox_snippet_datastore
   content_type = "snippets"
@@ -184,6 +286,64 @@ resource "proxmox_virtual_environment_vm" "control_plane" {
     datastore_id         = each.value.cloud_init_datastore_id
     user_data_file_id    = proxmox_virtual_environment_file.talos_user_data[each.key].id
     network_data_file_id = proxmox_virtual_environment_file.talos_network_data[each.key].id
+  }
+
+  network_device {
+    bridge      = each.value.bridge
+    vlan_id     = each.value.vlan_id
+    mac_address = each.value.mac_address
+  }
+
+  operating_system {
+    type = "l26"
+  }
+
+  serial_device {}
+}
+
+resource "proxmox_virtual_environment_vm" "worker" {
+  for_each = var.worker_nodes
+
+  # General-purpose workers are independently replaceable and do not carry
+  # etcd or Kubernetes API server state.
+  name        = each.value.hostname
+  node_name   = each.value.host_node
+  vm_id       = each.value.vm_id
+  description = "Talos worker node for ${var.cluster_name}, managed by OpenTofu"
+  tags        = distinct(concat(var.common_tags, ["worker"]))
+
+  started         = true
+  on_boot         = true
+  stop_on_destroy = true
+
+  agent {
+    enabled = true
+  }
+
+  cpu {
+    cores = each.value.cpu_cores
+    type  = "host"
+  }
+
+  memory {
+    dedicated = each.value.memory_mb
+    floating  = each.value.memory_mb
+  }
+
+  disk {
+    datastore_id = each.value.disk_datastore_id
+    file_id      = proxmox_download_file.talos_nocloud_image[local.node_image_keys[each.key]].id
+    interface    = each.value.disk_interface
+    iothread     = true
+    discard      = "on"
+    size         = each.value.disk_size_gb
+  }
+
+  initialization {
+    # The cloud-init disk transports only Talos noCloud configuration.
+    datastore_id         = each.value.cloud_init_datastore_id
+    user_data_file_id    = proxmox_virtual_environment_file.talos_worker_user_data[each.key].id
+    network_data_file_id = proxmox_virtual_environment_file.talos_worker_network_data[each.key].id
   }
 
   network_device {

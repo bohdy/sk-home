@@ -30,7 +30,7 @@ The currently intended committed surface is:
 
 ## Active OpenTofu Stacks
 
-The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and OpenTofu-managed Talos bootstrap state.
+The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane, one-worker upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and OpenTofu-managed Talos bootstrap state.
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
