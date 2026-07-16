@@ -82,6 +82,14 @@ data "talos_machine_configuration" "control_plane" {
         }
       }
     }),
+    yamlencode({
+      # Replace Talos' default automatic hostname with the committed inventory
+      # name so Kubernetes node identity stays predictable across rebuilds.
+      apiVersion = "v1alpha1"
+      kind       = "HostnameConfig"
+      auto       = "off"
+      hostname   = each.value.hostname
+    }),
   ]
 }
 
@@ -136,6 +144,13 @@ data "talos_machine_configuration" "worker" {
           disabled = true
         }
       }
+    }),
+    yamlencode({
+      # Workers use the same deterministic hostname policy as control planes.
+      apiVersion = "v1alpha1"
+      kind       = "HostnameConfig"
+      auto       = "off"
+      hostname   = each.value.hostname
     }),
   ]
 }
@@ -299,6 +314,14 @@ resource "proxmox_virtual_environment_vm" "control_plane" {
   }
 
   serial_device {}
+
+  lifecycle {
+    # Live Talos configuration is reconciled through the Talos API. Replacing a
+    # versioned Proxmox snippet must not replace an established control plane.
+    ignore_changes = [
+      initialization[0].user_data_file_id,
+    ]
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "worker" {
@@ -357,6 +380,47 @@ resource "proxmox_virtual_environment_vm" "worker" {
   }
 
   serial_device {}
+
+  lifecycle {
+    # Keep worker VM lifecycle independent from noCloud snippet replacement;
+    # the Talos apply resource below owns live configuration updates.
+    ignore_changes = [
+      initialization[0].user_data_file_id,
+    ]
+  }
+}
+
+resource "talos_machine_configuration_apply" "control_plane" {
+  for_each = var.nodes
+
+  # Prevent configuration reconciliation from rebooting multiple control-plane
+  # nodes automatically. Changes that require reboot are staged for an explicit
+  # rolling operation after the apply completes.
+  depends_on = [
+    proxmox_virtual_environment_vm.control_plane,
+  ]
+
+  node                        = split("/", each.value.ipv4_address)[0]
+  endpoint                    = split("/", each.value.ipv4_address)[0]
+  client_configuration        = talos_machine_secrets.cluster.client_configuration
+  machine_configuration_input = data.talos_machine_configuration.control_plane[each.key].machine_configuration
+  apply_mode                  = "staged_if_needing_reboot"
+}
+
+resource "talos_machine_configuration_apply" "worker" {
+  for_each = var.worker_nodes
+
+  # Workers use the same reboot-safe reconciliation mode so ordinary config
+  # changes cannot unexpectedly remove the cluster's only worker.
+  depends_on = [
+    proxmox_virtual_environment_vm.worker,
+  ]
+
+  node                        = split("/", each.value.ipv4_address)[0]
+  endpoint                    = split("/", each.value.ipv4_address)[0]
+  client_configuration        = talos_machine_secrets.cluster.client_configuration
+  machine_configuration_input = data.talos_machine_configuration.worker[each.key].machine_configuration
+  apply_mode                  = "staged_if_needing_reboot"
 }
 
 resource "talos_machine_bootstrap" "cluster" {
