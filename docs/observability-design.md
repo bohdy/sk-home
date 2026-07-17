@@ -2,6 +2,8 @@
 
 This document is the implementation contract for Home Infrastructure Observability in the `sk-talos` cluster. It records the decisions agreed before manifests are introduced.
 
+The resumable implementation status and ordered next actions live in `docs/observability-rollout.md`.
+
 ## Goals
 
 Run one Kubernetes-hosted platform that collects and correlates metrics, Kubernetes and Talos logs, network syslog, SNMP data, Kubernetes audit events, and synthetic checks for the active home infrastructure.

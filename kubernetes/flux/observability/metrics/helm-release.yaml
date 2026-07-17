@@ -1,0 +1,218 @@
+# This release owns the metrics database, collection, evaluation, alert state,
+# Kubernetes exporters, Grafana, and the VictoriaMetrics operator CRDs.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: metrics
+  namespace: observability
+spec:
+  interval: 30m
+  timeout: 15m
+  chartRef:
+    kind: OCIRepository
+    name: victoria-metrics-k8s-stack
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+      strategy: rollback
+  values:
+    global:
+      clusterLabel: cluster
+      extraLabels:
+        cluster: sk-talos
+        site: sk
+
+    defaultDashboards:
+      enabled: true
+
+    defaultRules:
+      create: true
+
+    victoria-metrics-operator:
+      enabled: true
+      crds:
+        plain: true
+      operator:
+        disable_prometheus_converter: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    vmsingle:
+      enabled: true
+      spec:
+        replicaCount: 1
+        retentionPeriod: 1y
+        storage:
+          storageClassName: synology-iscsi-retain
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 100Gi
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 3Gi
+
+    vmagent:
+      enabled: true
+      spec:
+        replicaCount: 1
+        scrapeInterval: 30s
+        externalLabels:
+          cluster: sk-talos
+          site: sk
+        extraArgs:
+          promscrape.streamParse: "true"
+          promscrape.maxScrapeSize: 64MiB
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+    vmalert:
+      enabled: true
+      spec:
+        replicaCount: 1
+        evaluationInterval: 30s
+        externalLabels:
+          cluster: sk-talos
+          site: sk
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+    alertmanager:
+      enabled: true
+      spec:
+        replicaCount: 1
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: synology-iscsi-retain
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 1Gi
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+      config:
+        route:
+          receiver: blackhole
+          group_by:
+            - alertname
+            - cluster
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+        receivers:
+          - name: blackhole
+
+    grafana:
+      enabled: true
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
+      persistence:
+        enabled: true
+        type: pvc
+        storageClassName: synology-iscsi-retain
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+      grafana.ini:
+        analytics:
+          reporting_enabled: false
+          check_for_updates: false
+        auth.anonymous:
+          enabled: false
+        security:
+          disable_gravatar: true
+          cookie_secure: true
+        users:
+          allow_sign_up: false
+      ingress:
+        enabled: false
+
+    kube-state-metrics:
+      enabled: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 250m
+          memory: 384Mi
+
+    prometheus-node-exporter:
+      enabled: true
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 150m
+          memory: 128Mi
+
+    kubelet:
+      enabled: true
+
+    kubeApiServer:
+      enabled: true
+
+    coreDns:
+      enabled: true
+
+    # Talos does not expose these control-plane endpoints through ordinary pod
+    # selectors, and the design forbids broadening listeners for dashboard gaps.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+    kubeProxy:
+      enabled: false
+
+    vlsingle:
+      enabled: false
+    vlcluster:
+      enabled: false
+    vtsingle:
+      enabled: false
+    vtcluster:
+      enabled: false

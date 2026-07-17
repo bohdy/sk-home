@@ -1,0 +1,6 @@
+# Workload-level observability stages reconcile separately from generic cluster
+# infrastructure so later logging and exporters can depend on metrics readiness.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - metrics-kustomization.yaml

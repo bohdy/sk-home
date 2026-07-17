@@ -1,0 +1,21 @@
+# Metrics starts only after generic storage and networking are healthy because
+# its three retained claims must bind before dependent logging is introduced.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-metrics
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  path: ./kubernetes/flux/observability/metrics
+  prune: true
+  wait: true
+  timeout: 20m
+  dependsOn:
+    - name: cluster-policy
+    - name: cilium
+    - name: storage-synology-csi
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
