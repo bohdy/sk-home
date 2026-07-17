@@ -43,14 +43,22 @@ Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwa
 5. Create the Synology CSI client secret if the storage component should reconcile immediately. Skip this step only if you intentionally want Flux to report the storage component as not ready until the secret is restored.
 
    ```bash
+   export SYNOLOGY_CSI_PASSWORD="$(bws secret get 3c76c84f-2fec-455c-b212-b46e00f63952 -o json | jq -r .value)"
+   jq -n --arg password "${SYNOLOGY_CSI_PASSWORD}" \
+     '{clients: [{host: "10.1.100.10", port: 5001, https: true, username: "synology-csi", password: $password}]}' \
+     > /tmp/synology-client-info.yml
+
    kubectl --kubeconfig /tmp/sk-talos-kubeconfig create namespace synology-csi --dry-run=client -o yaml \
      | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
    kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n synology-csi create secret generic client-info-secret \
-     --from-file=client-info.yml=/path/to/client-info.yml \
+     --from-file=client-info.yml=/tmp/synology-client-info.yml \
      --dry-run=client -o yaml | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
+
+   unset SYNOLOGY_CSI_PASSWORD
+   rm -f /tmp/synology-client-info.yml
    ```
 
-   Store the DSM host, port, username, and password in Bitwarden Secrets Manager. Do not commit `client-info.yml` or print it in logs.
+   Bitwarden Secrets Manager item `SK-TALOS-SYNO-CSI` stores only the DSM password. The committed documentation owns the non-secret endpoint and username. Do not commit `client-info.yml` or print it in logs.
 
 6. Bootstrap Flux v2.8.8 to reconcile the cluster path in this repository:
 
