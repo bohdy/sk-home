@@ -64,6 +64,12 @@ spec:
       - name: prom-exporter
         containerPort: 9598
         protocol: TCP
+      - name: syslog-tcp
+        containerPort: 514
+        protocol: TCP
+      - name: syslog-udp
+        containerPort: 514
+        protocol: UDP
 
     service:
       enabled: false
@@ -86,6 +92,24 @@ spec:
         internal_metrics:
           type: internal_metrics
           scrape_interval_secs: 15
+        # Raw socket sources preserve malformed input for the fallible parser
+        # instead of dropping records that are not valid RFC syslog.
+        syslog_tcp:
+          type: socket
+          address: 0.0.0.0:514
+          mode: tcp
+          decoding:
+            codec: bytes
+          framing:
+            method: newline_delimited
+          max_length: 262144
+        syslog_udp:
+          type: socket
+          address: 0.0.0.0:514
+          mode: udp
+          decoding:
+            codec: bytes
+          max_length: 65507
       transforms:
         exclude_annotated:
           type: filter
@@ -107,12 +131,57 @@ spec:
             .container = .kubernetes.container_name
             .node = .kubernetes.pod_node_name
             .workload = .kubernetes.pod_owner
+        parse_syslog_tcp:
+          type: remap
+          inputs:
+            - syslog_tcp
+          source: |
+            .transport = "tcp"
+            .raw_message = to_string(.message) ?? encode_json(.message)
+            parsed, parse_error = parse_syslog(.raw_message)
+            if parse_error == null {
+              . = merge(., parsed)
+              .parse_status = "parsed"
+            } else {
+              .parse_status = "unparsed"
+              .parse_error = to_string(parse_error)
+            }
+        parse_syslog_udp:
+          type: remap
+          inputs:
+            - syslog_udp
+          source: |
+            .transport = "udp"
+            .raw_message = to_string(.message) ?? encode_json(.message)
+            parsed, parse_error = parse_syslog(.raw_message)
+            if parse_error == null {
+              . = merge(., parsed)
+              .parse_status = "parsed"
+            } else {
+              .parse_status = "unparsed"
+              .parse_error = to_string(parse_error)
+            }
+        normalize_syslog:
+          type: remap
+          inputs:
+            - parse_syslog_tcp
+            - parse_syslog_udp
+          source: |
+            .cluster = "sk-talos"
+            .site = "sk"
+            .source_type = "syslog"
+            .received_at = now()
+            .sender = to_string(.host) ?? "unknown"
+            .sender_timestamp = .timestamp
+            .timestamp = .received_at
+            .device = to_string(.hostname) ?? .sender
       sinks:
         victoria_logs:
           type: http
           inputs:
             - normalize_kubernetes
-          uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node&_time_field=timestamp&_msg_field=message
+            - normalize_syslog
+          uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node,device,facility,severity,transport&_time_field=timestamp&_msg_field=message
           method: post
           compression: gzip
           encoding:
