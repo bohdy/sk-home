@@ -5,3 +5,4 @@ kind: Kustomization
 resources:
   - metrics-kustomization.yaml
   - logs-kustomization.yaml
+  - vector-kustomization.yaml

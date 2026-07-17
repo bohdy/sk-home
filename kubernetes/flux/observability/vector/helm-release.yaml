@@ -1,0 +1,146 @@
+# Vector collects node-local Kubernetes container logs and forwards normalized
+# JSON streams to the internal VictoriaLogs service.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vector
+  namespace: observability
+spec:
+  interval: 30m
+  timeout: 10m
+  chartRef:
+    kind: OCIRepository
+    name: vector
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      strategy: rollback
+  values:
+    role: Agent
+
+    commonLabels:
+      cluster: sk-talos
+      site: sk
+
+    # The kubernetes_logs source honors this annotation before reading files,
+    # preventing Vector from ingesting its own operational logs.
+    podAnnotations:
+      vector.dev/exclude: "true"
+
+    podLabels:
+      vector.dev/exclude: "true"
+      cluster: sk-talos
+      site: sk
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    # Collection must cover control-plane container logs as well as the worker;
+    # this tolerates the existing Talos control-plane scheduling taint only.
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+
+    # Each node gets an independent bounded retry buffer. Host persistence is
+    # intentional because a DaemonSet cannot use one shared RWO claim.
+    persistence:
+      hostPath:
+        enabled: true
+        path: /var/lib/vector
+
+    containerPorts:
+      - name: prom-exporter
+        containerPort: 9598
+        protocol: TCP
+
+    service:
+      enabled: false
+
+    serviceHeadless:
+      enabled: false
+
+    customConfig:
+      data_dir: /vector-data-dir
+      api:
+        enabled: true
+        address: 0.0.0.0:8686
+      sources:
+        kubernetes_logs:
+          type: kubernetes_logs
+          # Exclusion happens in the source so ignored files consume neither
+          # parsing CPU nor buffer capacity.
+          extra_label_selector: vector.dev/exclude!=true
+        internal_metrics:
+          type: internal_metrics
+          scrape_interval_secs: 15
+      transforms:
+        normalize_kubernetes:
+          type: remap
+          inputs:
+            - kubernetes_logs
+          source: |
+            .cluster = "sk-talos"
+            .site = "sk"
+            .source_type = "kubernetes"
+            .received_at = now()
+            .sender_timestamp = .timestamp
+            .namespace = .kubernetes.pod_namespace
+            .pod = .kubernetes.pod_name
+            .container = .kubernetes.container_name
+            .node = .kubernetes.pod_node_name
+            .workload = .kubernetes.pod_owner
+      sinks:
+        victoria_logs:
+          type: http
+          inputs:
+            - normalize_kubernetes
+          uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node&_time_field=timestamp&_msg_field=message
+          method: post
+          compression: gzip
+          encoding:
+            codec: json
+          framing:
+            method: newline_delimited
+          batch:
+            max_bytes: 1048576
+            timeout_secs: 2
+          buffer:
+            type: disk
+            max_size: 1073741824
+            when_full: block
+          request:
+            retry_initial_backoff_secs: 1
+            timeout_secs: 30
+          healthcheck:
+            enabled: true
+        prometheus_metrics:
+          type: prometheus_exporter
+          inputs:
+            - internal_metrics
+          address: 0.0.0.0:9598
+
+    # Vector needs read access to Kubernetes log files but no added Linux
+    # capabilities or writable root filesystem.
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      readOnlyRootFilesystem: true
+      # The official image declares UID 0, and the Agent must write its
+      # node-local hostPath checkpoint and disk-buffer directory.
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault

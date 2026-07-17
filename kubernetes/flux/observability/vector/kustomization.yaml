@@ -1,0 +1,8 @@
+# Reconcile the pinned collector chart and its VictoriaMetrics-native scrape
+# definition as one independently accepted component.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - oci-repository.yaml
+  - helm-release.yaml
+  - vm-pod-scrape.yaml

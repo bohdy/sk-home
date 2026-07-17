@@ -1,0 +1,12 @@
+# Flux pulls the pinned official Vector chart from its OCI registry so the
+# collector deployment does not depend on a mutable Helm index.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: vector
+  namespace: observability
+spec:
+  interval: 30m
+  url: oci://ghcr.io/vectordotdev/helm-charts/vector
+  ref:
+    tag: 0.57.0
