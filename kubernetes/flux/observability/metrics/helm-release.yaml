@@ -147,6 +147,10 @@ spec:
         accessModes:
           - ReadWriteOnce
         size: 10Gi
+        # Grafana's PVC is a direct Helm resource, so retain it across failed
+        # install remediation and intentional release removal.
+        annotations:
+          helm.sh/resource-policy: keep
       resources:
         requests:
           cpu: 100m

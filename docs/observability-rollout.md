@@ -39,7 +39,9 @@ The metrics deployment must not be considered accepted until all of these checks
 
 If the Alertmanager storage field is rejected by the operator or does not produce a PVC, correct the `VMAlertmanager` specification using the installed CRD schema before acceptance. Do not work around persistence by switching it to ephemeral storage.
 
-Live reconciliation exposed that the cluster's default baseline Pod Security policy rejects node exporter's required host namespaces and host mounts. The follow-up must explicitly label only the shared `observability` namespace as privileged, consistent with the accepted node exporter and Vector host-access tradeoff, while retaining hardened per-workload security contexts.
+Live reconciliation exposed that the cluster's default baseline Pod Security policy rejects node exporter's required host namespaces and host mounts. The shared `observability` namespace is now explicitly privileged, consistent with the accepted node exporter and Vector host-access tradeoff, while hardened per-workload security contexts remain required.
+
+The first failed Helm install preserved the VMSingle and Alertmanager claims but deleted Grafana's directly managed PVC before retrying. The replacement Grafana claim must carry `helm.sh/resource-policy: keep`. The first 10 GiB Grafana PV is Released and intentionally retained; record its identity during final metrics acceptance and remove it only through a separate explicit storage cleanup.
 
 ## Remaining stages
 
