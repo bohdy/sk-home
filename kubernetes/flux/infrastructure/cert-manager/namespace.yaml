@@ -1,0 +1,6 @@
+# cert-manager owns cluster certificate issuance and keeps its privileged
+# Cloudflare DNS token isolated from application namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager

@@ -1,0 +1,6 @@
+# Issuer resources are separated from the controller installation so Flux can
+# enforce that cert-manager's CRDs and webhook are ready before applying them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster-issuer.yaml

@@ -2,11 +2,11 @@
 
 This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
-Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
+Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
 
 ## Bootstrap order
 
-Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwarden Secrets Manager CLI, and `jq`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
+Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Manager CLI, and `jq`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
 
 1. Apply the Talos Terraform stack so the cluster starts without the Talos default CNI or kube-proxy.
 2. Retrieve kubeconfig into a local ignored path:
@@ -60,20 +60,35 @@ Prerequisites for the bootstrap host are `kubectl`, Helm, Flux CLI v2.8.8, Bitwa
 
    Bitwarden Secrets Manager item `SK-TALOS-SYNO-CSI` stores only the DSM password. The committed documentation owns the non-secret endpoint and username. Do not commit `client-info.yml` or print it in logs.
 
-6. Bootstrap Flux v2.8.8 to reconcile the cluster path in this repository:
+6. Create the Cloudflare DNS-01 token Secret for cert-manager. Bitwarden item `CLOUDFLARE_API_TOKEN` must contain a token restricted to `Zone:DNS:Edit` and `Zone:Zone:Read` for `bohdal.name`.
 
    ```bash
-   flux bootstrap github \
-     --owner=bohdy \
-     --repository=sk-home \
-     --branch=main \
-     --path=./kubernetes/flux/clusters/sk-talos \
-     --version=v2.8.8 \
-     --toleration-keys=node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master \
-     --personal
+   kubectl --kubeconfig /tmp/sk-talos-kubeconfig create namespace cert-manager --dry-run=client -o yaml \
+     | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
+   export CLOUDFLARE_API_TOKEN="$(bws secret get 535c2d90-8239-4f6b-a70f-b41b00c9d06c -o json | jq -r .value)"
+   kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n cert-manager create secret generic cloudflare-api-token \
+     --from-literal=api-token="${CLOUDFLARE_API_TOKEN}" \
+     --dry-run=client -o yaml | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
+   unset CLOUDFLARE_API_TOKEN
    ```
 
-Keep shell tracing disabled while the Bitwarden value is present. Do not commit kubeconfig, generated Flux credentials, or plaintext BGP authentication material.
+7. Apply the committed Flux v2.8.8 controllers and public read-only repository sync:
+
+   ```bash
+   kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply \
+     --server-side \
+     --kustomize kubernetes/flux/clusters/sk-talos/flux-system
+   ```
+
+   The repository is public, so Flux uses HTTPS without a GitHub deploy credential. Write access remains limited to the normal reviewed pull-request workflow.
+
+Keep shell tracing disabled while a Bitwarden value is present. Do not commit kubeconfig or plaintext secret material.
+
+## Certificates
+
+cert-manager lives in `kubernetes/flux/infrastructure/cert-manager`. The dependent `certificates` component owns the production Let's Encrypt ClusterIssuer and uses Cloudflare DNS-01 validation without requiring an ingress controller.
+
+The component README at `kubernetes/flux/infrastructure/cert-manager/README.md` documents the token contract, bootstrap command, validation, and rollback constraints.
 
 ## Storage
 
