@@ -2,7 +2,7 @@
 
 This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
-Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
+Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, the shared Cloudflare Tunnel connector depends on policy and Cilium, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
 
 ## Bootstrap order
 
@@ -89,6 +89,12 @@ Keep shell tracing disabled while a Bitwarden value is present. Do not commit ku
 cert-manager lives in `kubernetes/flux/infrastructure/cert-manager`. The dependent `certificates` component owns the production Let's Encrypt ClusterIssuer and uses Cloudflare DNS-01 validation without requiring an ingress controller.
 
 The component README at `kubernetes/flux/infrastructure/cert-manager/README.md` documents the token contract, bootstrap command, validation, and rollback constraints.
+
+## Cloudflare Tunnel
+
+The reusable connector lives in `kubernetes/flux/infrastructure/cloudflare-tunnel`. It runs two fixed replicas for the remotely managed tunnel created by `terraform/cloudflare/tunnel` and reads its connector token from an externally bootstrapped Kubernetes Secret.
+
+The component README documents the Bitwarden item, token bootstrap, and connector validation. Application routes, DNS records, and Cloudflare Access policies are introduced separately with their owning workloads.
 
 ## Storage
 

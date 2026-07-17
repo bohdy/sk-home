@@ -1,0 +1,6 @@
+# The shared connector is isolated from workload namespaces because multiple
+# future services may route through the same Cloudflare Tunnel.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudflare-tunnel

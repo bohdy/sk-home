@@ -1,0 +1,12 @@
+# Keep one connector available during voluntary maintenance; this does not claim
+# node-level HA while both replicas share the cluster's only worker.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflared
+  namespace: cloudflare-tunnel
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
