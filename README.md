@@ -100,6 +100,8 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by OpenTofu's S3-compatible backend. If they are missing from the shell environment, `tofu init` and `tofu plan` will fail before evaluating stack resources with `No valid credential sources found`.
 
+The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It is plan-only in GitHub Actions and starts with a terminal `404` route; application DNS, routing, and Access policy are added with the workload that owns each hostname.
+
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
 ```bash
