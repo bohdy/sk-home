@@ -1,0 +1,19 @@
+# Kubernetes log collection starts only after VictoriaLogs and its self-
+# monitoring path are Ready.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-vector
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 15m
+  retryInterval: 2m
+  path: ./kubernetes/flux/observability/vector
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-logs

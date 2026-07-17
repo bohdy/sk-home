@@ -1,0 +1,16 @@
+# Scrape Vector's node-local internal metrics directly from every DaemonSet pod
+# so drops, retries, buffer pressure, and component errors are observable.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: vector
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: vector
+      app.kubernetes.io/name: vector
+  podMetricsEndpoints:
+    - port: prom-exporter
+      interval: 30s
+      path: /metrics
