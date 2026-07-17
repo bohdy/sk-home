@@ -79,17 +79,23 @@ spec:
       sources:
         kubernetes_logs:
           type: kubernetes_logs
-          # Exclusion happens in the source so ignored files consume neither
-          # parsing CPU nor buffer capacity.
+          # Current Vector source-side exclusion uses labels. Keep it for
+          # collector self-exclusion; the transform below also supports the
+          # design's annotation contract for arbitrary workloads.
           extra_label_selector: vector.dev/exclude!=true
         internal_metrics:
           type: internal_metrics
           scrape_interval_secs: 15
       transforms:
+        exclude_annotated:
+          type: filter
+          inputs:
+            - kubernetes_logs
+          condition: .kubernetes.pod_annotations."vector.dev/exclude" != "true"
         normalize_kubernetes:
           type: remap
           inputs:
-            - kubernetes_logs
+            - exclude_annotated
           source: |
             .cluster = "sk-talos"
             .site = "sk"
