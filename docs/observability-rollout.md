@@ -34,11 +34,21 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Deploy VictoriaLogs Single with a retained 50 GiB volume and 30-day retention.
-2. Provision the pinned Grafana VictoriaLogs data-source plugin and verify Grafana queries the log backend.
-3. Deploy Vector for Kubernetes container logs with exclusion annotations, bounded disk buffering, stable fields, and loop prevention.
-4. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
-5. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
+1. Deploy Vector for Kubernetes container logs with exclusion annotations, bounded disk buffering, stable fields, and loop prevention.
+2. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
+3. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
+
+## VictoriaLogs acceptance
+
+Acceptance completed on 2026-07-17:
+
+- Flux `observability-logs` and the VictoriaLogs Helm release reported Ready on chart 0.13.9 with VictoriaLogs v1.52.0.
+- The live StatefulSet used `--retentionPeriod=30d` and `--retention.maxDiskUsagePercent=85`.
+- Retained 50 GiB PV `pvc-55399cea-d465-4439-8517-423dca5704aa` was Bound through `synology-iscsi-retain`.
+- A synthetic JSON-stream record was ingested with stable `cluster`, `site`, and `source_type` fields and remained queryable after VictoriaLogs pod recreation.
+- VictoriaLogs self-monitoring reported `up=1` in VMSingle with `cluster="sk-talos"` and `site="sk"`.
+- Grafana loaded signed plugin `victoriametrics-logs-datasource` version 0.29.0, its real-query health check returned OK, and its data-source query API returned the persisted acceptance record.
+- VictoriaLogs and Grafana remained Ready with zero restarts after acceptance.
 
 ## Remaining stages
 
