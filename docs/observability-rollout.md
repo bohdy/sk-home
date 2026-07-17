@@ -34,8 +34,9 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
-2. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
+1. Restore the Flux dependency chain to Ready, beginning with `observability-metrics`; `observability-logs` and then `observability-vector` are currently blocked behind it.
+2. Confirm that Flux applies merged revision `bcce987`, the `syslog` LoadBalancer receives VIP `10.1.30.54`, and all four updated Vector pods become Ready.
+3. Run the syslog acceptance sequence below before configuring any devices or adding Talos and audit sources.
 
 ## Vector acceptance
 
@@ -48,6 +49,27 @@ Acceptance completed on 2026-07-17:
 - No component-error or discarded-event rate was present during acceptance.
 - A continuous ordinary test pod produced exactly 60 records, while an otherwise identical pod annotated `vector.dev/exclude: "true"` produced zero.
 - Recreating the worker's Vector pod while the test emitter ran preserved its node-local checkpoint: the stream finished at exactly 60 records without replay, and the replacement collector became Ready with zero restarts.
+
+## Syslog checkpoint
+
+PR #94 merged the initial syslog ingestion implementation as commit `bcce987` on 2026-07-17:
+
+- The `syslog` Cilium LoadBalancer requests fixed VIP `10.1.30.54`, accepts TCP and UDP on port 514 from `10.0.0.0/8`, and uses `externalTrafficPolicy: Local` to preserve the original sender address.
+- Every Vector Agent listens for newline-delimited TCP syslog and UDP syslog. TCP records are limited to 262,144 bytes and UDP datagrams to 65,507 bytes.
+- Parsing is fallible by design. Every record retains `raw_message`, `transport`, and parse status; malformed input is retained with its parse error instead of being silently discarded.
+- Normalized records use receipt time for the VictoriaLogs storage timestamp while retaining the sender timestamp separately. They include stable `cluster`, `site`, `source_type`, sender, and device fields.
+
+The merge has not yet reconciled into the cluster. At the time this checkpoint was saved, the Flux source had fetched `main@sha1:bcce987`, but `observability-logs` reported dependency `observability-metrics` not Ready and `observability-vector` consequently reported dependency `observability-logs` not Ready. The `syslog` Service did not yet exist. The previous Vector Helm release revision 2 and its four pods remained Ready.
+
+Resume with this acceptance sequence:
+
+1. Inspect and resolve the `observability-metrics` Ready condition without changing desired state merely to bypass dependency health, then wait for logs and Vector reconciliation at `bcce987`.
+2. Verify the Service VIP, local endpoints on every node, Cilium address allocation and advertisement, and reachability of TCP/UDP port 514 from the home LAN.
+3. From a LAN host, send uniquely marked valid RFC 5424 records over both TCP and UDP, then send uniquely marked malformed records over both transports.
+4. Query VictoriaLogs for each marker and verify transport, parse status, preserved raw message, original LAN sender address, receipt timestamp, sender timestamp where supplied, and stable `cluster="sk-talos"`, `site="sk"`, and syslog source fields.
+5. Recreate the Vector pod that received a marked record and confirm the record remains queryable in VictoriaLogs.
+6. Check Vector internal metrics and logs for component errors, discarded events, buffer pressure, repeated restarts, or unexpected cardinality.
+7. Record measured acceptance results here before configuring MikroTik, UniFi, Synology, APC, Brother, Talos, or other senders.
 
 ## VictoriaLogs acceptance
 
