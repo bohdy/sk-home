@@ -1,0 +1,6 @@
+# Metrics, logs, exporters, and alerting share this namespace by design so
+# cross-component ownership and network policy remain reviewable in one place.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability

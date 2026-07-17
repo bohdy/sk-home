@@ -96,6 +96,14 @@ The reusable connector lives in `kubernetes/flux/infrastructure/cloudflare-tunne
 
 The component README documents the Bitwarden item, token bootstrap, and connector validation. Application routes, DNS records, and Cloudflare Access policies are introduced separately with their owning workloads.
 
+## Observability
+
+The staged observability workloads live under `kubernetes/flux/observability`. The first component, `metrics`, installs the pinned VictoriaMetrics Kubernetes stack and Grafana after Cilium and validated Synology storage are Ready.
+
+The metrics component README documents the Grafana credential bootstrap, retained storage, validation, and rollback requirements. VictoriaLogs, Vector, exporters, public Grafana routing, and notification delivery remain later dependency-ordered components.
+
+Use `docs/observability-rollout.md` as the resumable deployment checkpoint and update it after each accepted stage.
+
 ## Storage
 
 Generic cluster storage lives in `kubernetes/flux/infrastructure/storage-synology-csi`. It installs the Talos-compatible Synology CSI driver and the explicit-only `synology-iscsi-retain` StorageClass. The Talos image must include `siderolabs/iscsi-tools`, and the `synology-csi/client-info-secret` secret must exist before the component can become ready.
