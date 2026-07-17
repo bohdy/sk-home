@@ -5,5 +5,7 @@ kind: Kustomization
 resources:
   - cluster-policy-kustomization.yaml
   - cilium-kustomization.yaml
+  - cert-manager-kustomization.yaml
+  - certificates-kustomization.yaml
   - storage-synology-csi-kustomization.yaml
   - dns-kustomization.yaml

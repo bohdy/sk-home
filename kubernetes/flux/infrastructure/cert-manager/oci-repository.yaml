@@ -1,0 +1,15 @@
+# Use the upstream OCI chart directly and pin the tested stable release so
+# upgrades remain deliberate and reviewable.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+spec:
+  interval: 1h
+  url: oci://quay.io/jetstack/charts/cert-manager
+  ref:
+    tag: v1.20.1
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy

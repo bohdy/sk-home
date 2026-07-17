@@ -1,0 +1,8 @@
+# This component installs only cert-manager itself. Issuers reconcile through a
+# separate dependent Flux Kustomization after the CRDs and webhook are ready.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - oci-repository.yaml
+  - helm-release.yaml
