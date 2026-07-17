@@ -1,0 +1,16 @@
+# The metrics Service is cluster-internal and will later be selected by the
+# observability stack; it does not publish the tunnel or any origin.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudflared-metrics
+  namespace: cloudflare-tunnel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: cloudflared
+  ports:
+    - name: metrics
+      port: 2000
+      targetPort: metrics
+      protocol: TCP

@@ -7,5 +7,6 @@ resources:
   - cilium-kustomization.yaml
   - cert-manager-kustomization.yaml
   - certificates-kustomization.yaml
+  - cloudflare-tunnel-kustomization.yaml
   - storage-synology-csi-kustomization.yaml
   - dns-kustomization.yaml

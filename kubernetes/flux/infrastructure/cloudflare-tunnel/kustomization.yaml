@@ -1,0 +1,10 @@
+# The connector token remains an externally bootstrapped Secret and is not part
+# of the committed Kustomize resource set.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - deployment.yaml
+  - poddisruptionbudget.yaml
+  - service.yaml
