@@ -1,6 +1,13 @@
 # Metrics, logs, exporters, and alerting share this namespace by design so
 # cross-component ownership and network policy remain reviewable in one place.
+# Node exporter requires host namespaces and hostPath mounts, and the later
+# Vector DaemonSet will require host log mounts. Keep this exception scoped to
+# the shared observability namespace and harden individual pods where supported.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: observability
+  labels:
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged

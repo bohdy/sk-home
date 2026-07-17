@@ -6,6 +6,8 @@ Stable labels are `cluster="sk-talos"` and `site="sk"`. General collection runs 
 
 Grafana and Alertmanager use retained 10 GiB and 1 GiB claims respectively. All services remain cluster-internal in this change; TLS and the fixed LAN/Cloudflare route are separate acceptance-gated changes.
 
+The shared namespace explicitly uses privileged Pod Security Admission because node exporter requires host namespaces and host mounts, and the later Vector DaemonSet requires host log mounts. This exception does not make every workload privileged; chart and local workload security contexts must still grant only the access each component requires.
+
 ## Grafana credential
 
 Bitwarden Secrets Manager item `SK-TALOS-GRAFANA-ADMIN-PASSWORD` (`6e37471a-b993-4700-907e-b48a009f9c41`) contains only the administrator password.
