@@ -1,0 +1,26 @@
+# Cilium advertises one fixed logging VIP over BGP. Local traffic policy is a
+# hard requirement because syslog records must retain the original sender IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: syslog
+  namespace: observability
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.54"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+  selector:
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+  ports:
+    - name: syslog-tcp
+      port: 514
+      targetPort: syslog-tcp
+      protocol: TCP
+    - name: syslog-udp
+      port: 514
+      targetPort: syslog-udp
+      protocol: UDP
