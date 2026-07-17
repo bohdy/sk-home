@@ -34,9 +34,20 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Deploy Vector for Kubernetes container logs with exclusion annotations, bounded disk buffering, stable fields, and loop prevention.
-2. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
-3. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
+1. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
+2. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
+
+## Vector acceptance
+
+Acceptance completed on 2026-07-17:
+
+- Flux `observability-vector` and Vector Helm release revision 2 reported Ready on chart and application version 0.57.0.
+- Four Agent DaemonSet pods covered all three control-plane nodes and the worker with zero restarts.
+- VictoriaLogs contained normalized Kubernetes records from every node and no records from Vector's own pods.
+- Four Vector internal-metrics targets reported `up=1` with stable `cluster="sk-talos"` and `site="sk"` labels.
+- No component-error or discarded-event rate was present during acceptance.
+- A continuous ordinary test pod produced exactly 60 records, while an otherwise identical pod annotated `vector.dev/exclude: "true"` produced zero.
+- Recreating the worker's Vector pod while the test emitter ran preserved its node-local checkpoint: the stream finished at exactly 60 records without replay, and the replacement collector became Ready with zero restarts.
 
 ## VictoriaLogs acceptance
 
