@@ -33,6 +33,20 @@ spec:
     defaultRules:
       create: true
 
+    defaultDatasources:
+      # VictoriaLogs is a separate release, so provision its stable internal
+      # service URL explicitly instead of enabling the bundled log backend.
+      extra:
+        - name: VictoriaLogs
+          type: victoriametrics-logs-datasource
+          access: proxy
+          uid: VictoriaLogs
+          url: http://victoria-logs.observability.svc.cluster.local.:9428
+          editable: false
+          isDefault: false
+          jsonData:
+            maxLines: 200
+
     victoria-metrics-operator:
       enabled: true
       crds:
@@ -136,6 +150,10 @@ spec:
 
     grafana:
       enabled: true
+      # Pin the signed backend plugin; do not depend on a floating marketplace
+      # version at pod startup.
+      plugins:
+        - victoriametrics-logs-datasource@0.29.0
       admin:
         existingSecret: grafana-admin
         userKey: admin-user

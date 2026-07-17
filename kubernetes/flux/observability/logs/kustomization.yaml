@@ -1,0 +1,7 @@
+# Keep vendor chart acquisition and release configuration together as one
+# independently reconciled logging backend component.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - oci-repository.yaml
+  - helm-release.yaml

@@ -1,0 +1,19 @@
+# The logging backend is introduced only after the metrics stack and Grafana
+# are Ready because acceptance depends on self-monitoring and log queries.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-logs
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 20m
+  retryInterval: 2m
+  path: ./kubernetes/flux/observability/logs
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-metrics

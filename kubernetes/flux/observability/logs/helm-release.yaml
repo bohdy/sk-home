@@ -1,0 +1,66 @@
+# This release owns only the VictoriaLogs database, its retained storage,
+# self-monitoring scrape definition, and vendor dashboard.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+  namespace: observability
+spec:
+  interval: 30m
+  timeout: 15m
+  chartRef:
+    kind: OCIRepository
+    name: victoria-logs-single
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      strategy: rollback
+  values:
+    global:
+      extraLabels:
+        cluster: sk-talos
+        site: sk
+
+    server:
+      fullnameOverride: victoria-logs
+      replicaCount: 1
+      retentionPeriod: 30d
+      # Bound storage plus percentage alerts provide the second retention
+      # guard; VictoriaLogs remains authoritative for age-based expiration.
+      retentionMaxDiskUsagePercent: 85
+      persistentVolume:
+        enabled: true
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: synology-iscsi-retain
+        size: 50Gi
+        # Carry the retention intent onto the StatefulSet-generated claim;
+        # Kubernetes retains StatefulSet claims by default on deletion.
+        annotations:
+          helm.sh/resource-policy: keep
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: "1"
+          memory: 2Gi
+      vmServiceScrape:
+        enabled: true
+        interval: 30s
+        extraLabels:
+          cluster: sk-talos
+          site: sk
+
+    # Collection is implemented separately so its host access, buffering,
+    # routing, and parsing configuration can be reviewed independently.
+    vector:
+      enabled: false
+
+    dashboards:
+      enabled: true
+      labels:
+        grafana_dashboard: "1"
