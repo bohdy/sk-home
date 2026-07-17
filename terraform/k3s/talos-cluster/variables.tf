@@ -38,6 +38,19 @@ variable "cluster_endpoint_sans" {
   default     = []
 }
 
+variable "talos_log_endpoint" {
+  # Talos service and kernel logs share the Cilium logging VIP but use their
+  # own TCP port and JSON-lines parser rather than the RFC syslog listeners.
+  description = "TCP endpoint that receives Talos service and kernel JSON logs."
+  type        = string
+  default     = "tcp://10.1.30.54:6051/"
+
+  validation {
+    condition     = can(regex("^tcp://[^/:]+:[0-9]+/$", var.talos_log_endpoint))
+    error_message = "talos_log_endpoint must use tcp://host:port/ syntax."
+  }
+}
+
 variable "talos_version" {
   # Talos is pinned intentionally so image factory downloads, installer images,
   # and generated machine configuration move together during upgrades.

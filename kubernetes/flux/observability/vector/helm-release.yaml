@@ -70,6 +70,9 @@ spec:
       - name: syslog-udp
         containerPort: 514
         protocol: UDP
+      - name: talos-logs
+        containerPort: 6051
+        protocol: TCP
 
     service:
       enabled: false
@@ -110,6 +113,17 @@ spec:
           decoding:
             codec: bytes
           max_length: 65507
+        # Talos emits newline-delimited JSON over TCP. Keep bytes intact until
+        # the remap transform so malformed input remains observable.
+        talos_logs:
+          type: socket
+          address: 0.0.0.0:6051
+          mode: tcp
+          decoding:
+            codec: bytes
+          framing:
+            method: newline_delimited
+          max_length: 262144
       transforms:
         exclude_annotated:
           type: filter
@@ -131,10 +145,31 @@ spec:
             .container = .kubernetes.container_name
             .node = .kubernetes.pod_node_name
             .workload = .kubernetes.pod_owner
+        # Bound each sender independently at ten times the initial planning
+        # rate. Do not emit sender keys on discard metrics because arbitrary
+        # source addresses would create attacker-controlled cardinality.
+        throttle_syslog_tcp:
+          type: throttle
+          inputs:
+            - syslog_tcp
+          key_field: "{{ host }}"
+          threshold: 1000
+          window_secs: 1
+          internal_metrics:
+            emit_events_discarded_per_key: false
+        throttle_syslog_udp:
+          type: throttle
+          inputs:
+            - syslog_udp
+          key_field: "{{ host }}"
+          threshold: 1000
+          window_secs: 1
+          internal_metrics:
+            emit_events_discarded_per_key: false
         parse_syslog_tcp:
           type: remap
           inputs:
-            - syslog_tcp
+            - throttle_syslog_tcp
           source: |
             .transport = "tcp"
             .raw_message = to_string(.message) ?? encode_json(.message)
@@ -149,7 +184,7 @@ spec:
         parse_syslog_udp:
           type: remap
           inputs:
-            - syslog_udp
+            - throttle_syslog_udp
           source: |
             .transport = "udp"
             .raw_message = to_string(.message) ?? encode_json(.message)
@@ -171,17 +206,133 @@ spec:
             .site = "sk"
             .source_type = "syslog"
             .received_at = now()
-            .sender = to_string(.host) ?? "unknown"
+            .sender = if exists(.host) { to_string!(.host) } else { "unknown" }
             .sender_timestamp = .timestamp
             .timestamp = .received_at
-            .device = to_string(.hostname) ?? .sender
+            .device = if exists(.hostname) { to_string!(.hostname) } else { .sender }
+        parse_talos:
+          type: remap
+          inputs:
+            - talos_logs
+          source: |
+            received_at = .timestamp
+            sender = if exists(.host) { to_string!(.host) } else { "unknown" }
+            raw_message = to_string(.message) ?? encode_json(.message)
+            parsed, parse_error = parse_json(raw_message)
+
+            if parse_error == null && is_object(parsed) {
+              . = merge(., object!(parsed))
+              .parse_status = "parsed"
+            } else {
+              .parse_status = "unparsed"
+              .parse_error = if parse_error == null {
+                "Talos record is not a JSON object"
+              } else {
+                to_string(parse_error)
+              }
+            }
+
+            .cluster = "sk-talos"
+            .site = "sk"
+            .source_type = "talos"
+            .transport = "tcp"
+            .raw_message = raw_message
+            .received_at = received_at
+            .sender = sender
+            .device = if exists(.node) { to_string!(.node) } else { sender }
+            .talos_stream = if .parse_status == "unparsed" {
+              "unknown"
+            } else if exists(."talos-service") {
+              "service"
+            } else {
+              "kernel"
+            }
+            if exists(."talos-service") {
+              .service = to_string!(."talos-service")
+            } else {
+              del(.service)
+            }
+            if exists(."talos-level") {
+              .severity = to_string!(."talos-level")
+            } else {
+              del(.severity)
+            }
+            .message = if exists(.msg) { to_string!(.msg) } else { raw_message }
+
+            sender_timestamp, timestamp_error = parse_timestamp(to_string(."talos-time") ?? "", format: "%+")
+            if timestamp_error == null {
+              .sender_timestamp = sender_timestamp
+            }
+            .timestamp = received_at
+      # Unit tests exercise the normalization contract without opening sockets
+      # or depending on the live VictoriaLogs backend.
+      tests:
+        - name: normalize Talos service log
+          inputs:
+            - insert_at: parse_talos
+              type: log
+              log_fields:
+                host: 10.1.20.41
+                message: '{"msg":"service marker","node":"sk-talos-cp-1","talos-level":"info","talos-service":"machined","talos-time":"2026-07-17T20:00:00Z"}'
+                timestamp: "2026-07-17T20:00:01Z"
+          outputs:
+            - extract_from: parse_talos
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "parsed")
+                    assert_eq!(.talos_stream, "service")
+                    assert_eq!(.source_type, "talos")
+                    assert_eq!(.sender, "10.1.20.41")
+                    assert_eq!(.device, "sk-talos-cp-1")
+                    assert_eq!(.service, "machined")
+                    assert_eq!(.severity, "info")
+                    assert_eq!(.message, "service marker")
+                    assert!(is_timestamp(.sender_timestamp))
+        - name: normalize Talos kernel log
+          inputs:
+            - insert_at: parse_talos
+              type: log
+              log_fields:
+                host: 10.1.20.42
+                message: '{"msg":"kernel marker","talos-level":"warning","talos-time":"2026-07-17T20:00:00Z"}'
+                timestamp: "2026-07-17T20:00:01Z"
+          outputs:
+            - extract_from: parse_talos
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "parsed")
+                    assert_eq!(.talos_stream, "kernel")
+                    assert_eq!(.sender, "10.1.20.42")
+                    assert_eq!(.device, "10.1.20.42")
+                    assert_eq!(.message, "kernel marker")
+        - name: retain malformed Talos log
+          inputs:
+            - insert_at: parse_talos
+              type: log
+              log_fields:
+                host: 10.1.20.43
+                message: "not-json"
+                timestamp: "2026-07-17T20:00:01Z"
+          outputs:
+            - extract_from: parse_talos
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "unparsed")
+                    assert_eq!(.talos_stream, "unknown")
+                    assert_eq!(.raw_message, "not-json")
+                    assert_eq!(.message, "not-json")
+                    assert!(exists(.parse_error))
       sinks:
         victoria_logs:
           type: http
           inputs:
             - normalize_kubernetes
             - normalize_syslog
-          uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node,device,facility,severity,transport&_time_field=timestamp&_msg_field=message
+            - parse_talos
+          uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node,device,facility,severity,transport,talos_stream,service&_time_field=timestamp&_msg_field=message
           method: post
           compression: gzip
           encoding:

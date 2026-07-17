@@ -12,6 +12,10 @@ The same DaemonSet accepts RFC syslog on TCP and UDP port 514 through fixed Cili
 
 Socket input is parsed fallibly. Every record retains its raw message, transport, sender, receipt timestamp, and `parse_status`; malformed input is stored as `unparsed` instead of being dropped. Parsed sender timestamps are retained separately, while the trustworthy Vector receipt time controls storage ordering.
 
+TCP and UDP syslog are throttled independently at 1,000 events per second for each preserved sender address. This leaves a tenfold reserve above the initial 100 events/second planning load while bounding a runaway device. Vector exports aggregate discarded-event metrics for alerting but omits sender keys from those metrics to avoid attacker-controlled cardinality.
+
+Talos service and kernel logs use JSON lines over TCP port 6051 on the same VIP. Vector parses that stream separately from RFC syslog, preserves malformed records, assigns `talos_stream` as `service`, `kernel`, or `unknown`, and keeps Talos' sender timestamp separate from its receipt timestamp. The Talos OpenTofu stack supplies a stable node tag for service logs; kernel records fall back to the preserved sender address when they do not contain that tag.
+
 ## Validation
 
 ```bash
@@ -19,6 +23,7 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability get helmrelease v
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability get daemonset,pods,vmpodscrape
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability logs daemonset/vector
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability get service syslog
+talosctl --talosconfig /tmp/sk-talos-talosconfig -n 10.1.20.41 get machineconfig -o yaml
 ```
 
-Acceptance requires one Ready pod per node with no repeated restarts, valid Vector configuration, Kubernetes records from every node in VictoriaLogs, no Vector self-records, annotation exclusion, stable stream fields, retained checkpoints across pod recreation, healthy sink metrics, and no dropped events. Syslog acceptance additionally requires LAN reachability on TCP and UDP 514, original sender preservation, valid RFC parsing, malformed-record retention, and end-to-end persistence.
+Acceptance requires one Ready pod per node with no repeated restarts, valid Vector configuration, Kubernetes records from every node in VictoriaLogs, no Vector self-records, annotation exclusion, stable stream fields, retained checkpoints across pod recreation, healthy sink metrics, and no dropped events. Syslog acceptance additionally requires LAN reachability on TCP and UDP 514, original sender preservation, valid RFC parsing, malformed-record retention, and end-to-end persistence. Talos acceptance requires service and kernel records from every node on TCP 6051, stable node identity, correct stream classification, receipt and sender timestamps, malformed-record retention, and no unexpected machine reboot.
