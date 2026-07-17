@@ -4,7 +4,7 @@ This component installs the official `victoria-metrics-k8s-stack` chart 0.86.1 t
 
 Stable labels are `cluster="sk-talos"` and `site="sk"`. General collection runs every 30 seconds. VMSingle retains raw metrics for one year on a retained 100 GiB Synology iSCSI claim.
 
-Grafana and Alertmanager use retained 10 GiB and 1 GiB claims respectively. All services remain cluster-internal in this change; TLS and the fixed LAN/Cloudflare route are separate acceptance-gated changes.
+Grafana and Alertmanager use retained 10 GiB and 1 GiB claims respectively. Grafana's Helm-managed claim carries the `helm.sh/resource-policy: keep` annotation so failed-install remediation and intentional Helm removal preserve it. All services remain cluster-internal in this change; TLS and the fixed LAN/Cloudflare route are separate acceptance-gated changes.
 
 The shared namespace explicitly uses privileged Pod Security Admission because node exporter requires host namespaces and host mounts, and the later Vector DaemonSet requires host log mounts. This exception does not make every workload privileged; chart and local workload security contexts must still grant only the access each component requires.
 
@@ -39,4 +39,4 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability port-forward serv
 
 Acceptance requires all retained claims to bind, every component to become Ready without repeated restarts, VMAgent targets to be healthy, samples to enter VMSingle with both global labels, Grafana to query the provisioned VictoriaMetrics data source, and a persistence marker to survive a Grafana pod recreation.
 
-Rollback suspends or reverts the Flux component while preserving all retained claims. Never delete observability PVCs, released PVs, or Synology LUNs as routine rollback.
+Rollback suspends or reverts the Flux component while preserving all retained claims. The keep annotation causes Helm to report the preserved Grafana PVC as an intentionally skipped resource during uninstall. Never delete observability PVCs, released PVs, or Synology LUNs as routine rollback.
