@@ -43,6 +43,19 @@ data "talos_machine_configuration" "control_plane" {
           disk  = each.value.install_disk
           image = "${var.image.factory_url}/installer/${each.value.update ? local.update_schematic_id : local.schematic_id}:${each.value.update ? local.update_version : local.image_version}"
         }
+        logging = {
+          # Forward structured service logs over a backpressure-capable stream.
+          # The node tag supplies stable identity independently of sender IP.
+          destinations = [
+            {
+              endpoint = var.talos_log_endpoint
+              format   = "json_lines"
+              extraTags = {
+                node = each.value.hostname
+              }
+            },
+          ]
+        }
         network = {
           nameservers = var.cluster_dns_servers
           interfaces = [
@@ -90,6 +103,14 @@ data "talos_machine_configuration" "control_plane" {
       auto       = "off"
       hostname   = each.value.hostname
     }),
+    yamlencode({
+      # Kernel logs are configured through Talos' dedicated multi-document
+      # resource; JSON lines lets Vector share normalization with service logs.
+      apiVersion = "v1alpha1"
+      kind       = "KmsgLogConfig"
+      name       = "observability"
+      url        = var.talos_log_endpoint
+    }),
   ]
 }
 
@@ -113,6 +134,19 @@ data "talos_machine_configuration" "worker" {
         install = {
           disk  = each.value.install_disk
           image = "${var.image.factory_url}/installer/${each.value.update ? local.update_schematic_id : local.schematic_id}:${each.value.update ? local.update_version : local.image_version}"
+        }
+        logging = {
+          # Workers use the same structured stream and stable node tag as the
+          # control planes so one Vector pipeline covers the whole cluster.
+          destinations = [
+            {
+              endpoint = var.talos_log_endpoint
+              format   = "json_lines"
+              extraTags = {
+                node = each.value.hostname
+              }
+            },
+          ]
         }
         network = {
           nameservers = var.cluster_dns_servers
@@ -151,6 +185,13 @@ data "talos_machine_configuration" "worker" {
       kind       = "HostnameConfig"
       auto       = "off"
       hostname   = each.value.hostname
+    }),
+    yamlencode({
+      # Keep kernel delivery declarative for workers as well as control planes.
+      apiVersion = "v1alpha1"
+      kind       = "KmsgLogConfig"
+      name       = "observability"
+      url        = var.talos_log_endpoint
     }),
   ]
 }
