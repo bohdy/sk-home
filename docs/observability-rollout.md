@@ -39,6 +39,8 @@ The metrics deployment must not be considered accepted until all of these checks
 
 If the Alertmanager storage field is rejected by the operator or does not produce a PVC, correct the `VMAlertmanager` specification using the installed CRD schema before acceptance. Do not work around persistence by switching it to ephemeral storage.
 
+Live reconciliation exposed that the cluster's default baseline Pod Security policy rejects node exporter's required host namespaces and host mounts. The follow-up must explicitly label only the shared `observability` namespace as privileged, consistent with the accepted node exporter and Vector host-access tradeoff, while retaining hardened per-workload security contexts.
+
 ## Remaining stages
 
 After metrics acceptance, use a fresh branch from current `main` for each coherent stage:
