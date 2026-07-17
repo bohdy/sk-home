@@ -13,35 +13,32 @@ The cluster foundations are deployed and healthy:
 - The shared Cloudflare Tunnel has two `cloudflared` 2026.7.2 replicas and a catch-all 404 route. Grafana is not routed through it yet.
 - The retained storage validation PV remains intentionally preserved for later manual cleanup.
 
-The metrics stage is implemented but not yet committed, reviewed, merged, or reconciled. The active branch is `deploy-metrics-stack`, with manifests under `kubernetes/flux/observability/metrics` and the cluster wiring under `kubernetes/flux/clusters/sk-talos/observability`.
+The metrics stage is deployed and accepted. PRs #85, #86, and #87 introduced the stack, added the namespace-scoped Pod Security exception required by node exporter, and preserved Grafana's Helm-managed PVC during remediation.
 
 The in-cluster `observability` namespace and `grafana-admin` Secret have already been bootstrapped. Bitwarden Secrets Manager item `SK-TALOS-GRAFANA-ADMIN-PASSWORD` stores only the Grafana administrator password; the Kubernetes Secret uses the `admin-user` and `admin-password` keys. Never print the secret value or commit rendered Secret data.
 
+## Metrics acceptance
+
+Acceptance completed on 2026-07-17:
+
+- Flux `observability-metrics` and Helm release revision 2 reported Ready at Git revision `81d6ca6`.
+- VMSingle, VMAgent, VMAlert, Alertmanager, Grafana, kube-state-metrics, and four node exporters were Ready with zero restarts.
+- VMAgent reported 32 active targets, no unhealthy targets, and 480 intentionally dropped discovery targets.
+- VMSingle returned 32 `up` series, all with `cluster="sk-talos"` and `site="sk"`, while ingesting approximately 5,800 rows per second during acceptance.
+- The live VMSingle specification reported `retentionPeriod: 1y`, `scrapeInterval: 30s`, and a retained 100 GiB claim.
+- Grafana 13.1.0 reported a healthy database and successfully queried its default VictoriaMetrics data source.
+- A temporary Grafana dashboard survived pod deletion and rollout on the retained claim, then was removed.
+- The worker reported no memory, disk, PID, or network pressure with 39% requested CPU and 35% requested memory after deployment.
+- Active retained PVs are `pvc-a1b722da-92ef-4772-b66a-6d89b3b2ce37` for VMSingle, `pvc-3e14274e-2c25-4005-a08e-ef1796fa310b` for Grafana, and `pvc-fe9fd1e9-2fc9-4555-a843-af46e1d73625` for Alertmanager.
+- Released PV `pvc-ac677c3b-8897-43e8-a538-dd34d71a3baf` is the first failed-install Grafana volume. It remains intentionally retained alongside storage-validation PV `pvc-c18327d7-51df-451f-80ac-daac0c4bb6dc`; remove either only through explicit storage cleanup.
+
 ## Immediate next actions
 
-1. Render both the metrics component and the complete cluster Kustomization in the repository devcontainer.
-2. Run every repository-defined formatting, linting, schema, and hygiene check that applies to the changed files.
-3. Inspect the complete diff, verify that no secret value or generated credential is present, and create a signed commit.
-4. Push `deploy-metrics-stack`, open a pull request into `main`, merge it after checks pass, and wait for Flux reconciliation.
-5. Diagnose any `OCIRepository`, `HelmRelease`, custom-resource, scheduling, or PVC failure before proceeding.
-6. Verify the deployed stack and record the result in this document.
-
-The metrics deployment must not be considered accepted until all of these checks pass:
-
-- `observability-metrics` and its source and Helm release report Ready.
-- VMSingle, VMAgent, VMAlert, Alertmanager, Grafana, kube-state-metrics, and node exporter are healthy without repeated restarts.
-- VictoriaMetrics has a retained 100 GiB `synology-iscsi-retain` PVC, Grafana has a retained 10 GiB PVC, and Alertmanager has its configured retained volume.
-- VMSingle reports a one-year retention period.
-- VMAgent has expected Kubernetes targets and successfully writes samples to VMSingle.
-- Queries return the stable `cluster="sk-talos"` and `site="sk"` labels.
-- Grafana starts with the bootstrapped administrator credential, has a working VictoriaMetrics data source, and preserves a temporary test dashboard across a pod restart.
-- Worker scheduling, node conditions, memory use, and storage use show enough headroom for the next stage.
-
-If the Alertmanager storage field is rejected by the operator or does not produce a PVC, correct the `VMAlertmanager` specification using the installed CRD schema before acceptance. Do not work around persistence by switching it to ephemeral storage.
-
-Live reconciliation exposed that the cluster's default baseline Pod Security policy rejects node exporter's required host namespaces and host mounts. The shared `observability` namespace is now explicitly privileged, consistent with the accepted node exporter and Vector host-access tradeoff, while hardened per-workload security contexts remain required.
-
-The first failed Helm install preserved the VMSingle and Alertmanager claims but deleted Grafana's directly managed PVC before retrying. The replacement Grafana claim must carry `helm.sh/resource-policy: keep`. The first 10 GiB Grafana PV is Released and intentionally retained; record its identity during final metrics acceptance and remove it only through a separate explicit storage cleanup.
+1. Deploy VictoriaLogs Single with a retained 50 GiB volume and 30-day retention.
+2. Provision the pinned Grafana VictoriaLogs data-source plugin and verify Grafana queries the log backend.
+3. Deploy Vector for Kubernetes container logs with exclusion annotations, bounded disk buffering, stable fields, and loop prevention.
+4. Add the fixed Cilium logging VIP with TCP/UDP syslog and original sender preservation.
+5. Verify parsing failures, sender and receipt timestamps, rate limits, buffer pressure metrics, and end-to-end log persistence before adding Talos and audit sources.
 
 ## Remaining stages
 
