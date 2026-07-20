@@ -34,9 +34,9 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Restore the Flux dependency chain to Ready, beginning with `observability-metrics`; `observability-logs` and then `observability-vector` are currently blocked behind it.
-2. Confirm that Flux applies merged revision `bcce987`, the `syslog` LoadBalancer receives VIP `10.1.30.54`, and all four updated Vector pods become Ready.
-3. Run the syslog acceptance sequence below before configuring any devices or adding Talos and audit sources.
+1. Add Kubernetes API audit logging at metadata level without request or response bodies, using the supported Talos audit-file path.
+2. Mount the audit path read-only into Vector with only the capability required to traverse and read it, then normalize audit records into VictoriaLogs.
+3. Verify authentication and authorization failures, ordinary metadata-only events, rotation handling, restart continuity, collector health, and the absence of sensitive request or response bodies before proceeding to SNMP.
 
 ## Vector acceptance
 
@@ -50,26 +50,29 @@ Acceptance completed on 2026-07-17:
 - A continuous ordinary test pod produced exactly 60 records, while an otherwise identical pod annotated `vector.dev/exclude: "true"` produced zero.
 - Recreating the worker's Vector pod while the test emitter ran preserved its node-local checkpoint: the stream finished at exactly 60 records without replay, and the replacement collector became Ready with zero restarts.
 
-## Syslog checkpoint
+## Syslog acceptance
 
-PR #94 merged the initial syslog ingestion implementation as commit `bcce987` on 2026-07-17:
+Acceptance completed on 2026-07-20. PRs #94, #96, and #97 introduced syslog ingestion, per-sender throttling, and the required Helm template escaping:
 
 - The `syslog` Cilium LoadBalancer requests fixed VIP `10.1.30.54`, accepts TCP and UDP on port 514 from `10.0.0.0/8`, and uses `externalTrafficPolicy: Local` to preserve the original sender address.
 - Every Vector Agent listens for newline-delimited TCP syslog and UDP syslog. TCP records are limited to 262,144 bytes and UDP datagrams to 65,507 bytes.
 - Parsing is fallible by design. Every record retains `raw_message`, `transport`, and parse status; malformed input is retained with its parse error instead of being silently discarded.
 - Normalized records use receipt time for the VictoriaLogs storage timestamp while retaining the sender timestamp separately. They include stable `cluster`, `site`, `source_type`, sender, and device fields.
+- Valid and malformed TCP and UDP records sent first from WireGuard address `10.1.250.10` and then from LAN address `10.1.10.10` remained queryable with the original sender, correct transport and parse status, retained raw input, receipt and sender timestamps, `cluster="sk-talos"`, and `site="sk"`.
+- All four marked validation records survived VictoriaLogs pod recreation. All four Vector scrape targets remained `up=1`, buffers drained, and the collectors reported no recent component errors or restarts.
+- A 2,501-record TCP flood produced 1,128 stored events and 1,373 throttled events. A paced 1,800-record UDP flood delivered 1,796 events to Vector, stored 1,671, and throttled 125. Ordinary records continued to pass.
+- Vector 0.57.0 does not expose `component_discarded_events_total` for throttle drops even with per-key discarded metrics disabled. Alerting must derive aggregate throttle drops from the difference between the throttle component's received and sent event counters; sender labels remain intentionally absent to prevent attacker-controlled cardinality.
 
-The merge has not yet reconciled into the cluster. At the time this checkpoint was saved, the Flux source had fetched `main@sha1:bcce987`, but `observability-logs` reported dependency `observability-metrics` not Ready and `observability-vector` consequently reported dependency `observability-logs` not Ready. The `syslog` Service did not yet exist. The previous Vector Helm release revision 2 and its four pods remained Ready.
+## Talos log acceptance
 
-Resume with this acceptance sequence:
+Acceptance completed on 2026-07-20. PRs #96, #98, and #99 introduced Talos forwarding, corrected kernel identity, and replaced the shared-VIP path with direct node-local delivery:
 
-1. Inspect and resolve the `observability-metrics` Ready condition without changing desired state merely to bypass dependency health, then wait for logs and Vector reconciliation at `bcce987`.
-2. Verify the Service VIP, local endpoints on every node, Cilium address allocation and advertisement, and reachability of TCP/UDP port 514 from the home LAN.
-3. From a LAN host, send uniquely marked valid RFC 5424 records over both TCP and UDP, then send uniquely marked malformed records over both transports.
-4. Query VictoriaLogs for each marker and verify transport, parse status, preserved raw message, original LAN sender address, receipt timestamp, sender timestamp where supplied, and stable `cluster="sk-talos"`, `site="sk"`, and syslog source fields.
-5. Recreate the Vector pod that received a marked record and confirm the record remains queryable in VictoriaLogs.
-6. Check Vector internal metrics and logs for component errors, discarded events, buffer pressure, repeated restarts, or unexpected cardinality.
-7. Record measured acceptance results here before configuring MikroTik, UniFi, Synology, APC, Brother, Talos, or other senders.
+- Talos service and kernel logging is applied to all three control planes and the worker. Each node has a runtime `KmsgLogConfig`, and service logs carry the committed node name as an extra tag.
+- Talos kernel records have no node tag. Each node therefore connects to TCP hostPort 6051 on its own management address, bypassing Kubernetes Service load balancing; Vector assigns the receiving Agent's Downward API node name as the stable device identity.
+- Live socket inspection showed two established streams per node, with every connection terminating at the Vector pod on that same node.
+- VictoriaLogs contained parsed service and kernel records for `sk-talos-cp-1`, `sk-talos-cp-2`, `sk-talos-cp-3`, and `sk-talos-worker-1`. Records retained sender and receipt timestamps, correct stream classification, and stable `cluster="sk-talos"` and `site="sk"` fields.
+- Flux applied Git revision `07eb8a8`, Vector Helm revision 6 became Ready, and four Agent pods ran with zero restarts. The main OpenTofu workflow run `29728168676` applied the endpoint changes successfully.
+- The final Talos health check passed etcd, API, kubelet, boot-sequence, static-pod, component-readiness, and schedulability checks. Kubernetes node creation timestamps remained unchanged from 2026-07-17, confirming that configuration reconciliation did not reboot a node.
 
 ## VictoriaLogs acceptance
 
@@ -85,16 +88,14 @@ Acceptance completed on 2026-07-17:
 
 ## Remaining stages
 
-After metrics acceptance, use a fresh branch from current `main` for each coherent stage:
+Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Deploy VictoriaLogs Single with a retained 50 GiB volume and 30-day retention.
-2. Deploy Vector as a DaemonSet for Kubernetes logs, then add TCP/UDP syslog on a fixed Cilium LoadBalancer VIP with original sender preservation.
-3. Add Talos service and kernel log forwarding and verify the supported Talos audit-event delivery path without request or response bodies.
-4. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-5. Add the read-only Proxmox exporter and Blackbox Exporter probes.
-6. Add focused dashboards, actionable alert rules, inhibition, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
-7. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
-8. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
+1. Add metadata-only Kubernetes API audit logging through the supported Talos audit-file path.
+2. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
+3. Add the read-only Proxmox exporter and Blackbox Exporter probes.
+4. Add focused dashboards, actionable alert rules, inhibition, derived Vector throttle-drop alerting, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
+5. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
+6. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
