@@ -152,7 +152,9 @@ spec:
           type: throttle
           inputs:
             - syslog_tcp
-          key_field: "{{ host }}"
+          # The chart evaluates customConfig through Helm tpl, so emit the
+          # braces as a quoted string for Vector's own template parser.
+          key_field: '{{ "{{ host }}" }}'
           threshold: 1000
           window_secs: 1
           internal_metrics:
@@ -161,7 +163,7 @@ spec:
           type: throttle
           inputs:
             - syslog_udp
-          key_field: "{{ host }}"
+          key_field: '{{ "{{ host }}" }}'
           threshold: 1000
           window_secs: 1
           internal_metrics:
