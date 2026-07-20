@@ -134,6 +134,10 @@ spec:
       enabled: true
       spec:
         replicaCount: 1
+        # Alertmanager reads notification credentials from mounted files; its
+        # configuration intentionally does not contain inline secret values.
+        secrets:
+          - alertmanager-notifications
         storage:
           volumeClaimTemplate:
             spec:

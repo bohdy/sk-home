@@ -1,0 +1,33 @@
+# Alertmanager needs external egress only for its reviewed notification
+# receivers. FQDN policy avoids granting general outbound HTTPS access.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alertmanager-notifications
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vmalertmanager
+  egress:
+    # Cilium's DNS proxy must observe permitted lookups before it can populate
+    # the IP sets used by the following FQDN rules.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchName: api.telegram.org
+              - matchName: discord.com
+    - toFQDNs:
+        - matchName: api.telegram.org
+        - matchName: discord.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

@@ -6,3 +6,4 @@ resources:
   - namespace.yaml
   - oci-repository.yaml
   - helm-release.yaml
+  - alertmanager-network-policy.yaml
