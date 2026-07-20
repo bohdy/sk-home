@@ -341,6 +341,7 @@ spec:
               .resource = to_string(.objectRef.resource) ?? ""
               .resource_name = to_string(.objectRef.name) ?? ""
               .username = to_string(.user.username) ?? "unknown"
+              .impersonated_username = to_string(.impersonatedUser.username) ?? ""
               .response_code = to_int(.responseStatus.code) ?? 0
               sender_timestamp, timestamp_error = parse_timestamp(to_string(.stageTimestamp) ?? "", format: "%+")
               if timestamp_error == null {
@@ -415,7 +416,7 @@ spec:
             - insert_at: normalize_kubernetes_audit
               type: log
               log_fields:
-                message: '{"apiVersion":"audit.k8s.io/v1","kind":"Event","level":"RequestResponse","auditID":"test-audit-id","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/secrets/example","verb":"get","user":{"username":"acceptance-user"},"objectRef":{"resource":"secrets","namespace":"default","name":"example"},"responseStatus":{"code":200},"requestObject":{"data":{"password":"top-secret"}},"responseObject":{"data":{"password":"top-secret"}},"stageTimestamp":"2026-07-20T20:00:00Z"}'
+                message: '{"apiVersion":"audit.k8s.io/v1","kind":"Event","level":"RequestResponse","auditID":"test-audit-id","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/secrets/example","verb":"get","user":{"username":"acceptance-user"},"impersonatedUser":{"username":"system:serviceaccount:default:reader"},"objectRef":{"resource":"secrets","namespace":"default","name":"example"},"responseStatus":{"code":200},"requestObject":{"data":{"password":"top-secret"}},"responseObject":{"data":{"password":"top-secret"}},"stageTimestamp":"2026-07-20T20:00:00Z"}'
           outputs:
             - extract_from: normalize_kubernetes_audit
               conditions:
@@ -425,6 +426,8 @@ spec:
                     assert_eq!(.source_type, "kubernetes_audit")
                     assert_eq!(.node, "vector-test-node")
                     assert_eq!(.resource, "secrets")
+                    assert_eq!(.username, "acceptance-user")
+                    assert_eq!(.impersonated_username, "system:serviceaccount:default:reader")
                     assert_eq!(.response_code, 200)
                     assert_eq!(.sensitive_fields_removed, true)
                     assert!(!exists(.requestObject))
