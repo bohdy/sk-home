@@ -19,6 +19,8 @@ OpenTofu patches the `HostnameConfig` document in every generated Talos 1.13 mac
 
 Every node forwards Talos service and kernel logs as JSON lines to TCP port `6051` on its own management address. The port is configurable through `talos_log_port`, but it must remain aligned with the Vector Agent hostPort. Direct node-local delivery is required because service records carry the committed node name as an extra tag while kernel records do not; Vector uses its own Kubernetes node name for the latter. The separate `KmsgLogConfig` document enables kernel delivery. Apply this configuration only after the Vector receiver is Ready, and confirm the OpenTofu plan does not propose VM replacement or an unplanned reboot.
 
+The control-plane configuration explicitly enables kube-apiserver audit logging at Metadata level and omits the duplicate `RequestReceived` stage. Metadata captures request identity, target, authorization outcome, and response status without request or response bodies. Talos writes the resulting JSON-lines files under `/var/log/audit/kube` for the node-local Vector Agent.
+
 Talos does not install the default CNI or kube-proxy for this cluster. Cilium is installed after bootstrap from `kubernetes/bootstrap/cilium/values.yaml`, runs kube-proxy replacement, and later advertises `LoadBalancer` service VIP routes through its BGP control plane.
 
 The Talos image schematic includes the `siderolabs/iscsi-tools` system extension so the cluster can later run Synology CSI-backed iSCSI storage. Updating the schematic only changes the desired Talos image; nodes must still be rolled or upgraded onto the generated image before iSCSI storage is considered available.

@@ -129,9 +129,9 @@ Run Vector as a DaemonSet in the shared observability namespace. Collect pod log
 
 Expose network syslog through a fixed Cilium LoadBalancer IP on UDP/514 and TCP/514. Prefer TCP when a device supports it; retain UDP for compatibility. Do not expose syslog through Cloudflare or the public internet.
 
-Expose Talos structured log ingestion on a separate TCP port at the same logging VIP. Configure Talos 1.13 service and kernel log forwarding in JSON-lines format. Parse this stream separately from RFC syslog.
+Expose Talos structured log ingestion on a per-node host port reached through each node's management address. Configure Talos 1.13 service and kernel log forwarding in JSON-lines format. Parse this stream separately from RFC syslog. Direct node-local delivery supplies stable identity for kernel records, which do not contain the service-log node tag.
 
-Preserve the original sender address through the LoadBalancer and store it as a normalized field. Original source-IP preservation is a hard requirement.
+Preserve the original network-syslog sender address through the LoadBalancer and store it as a normalized field. Original source-IP preservation is a hard requirement for network syslog; Talos records use stable node identity from their tagged or node-local delivery path.
 
 Preserve raw message, sender, receive timestamp, transport, and parse status when syslog parsing fails. Store both sender timestamps and Vector receipt timestamps. Use the sender timestamp only when it is valid and within an allowed clock-skew window.
 
@@ -193,7 +193,7 @@ Collect all Kubernetes namespaces by default, with explicit exclusions. Drop kno
 
 ## Network addresses
 
-Use fixed Cilium LoadBalancer IPs for Grafana and the combined syslog/Talos logging endpoint. Select addresses only after checking live Cilium and MikroTik state; do not rely on the previously proposed unverified reservations.
+Use fixed Cilium LoadBalancer IPs for Grafana and syslog. Talos logging uses direct node-local delivery and does not consume a LoadBalancer address. Select addresses only after checking live Cilium and MikroTik state; do not rely on the previously proposed unverified reservations.
 
 Commit the selected non-secret addresses and matching internal A/PTR records only after the services are reachable. Preserve source IPs on the logging endpoint.
 
