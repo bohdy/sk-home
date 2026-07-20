@@ -1,0 +1,23 @@
+# Certificate expiry and controller health require the cert-manager controller's
+# existing ClusterIP metrics Service; webhook and cainjector are covered by
+# Kubernetes workload alerts and do not emit certificate lifecycle series.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: cert-manager
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - cert-manager
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager
+      app.kubernetes.io/component: controller
+  endpoints:
+    - port: tcp-prometheus-servicemonitor
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 5000
+      seriesLimit: 5000

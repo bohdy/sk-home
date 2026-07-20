@@ -7,3 +7,4 @@ resources:
   - logs-kustomization.yaml
   - vector-kustomization.yaml
   - blackbox-kustomization.yaml
+  - alerting-kustomization.yaml
