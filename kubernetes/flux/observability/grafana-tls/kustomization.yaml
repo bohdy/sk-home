@@ -1,0 +1,6 @@
+# Certificate issuance is isolated from the later Grafana listener change so
+# the TLS Secret is Ready before Helm attempts to mount it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - certificate.yaml

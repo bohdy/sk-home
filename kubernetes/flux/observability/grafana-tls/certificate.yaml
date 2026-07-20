@@ -1,0 +1,19 @@
+# Grafana serves this certificate directly on both its canonical hostname and
+# the explicit LAN alias; DNS-01 issuance does not require public reachability.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana
+  namespace: observability
+spec:
+  secretName: grafana-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-production
+  dnsNames:
+    - grafana.bohdal.name
+    - grafana.internal.bohdal.name
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
