@@ -38,16 +38,16 @@ variable "cluster_endpoint_sans" {
   default     = []
 }
 
-variable "talos_log_endpoint" {
-  # Talos service and kernel logs share the Cilium logging VIP but use their
-  # own TCP port and JSON-lines parser rather than the RFC syslog listeners.
-  description = "TCP endpoint that receives Talos service and kernel JSON logs."
-  type        = string
-  default     = "tcp://10.1.30.54:6051/"
+variable "talos_log_port" {
+  # Each node targets its own management address so untagged kernel records
+  # reach that node's Vector Agent directly through its hostPort.
+  description = "Host port that receives Talos service and kernel JSON logs."
+  type        = number
+  default     = 6051
 
   validation {
-    condition     = can(regex("^tcp://[^/:]+:[0-9]+/$", var.talos_log_endpoint))
-    error_message = "talos_log_endpoint must use tcp://host:port/ syntax."
+    condition     = var.talos_log_port >= 1024 && var.talos_log_port <= 65535
+    error_message = "talos_log_port must be an unprivileged TCP port."
   }
 }
 
