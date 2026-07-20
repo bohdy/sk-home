@@ -35,6 +35,15 @@ spec:
       cluster: sk-talos
       site: sk
 
+    # Talos kernel records do not include the service-log extraTags. With the
+    # Local LoadBalancer policy, each node reaches its local Vector Agent, so
+    # the Downward API provides the stable identity for those records.
+    extraEnv:
+      - name: VECTOR_SELF_NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+
     resources:
       requests:
         cpu: 100m
@@ -219,6 +228,7 @@ spec:
           source: |
             received_at = .timestamp
             sender = if exists(.host) { to_string!(.host) } else { "unknown" }
+            collector_node = get_env_var("VECTOR_SELF_NODE_NAME") ?? sender
             raw_message = to_string(.message) ?? encode_json(.message)
             parsed, parse_error = parse_json(raw_message)
 
@@ -241,7 +251,7 @@ spec:
             .raw_message = raw_message
             .received_at = received_at
             .sender = sender
-            .device = if exists(.node) { to_string!(.node) } else { sender }
+            .device = if exists(.node) { to_string!(.node) } else { collector_node }
             .talos_stream = if .parse_status == "unparsed" {
               "unknown"
             } else if exists(."talos-service") {
@@ -307,7 +317,7 @@ spec:
                     assert_eq!(.parse_status, "parsed")
                     assert_eq!(.talos_stream, "kernel")
                     assert_eq!(.sender, "10.1.20.42")
-                    assert_eq!(.device, "10.1.20.42")
+                    assert_eq!(.device, "vector-test-node")
                     assert_eq!(.message, "kernel marker")
         - name: retain malformed Talos log
           inputs:
