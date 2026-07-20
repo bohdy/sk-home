@@ -100,7 +100,9 @@ The component README documents the Bitwarden item, token bootstrap, and connecto
 
 The staged observability workloads live under `kubernetes/flux/observability`. The first component, `metrics`, installs the pinned VictoriaMetrics Kubernetes stack and Grafana after Cilium and validated Synology storage are Ready.
 
-The metrics component README documents the Grafana credential bootstrap, retained storage, validation, and rollback requirements. The dependent `logs` component deploys VictoriaLogs and provisions Grafana's pinned log data source. The `vector` component then collects node-local Kubernetes logs with bounded buffers and source exclusions. External syslog, exporters, public Grafana routing, and notification delivery remain later dependency-ordered components.
+The metrics component README documents the Grafana credential bootstrap, retained storage, validation, and rollback requirements. The dependent `logs` component deploys VictoriaLogs and provisions Grafana's pinned log data source. The `vector` component collects node-local Kubernetes, Talos, audit, and external syslog records with bounded buffers and source exclusions.
+
+The reusable `snmp` component pins SNMP Exporter and its reviewed generated vendor modules, but remains outside the live Flux tree until the explicit target inventory and Bitwarden-backed credential Secret are complete. Proxmox and Blackbox exporters, public Grafana routing, and notification delivery remain later dependency-ordered components.
 
 Use `docs/observability-rollout.md` as the resumable deployment checkpoint and update it after each accepted stage.
 

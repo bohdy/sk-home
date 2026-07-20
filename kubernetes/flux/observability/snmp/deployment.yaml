@@ -1,0 +1,106 @@
+# The exporter is deliberately a single stateless replica because temporary
+# monitoring downtime is acceptable and parallel walks would burden devices.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snmp-exporter
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: snmp-exporter
+    app.kubernetes.io/component: network-monitoring
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: snmp-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: snmp-exporter
+        app.kubernetes.io/component: network-monitoring
+    spec:
+      automountServiceAccountToken: false
+      # Prefer a general-purpose worker without making it a hard dependency.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: snmp-exporter
+          image: quay.io/prometheus/snmp-exporter:v0.30.1@sha256:e5fd5e8b43ace6c088fe9bf0b37b7fff0e04380bee352be7ec41b853a4dd5859
+          args:
+            - --config.file=/etc/snmp-exporter/snmp.yml
+            - --config.expand-environment-variables
+            - --web.listen-address=:9116
+          env:
+            # The external Secret is manually bootstrapped from Bitwarden and
+            # contains values only, while protocols remain reviewed in Git.
+            - name: SNMP_V2_COMMUNITY
+              valueFrom:
+                secretKeyRef:
+                  name: snmp-exporter-auth
+                  key: v2-community
+            - name: SNMP_V3_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: snmp-exporter-auth
+                  key: v3-username
+            - name: SNMP_V3_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: snmp-exporter-auth
+                  key: v3-auth-password
+            - name: SNMP_V3_PRIV_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: snmp-exporter-auth
+                  key: v3-priv-password
+          ports:
+            - name: http
+              containerPort: 9116
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /etc/snmp-exporter
+              readOnly: true
+      securityContext:
+        fsGroup: 65534
+      volumes:
+        - name: config
+          configMap:
+            name: snmp-exporter-config
