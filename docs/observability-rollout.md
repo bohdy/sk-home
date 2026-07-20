@@ -34,9 +34,9 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Add Kubernetes API audit logging at metadata level without request or response bodies, using the supported Talos audit-file path.
-2. Mount the audit path read-only into Vector with only the capability required to traverse and read it, then normalize audit records into VictoriaLogs.
-3. Verify authentication and authorization failures, ordinary metadata-only events, rotation handling, restart continuity, collector health, and the absence of sensitive request or response bodies before proceeding to SNMP.
+1. Add SNMP Exporter with a committed target inventory and reviewed vendor-specific modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printers.
+2. Bootstrap the required SNMPv2c and SNMPv3 credentials from dedicated Bitwarden Secrets Manager items without committing or logging their values.
+3. Verify every configured device, intermittent-printer behavior, collector health, stable target labels, and resource use before proceeding to the Proxmox and Blackbox exporters.
 
 ## Vector acceptance
 
@@ -74,6 +74,19 @@ Acceptance completed on 2026-07-20. PRs #96, #98, and #99 introduced Talos forwa
 - Flux applied Git revision `07eb8a8`, Vector Helm revision 6 became Ready, and four Agent pods ran with zero restarts. The main OpenTofu workflow run `29728168676` applied the endpoint changes successfully.
 - The final Talos health check passed etcd, API, kubelet, boot-sequence, static-pod, component-readiness, and schedulability checks. Kubernetes node creation timestamps remained unchanged from 2026-07-17, confirming that configuration reconciliation did not reboot a node.
 
+## Kubernetes audit acceptance
+
+Acceptance completed on 2026-07-20. PRs #101 and #102 introduced metadata-only Kubernetes API auditing and preserved authenticated and impersonated identities separately:
+
+- Talos applies an explicit kube-apiserver audit policy to all three control-plane nodes. It omits the `RequestReceived` stage and records metadata without request or response bodies.
+- Vector mounts only `/var/log/audit/kube` read-only with `DAC_READ_SEARCH`, follows the active `kube-apiserver.log`, and excludes the existing rotated archives from initial discovery.
+- Five embedded Vector tests cover normalized events, missing optional fields, malformed payload handling, explicit removal of request and response objects, and impersonated identity.
+- VictoriaLogs contained parsed audit records from every control-plane node. Temporary ConfigMap and Role create/delete operations, an authorized Secret read, an impersonated authorization denial, and an invalid-token authentication failure were all observed.
+- Queries for `requestObject` and `responseObject` returned zero records. Malformed audit input omits its original text because content that cannot be parsed cannot be scrubbed safely.
+- The live impersonation denial retained `username="admin"` as the authenticated caller and `impersonated_username="system:serviceaccount:observability:default"` as the effective authorization subject.
+- OpenTofu workflow run `29733869644` applied the Talos audit configuration successfully. Flux applied Vector Helm revisions 8 and 9, and the final Agent rollout completed across all four nodes with zero repeated restarts.
+- Concurrent kube-apiserver refresh briefly caused in-cluster API connection refusals and restarts of kube-state-metrics and the VictoriaMetrics operator. Both recovered after API availability returned, and the final cluster and observability workloads were healthy.
+
 ## VictoriaLogs acceptance
 
 Acceptance completed on 2026-07-17:
@@ -90,12 +103,11 @@ Acceptance completed on 2026-07-17:
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Add metadata-only Kubernetes API audit logging through the supported Talos audit-file path.
-2. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-3. Add the read-only Proxmox exporter and Blackbox Exporter probes.
-4. Add focused dashboards, actionable alert rules, inhibition, derived Vector throttle-drop alerting, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
-5. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
-6. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
+1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
+2. Add the read-only Proxmox exporter and Blackbox Exporter probes.
+3. Add focused dashboards, actionable alert rules, inhibition, derived Vector throttle-drop alerting, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
+4. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
+5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
