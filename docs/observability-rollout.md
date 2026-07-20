@@ -87,6 +87,18 @@ Acceptance completed on 2026-07-20. PRs #101 and #102 introduced metadata-only K
 - OpenTofu workflow run `29733869644` applied the Talos audit configuration successfully. Flux applied Vector Helm revisions 8 and 9, and the final Agent rollout completed across all four nodes with zero repeated restarts.
 - Concurrent kube-apiserver refresh briefly caused in-cluster API connection refusals and restarts of kube-state-metrics and the VictoriaMetrics operator. Both recovered after API availability returned, and the final cluster and observability workloads were healthy.
 
+## Blackbox acceptance
+
+Acceptance completed on 2026-07-20. PRs #106 and #107 introduced the exporter and corrected DNS egress after observing Cilium's in-cluster LoadBalancer translation:
+
+- Flux `observability-blackbox` applied Git revision `2a41358` and reported Ready. Blackbox Exporter 0.28.0 ran on the general-purpose worker from its pinned multi-architecture digest with zero restarts.
+- VMSingle reported `up=1` for the exporter self-scrape and both probe scrape jobs with stable `cluster="sk-talos"` and `site="sk"` labels.
+- The MikroTik gateway IPv4 ICMP probe reported `probe_success=1` for logical instance `mikrotik-gw`.
+- The Blocky DNS probe queried `gw.bohdal.name` through client-facing VIP `10.1.30.53`, required the expected `10.1.100.1` answer, and reported `probe_success=1` for logical instance `blocky`.
+- The first DNS attempts timed out because Cilium translated the VIP to Blocky pod port 1053 before egress enforcement. The accepted policy retains the VIP rule and permits only Blocky pods in `dns-system` on UDP/TCP 1053.
+- Recent exporter logs contained no errors after the policy correction. Current probe-duration samples were below one millisecond, and exporter self-metrics reported approximately 28.3 MiB resident memory.
+- The Kubernetes Metrics API was unavailable during acceptance, so resource evidence came from the exporter's VMSingle process metrics rather than `kubectl top`.
+
 ## VictoriaLogs acceptance
 
 Acceptance completed on 2026-07-17:
@@ -104,7 +116,7 @@ Acceptance completed on 2026-07-17:
 Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-2. Add the read-only Proxmox exporter and Blackbox Exporter probes.
+2. Add the read-only Proxmox exporter, then add Grafana HTTPS and one explicitly selected stable external HTTPS target to Blackbox Exporter.
 3. Add focused dashboards, actionable alert rules, inhibition, derived Vector throttle-drop alerting, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
 4. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
 5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
