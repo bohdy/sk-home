@@ -52,7 +52,9 @@ Replace each placeholder ID only after creating the named Bitwarden item. The Se
 
 ## Target Gate
 
-Before wiring this component into Flux, commit one `VMStaticScrape` endpoint per confirmed device. Each endpoint must state the stable device name, management address, exporter module, auth profile, polling interval, and `always-on` or `intermittent` availability class. Do not infer missing addresses or scan a subnet.
+`targets.yaml` is the explicit external-device inventory. It records stable identity, management address, modules, auth profile, polling interval, availability class, address stability, and deployment blockers. A disabled entry is documentation only and must not produce a scrape endpoint.
+
+Before wiring this component into Flux, remove every target blocker and add one `VMStaticScrape` endpoint per enabled device. Do not infer missing addresses or scan a subnet.
 
 Perform narrow discovery of `sysName.0`, `sysDescr.0`, and `sysObjectID.0` from the confirmed seed list before finalizing modules. Use a 60-second interval for ordinary network devices, 30 seconds for APC UPS devices, and suppress offline alerts for the intermittent Brother printer.
 

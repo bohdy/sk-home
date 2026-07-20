@@ -1,0 +1,120 @@
+# This explicit inventory is the source of truth for external SNMP polling.
+# A target becomes scrapeable only after every blocker is removed and enabled
+# is set to true in the same change that adds its VMStaticScrape endpoint.
+schema_version: 1
+targets:
+  - name: mikrotik-gw
+    address: 10.1.100.1
+    vendor: mikrotik
+    modules:
+      - system
+      - if_mib
+      - mikrotik
+    interval: 60s
+    availability: always-on
+    address_stability: static
+    auth_profile: snmp_v2
+    enabled: false
+    blockers:
+      # Live inspection confirmed read-only v2c, but its current ACL includes
+      # 0.0.0.0/0 and must be narrowed to the accepted 10.0.0.0/8 boundary.
+      - narrow-snmp-acl
+      - bootstrap-v2-secret
+
+  - name: synology
+    address: 10.1.100.10
+    vendor: synology
+    modules:
+      - system
+      - if_mib
+      - synology
+    interval: 60s
+    availability: always-on
+    address_stability: static
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - confirm-auth-profile
+      - bootstrap-auth-secret
+
+  - name: unifi-ap-1pp
+    address: 10.1.102.10
+    vendor: ubiquiti
+    modules:
+      - system
+      - if_mib
+      - ubiquiti_unifi
+    interval: 60s
+    availability: always-on
+    address_stability: static-dhcp
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - confirm-auth-profile
+      - bootstrap-auth-secret
+
+  - name: unifi-ap-1np
+    address: 10.1.102.11
+    vendor: ubiquiti
+    modules:
+      - system
+      - if_mib
+      - ubiquiti_unifi
+    interval: 60s
+    availability: always-on
+    address_stability: static-dhcp
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - confirm-auth-profile
+      - bootstrap-auth-secret
+
+  - name: unifi-ap-temp
+    address: 10.1.102.12
+    vendor: ubiquiti
+    modules:
+      - system
+      - if_mib
+      - ubiquiti_unifi
+    interval: 60s
+    availability: always-on
+    address_stability: static-dhcp
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - confirm-target-scope
+      - confirm-auth-profile
+      - bootstrap-auth-secret
+
+  - name: apc-ups
+    address: 10.1.10.43
+    vendor: apc
+    modules:
+      - system
+      - ups_mib
+      - apcups
+    interval: 30s
+    availability: always-on
+    address_stability: dynamic-dhcp
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - create-static-reservation
+      - confirm-auth-profile
+      - bootstrap-auth-secret
+
+  - name: brother-printer
+    address: 10.1.10.13
+    vendor: brother
+    modules:
+      - system
+      - printer_mib
+    interval: 60s
+    availability: intermittent
+    address_stability: dynamic-dhcp
+    auth_profile: pending
+    enabled: false
+    blockers:
+      - create-static-reservation
+      - confirm-auth-profile
+      - bootstrap-auth-secret
