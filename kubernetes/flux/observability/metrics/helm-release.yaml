@@ -32,6 +32,12 @@ spec:
 
     defaultRules:
       create: true
+      # count:up0 intentionally emits no samples while every scrape target is
+      # healthy, so the generic no-data detector produces a permanent false
+      # positive for that valid state.
+      rules:
+        RecordingRulesNoData:
+          enabled: false
       # Talos keeps scheduler and controller-manager metrics private. Disable
       # rules that otherwise report those intentionally absent jobs forever.
       groups:
