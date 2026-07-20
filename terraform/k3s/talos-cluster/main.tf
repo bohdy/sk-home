@@ -92,6 +92,19 @@ data "talos_machine_configuration" "control_plane" {
         }
         apiServer = {
           certSANs = local.api_server_cert_sans
+          # Metadata captures authentication, authorization, and mutation
+          # outcomes without persisting request or response bodies. Omitting
+          # RequestReceived avoids a duplicate event before the outcome exists.
+          auditPolicy = {
+            apiVersion = "audit.k8s.io/v1"
+            kind       = "Policy"
+            rules = [
+              {
+                level      = "Metadata"
+                omitStages = ["RequestReceived"]
+              },
+            ]
+          }
         }
       }
     }),

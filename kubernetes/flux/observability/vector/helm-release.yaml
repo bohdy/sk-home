@@ -69,6 +69,18 @@ spec:
         enabled: true
         path: /var/lib/vector
 
+    # Talos writes kube-apiserver audit JSON to this host directory. Mount only
+    # the audit subtree, read-only, rather than broadening the existing log
+    # mount contract.
+    extraVolumes:
+      - name: kubernetes-audit
+        hostPath:
+          path: /var/log/audit/kube
+    extraVolumeMounts:
+      - name: kubernetes-audit
+        mountPath: /var/log/audit/kube
+        readOnly: true
+
     containerPorts:
       - name: prom-exporter
         containerPort: 9598
@@ -136,6 +148,16 @@ spec:
           framing:
             method: newline_delimited
           max_length: 262144
+        # Talos rotates one JSON-lines audit stream on each control-plane node.
+        # Vector checkpoints file offsets in its existing node-local data_dir.
+        kubernetes_audit:
+          type: file
+          include:
+            # Follow the active file across rotation without backfilling Talos'
+            # retained 100 MiB timestamped archives on first deployment.
+            - /var/log/audit/kube/kube-apiserver.log
+          read_from: beginning
+          max_line_bytes: 1048576
       transforms:
         exclude_annotated:
           type: filter
@@ -279,6 +301,54 @@ spec:
               .sender_timestamp = sender_timestamp
             }
             .timestamp = received_at
+        normalize_kubernetes_audit:
+          type: remap
+          inputs:
+            - kubernetes_audit
+          source: |
+            received_at = now()
+            collector_node = get_env_var("VECTOR_SELF_NODE_NAME") ?? "unknown"
+            raw_message = to_string(.message) ?? encode_json(.message)
+            parsed, parse_error = parse_json(raw_message)
+
+            if parse_error == null && is_object(parsed) {
+              . = merge(., object!(parsed))
+              .parse_status = "parsed"
+              .sensitive_fields_removed = exists(.requestObject) || exists(.responseObject)
+              del(.requestObject)
+              del(.responseObject)
+              del(.message)
+            } else {
+              .parse_status = "unparsed"
+              .parse_error = if parse_error == null {
+                "Kubernetes audit record is not a JSON object"
+              } else {
+                to_string(parse_error)
+              }
+              # An unparseable payload cannot be scrubbed safely.
+              .message = "Unparseable Kubernetes audit record omitted"
+            }
+
+            .cluster = "sk-talos"
+            .site = "sk"
+            .source_type = "kubernetes_audit"
+            .node = collector_node
+            .received_at = received_at
+            if .parse_status == "parsed" {
+              .audit_stage = to_string(.stage) ?? "unknown"
+              .verb = to_string(.verb) ?? "unknown"
+              .namespace = to_string(.objectRef.namespace) ?? ""
+              .resource = to_string(.objectRef.resource) ?? ""
+              .resource_name = to_string(.objectRef.name) ?? ""
+              .username = to_string(.user.username) ?? "unknown"
+              .response_code = to_int(.responseStatus.code) ?? 0
+              sender_timestamp, timestamp_error = parse_timestamp(to_string(.stageTimestamp) ?? "", format: "%+")
+              if timestamp_error == null {
+                .sender_timestamp = sender_timestamp
+              }
+              .message = encode_json(.)
+            }
+            .timestamp = received_at
       # Unit tests exercise the normalization contract without opening sockets
       # or depending on the live VictoriaLogs backend.
       tests:
@@ -340,6 +410,41 @@ spec:
                     assert_eq!(.raw_message, "not-json")
                     assert_eq!(.message, "not-json")
                     assert!(exists(.parse_error))
+        - name: scrub Kubernetes audit bodies
+          inputs:
+            - insert_at: normalize_kubernetes_audit
+              type: log
+              log_fields:
+                message: '{"apiVersion":"audit.k8s.io/v1","kind":"Event","level":"RequestResponse","auditID":"test-audit-id","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/secrets/example","verb":"get","user":{"username":"acceptance-user"},"objectRef":{"resource":"secrets","namespace":"default","name":"example"},"responseStatus":{"code":200},"requestObject":{"data":{"password":"top-secret"}},"responseObject":{"data":{"password":"top-secret"}},"stageTimestamp":"2026-07-20T20:00:00Z"}'
+          outputs:
+            - extract_from: normalize_kubernetes_audit
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "parsed")
+                    assert_eq!(.source_type, "kubernetes_audit")
+                    assert_eq!(.node, "vector-test-node")
+                    assert_eq!(.resource, "secrets")
+                    assert_eq!(.response_code, 200)
+                    assert_eq!(.sensitive_fields_removed, true)
+                    assert!(!exists(.requestObject))
+                    assert!(!exists(.responseObject))
+                    assert!(!contains(to_string!(.message), "top-secret"))
+        - name: omit malformed Kubernetes audit payload
+          inputs:
+            - insert_at: normalize_kubernetes_audit
+              type: log
+              log_fields:
+                message: 'not-json-with-top-secret'
+          outputs:
+            - extract_from: normalize_kubernetes_audit
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "unparsed")
+                    assert_eq!(.message, "Unparseable Kubernetes audit record omitted")
+                    assert!(!contains(to_string!(.message), "top-secret"))
+                    assert!(exists(.parse_error))
       sinks:
         victoria_logs:
           type: http
@@ -347,6 +452,7 @@ spec:
             - normalize_kubernetes
             - normalize_syslog
             - parse_talos
+            - normalize_kubernetes_audit
           uri: http://victoria-logs.observability.svc.cluster.local.:9428/insert/jsonline?_stream_fields=cluster,site,source_type,namespace,workload,pod,container,node,device,facility,severity,transport,talos_stream,service&_time_field=timestamp&_msg_field=message
           method: post
           compression: gzip
@@ -372,11 +478,13 @@ spec:
             - internal_metrics
           address: 0.0.0.0:9598
 
-    # Vector needs read access to Kubernetes log files but no added Linux
-    # capabilities or writable root filesystem.
+    # DAC_READ_SEARCH is the capability Talos documents for reading audit files
+    # written by the kube-apiserver nobody user. No write capability is added.
     securityContext:
       allowPrivilegeEscalation: false
       capabilities:
+        add:
+          - DAC_READ_SEARCH
         drop:
           - ALL
       readOnlyRootFilesystem: true
