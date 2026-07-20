@@ -34,9 +34,9 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Add SNMP Exporter with a committed target inventory and reviewed vendor-specific modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printers.
-2. Bootstrap the required SNMPv2c and SNMPv3 credentials from dedicated Bitwarden Secrets Manager items without committing or logging their values.
-3. Verify every configured device, intermittent-printer behavior, collector health, stable target labels, and resource use before proceeding to the Proxmox and Blackbox exporters.
+1. Create dedicated Telegram and Discord Bitwarden items, bootstrap the notification Secret without committing or logging its values, and replace the Alertmanager blackhole with severity-based routes.
+2. Run synthetic notification tests for critical, warning, recovery, grouping, and inhibition behavior, then expire every test alert.
+3. Bootstrap the required SNMPv2c and SNMPv3 credentials, resolve the committed inventory blockers, deploy the prepared SNMP Exporter component, and verify every enabled device.
 
 ## Vector acceptance
 
@@ -99,6 +99,20 @@ Acceptance completed on 2026-07-20. PRs #106 and #107 introduced the exporter an
 - Recent exporter logs contained no errors after the policy correction. Current probe-duration samples were below one millisecond, and exporter self-metrics reported approximately 28.3 MiB resident memory.
 - The Kubernetes Metrics API was unavailable during acceptance, so resource evidence came from the exporter's VMSingle process metrics rather than `kubectl top`.
 
+## Alerting acceptance
+
+Acceptance completed on 2026-07-20. PRs #109 and #110 introduced local coverage, bounded Alertmanager behavior, and a correction for one invalid upstream meta-alert:
+
+- Flux `observability-alerting` and `observability-metrics` reported Ready at Git revision `6d4a4e5`; the metrics Helm release upgraded successfully to revision 5.
+- All four Flux controller targets and the cert-manager controller reported `up=1`. The local VMRule was operational, every local rule evaluated with health `ok`, and no local warning or critical alert was unexpectedly active.
+- Local rules cover sustained Blackbox failure, derived Vector syslog throttle drops, Vector discarded events and buffer pressure, VictoriaLogs dropped rows and read-only storage, Flux reconciliation failure, and certificate expiry.
+- Talos-only scheduler and controller-manager rules were disabled because their private metrics endpoints are intentionally unavailable. The resulting false `KubeSchedulerDown` and `KubeControllerManagerDown` alerts cleared.
+- The chart's generic `RecordingRulesNoData` alert was disabled because `count:up0` correctly emits no sample while every target is healthy. The other 248 live rules remained loaded after the change, and the stale false alert cleared from Alertmanager.
+- The live Alertmanager configuration passed `amtool` validation with one blackhole receiver and three inhibition rules. A temporary matching critical and warning pair proved that the warning was suppressed while the critical remained active; both test alerts were then expired.
+- Grafana provisioned exactly one read-only Alertmanager data source. Its server-side proxy reached Alertmanager 0.32.1 successfully; the generic health endpoint is not implemented for Grafana's built-in Alertmanager data-source type and returns `plugin.unavailable`.
+- All serving metrics pods were Ready after reconciliation. Grafana and node exporters had zero restarts; kube-state-metrics and the operator retained historical restart counts from the earlier Kubernetes API audit rollout.
+- Notification delivery remains intentionally disabled. Telegram critical delivery and Discord critical-and-warning delivery require dedicated Bitwarden credentials, a securely bootstrapped Kubernetes Secret, restricted egress, and synthetic delivery and recovery tests.
+
 ## VictoriaLogs acceptance
 
 Acceptance completed on 2026-07-17:
@@ -117,7 +131,7 @@ Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
 2. Add the read-only Proxmox exporter, then add Grafana HTTPS and one explicitly selected stable external HTTPS target to Blackbox Exporter.
-3. Add focused dashboards, actionable alert rules, inhibition, derived Vector throttle-drop alerting, Telegram delivery for critical alerts, Discord delivery for critical and warning alerts, and no push delivery for info alerts.
+3. Add Telegram delivery for critical alerts and Discord delivery for critical and warning alerts; retain info alerts in Alertmanager and Grafana without push delivery.
 4. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
 5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
