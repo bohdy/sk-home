@@ -48,7 +48,7 @@ data "talos_machine_configuration" "control_plane" {
           # The node tag supplies stable identity independently of sender IP.
           destinations = [
             {
-              endpoint = var.talos_log_endpoint
+              endpoint = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
               format   = "json_lines"
               extraTags = {
                 node = each.value.hostname
@@ -109,7 +109,7 @@ data "talos_machine_configuration" "control_plane" {
       apiVersion = "v1alpha1"
       kind       = "KmsgLogConfig"
       name       = "observability"
-      url        = var.talos_log_endpoint
+      url        = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
     }),
   ]
 }
@@ -140,7 +140,7 @@ data "talos_machine_configuration" "worker" {
           # control planes so one Vector pipeline covers the whole cluster.
           destinations = [
             {
-              endpoint = var.talos_log_endpoint
+              endpoint = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
               format   = "json_lines"
               extraTags = {
                 node = each.value.hostname
@@ -191,7 +191,7 @@ data "talos_machine_configuration" "worker" {
       apiVersion = "v1alpha1"
       kind       = "KmsgLogConfig"
       name       = "observability"
-      url        = var.talos_log_endpoint
+      url        = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
     }),
   ]
 }

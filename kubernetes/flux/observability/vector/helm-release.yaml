@@ -35,9 +35,9 @@ spec:
       cluster: sk-talos
       site: sk
 
-    # Talos kernel records do not include the service-log extraTags. With the
-    # Local LoadBalancer policy, each node reaches its local Vector Agent, so
-    # the Downward API provides the stable identity for those records.
+    # Talos kernel records do not include the service-log extraTags. Each node
+    # targets its own hostPort, so the Downward API provides the stable identity
+    # for records received by that node's Vector Agent.
     extraEnv:
       - name: VECTOR_SELF_NODE_NAME
         valueFrom:
@@ -81,6 +81,9 @@ spec:
         protocol: UDP
       - name: talos-logs
         containerPort: 6051
+        # Talos connects to its own management address, bypassing Kubernetes
+        # Service load balancing so untagged kernel logs remain node-local.
+        hostPort: 6051
         protocol: TCP
 
     service:

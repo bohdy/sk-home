@@ -1,5 +1,5 @@
-# Cilium advertises one fixed logging VIP over BGP. Local traffic policy is a
-# hard requirement because syslog and Talos records must retain the sender IP.
+# Cilium advertises one fixed syslog VIP over BGP. Local traffic policy is a
+# hard requirement because RFC syslog records must retain the sender IP.
 apiVersion: v1
 kind: Service
 metadata:
@@ -24,9 +24,3 @@ spec:
       port: 514
       targetPort: syslog-udp
       protocol: UDP
-    # Talos service and kernel logs use JSON lines on a dedicated TCP stream so
-    # they cannot be mistaken for RFC syslog by the adjacent listeners.
-    - name: talos-logs
-      port: 6051
-      targetPort: talos-logs
-      protocol: TCP
