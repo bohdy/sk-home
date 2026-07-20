@@ -1,0 +1,43 @@
+# Cilium policy supports the ICMP rule that standard Kubernetes NetworkPolicy
+# cannot express, while also placing the selected pod in ingress/egress deny.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blackbox-exporter
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: vmagent
+      toPorts:
+        - ports:
+            - port: "9115"
+              protocol: TCP
+    # Kubelet probes may originate from the local or another cluster node.
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9115"
+              protocol: TCP
+  egress:
+    - toCIDR:
+        - 10.1.100.1/32
+      icmps:
+        - fields:
+            - family: IPv4
+              type: EchoRequest
+    - toCIDR:
+        - 10.1.30.53/32
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            # Permit TCP fallback if a future valid response is truncated.
+            - port: "53"
+              protocol: TCP

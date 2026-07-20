@@ -1,0 +1,19 @@
+# Content-hash the probe configuration so reviewed module changes trigger a
+# deterministic Deployment rollout.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - network-policy.yaml
+  - vm-service-scrape.yaml
+  - vm-static-scrapes.yaml
+configMapGenerator:
+  - name: blackbox-exporter-config
+    namespace: observability
+    files:
+      - config.yml=config.yaml
+generatorOptions:
+  labels:
+    app.kubernetes.io/name: blackbox-exporter
+    app.kubernetes.io/component: synthetic-monitoring

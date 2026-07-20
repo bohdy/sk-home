@@ -6,3 +6,4 @@ resources:
   - metrics-kustomization.yaml
   - logs-kustomization.yaml
   - vector-kustomization.yaml
+  - blackbox-kustomization.yaml

@@ -102,7 +102,7 @@ The staged observability workloads live under `kubernetes/flux/observability`. T
 
 The metrics component README documents the Grafana credential bootstrap, retained storage, validation, and rollback requirements. The dependent `logs` component deploys VictoriaLogs and provisions Grafana's pinned log data source. The `vector` component collects node-local Kubernetes, Talos, audit, and external syslog records with bounded buffers and source exclusions.
 
-The reusable `snmp` component pins SNMP Exporter and its reviewed generated vendor modules, but remains outside the live Flux tree until the explicit target inventory and Bitwarden-backed credential Secret are complete. Proxmox and Blackbox exporters, public Grafana routing, and notification delivery remain later dependency-ordered components.
+The reusable `snmp` component pins SNMP Exporter and its reviewed generated vendor modules, but remains outside the live Flux tree until the explicit target inventory and Bitwarden-backed credential Secret are complete. The independent `blackbox` component performs confirmed gateway ICMP and Blocky DNS probes through VMAgent. Proxmox export, remaining synthetic targets, public Grafana routing, and notification delivery remain later dependency-ordered work.
 
 Use `docs/observability-rollout.md` as the resumable deployment checkpoint and update it after each accepted stage.
 
