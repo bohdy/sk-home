@@ -1,0 +1,425 @@
+---
+# This input selects the reviewed upstream v0.30.1 modules used by the homelab.
+# Regeneration requires the MIB sources and versions documented in README.md.
+auths:
+  snmp_v2:
+    community: ${SNMP_V2_COMMUNITY}
+    security_level: noAuthNoPriv
+    auth_protocol: MD5
+    priv_protocol: DES
+    version: 2
+  snmp_v3:
+    username: ${SNMP_V3_USERNAME}
+    security_level: authPriv
+    password: ${SNMP_V3_AUTH_PASSWORD}
+    auth_protocol: SHA256
+    priv_password: ${SNMP_V3_PRIV_PASSWORD}
+    priv_protocol: AES
+    version: 3
+modules:
+  # SNMPv2-MIB for things like sysDescr, sysUpTime, etc.
+  system:
+    walk:
+      - "SNMPv2-MIB::system"
+    lookups:
+      - source_indexes: [sysORIndex]
+        lookup: "SNMPv2-MIB::sysORDescr"
+  # Default IF-MIB interfaces table with ifIndex.
+  if_mib:
+    walk:
+      - "IF-MIB::interfaces"
+      - "IF-MIB::ifXTable"
+    lookups:
+      - source_indexes: [ifIndex]
+        lookup: "IF-MIB::ifAlias"
+      - source_indexes: [ifIndex]
+        # Disambiguate from PaloAlto PAN-COMMON-MIB::ifDescr.
+        lookup: "IF-MIB::ifDescr"
+      - source_indexes: [ifIndex]
+        # Disambiguate from Netscaler NS-ROOT-MIB::ifName.
+        lookup: "IF-MIB::ifName"
+    overrides:
+      ifAlias:
+        ignore: true # Lookup metric
+      ifDescr:
+        ignore: true # Lookup metric
+      ifName:
+        ignore: true # Lookup metric
+      ifType:
+        type: EnumAsInfo
+  apcups:
+    walk:
+      - PowerNet-MIB::upsBattery # 1.3.6.1.4.1.318.1.1.1.2
+      - PowerNet-MIB::upsInput # 1.3.6.1.4.1.318.1.1.1.3
+      - PowerNet-MIB::upsOutput # 1.3.6.1.4.1.318.1.1.1.4
+      - PowerNet-MIB::upsAdvTest # 1.3.6.1.4.1.318.1.1.1.7.2
+      - PowerNet-MIB::upsComm # 1.3.6.1.4.1.318.1.1.1.8
+      - 1.3.6.1.4.1.318.1.1.1.12 # upsOutletGroups
+      - 1.3.6.1.4.1.318.1.1.10.2.3.2 # iemStatusProbesTable
+      - 1.3.6.1.4.1.318.1.1.26.4.3 # rPDU2DeviceStatusTable
+      - 1.3.6.1.4.1.318.1.1.26.6.3 # rPDU2PhaseStatusTable
+      - 1.3.6.1.4.1.318.1.1.26.8.3 # rPDU2BankStatusTable
+      - 1.3.6.1.4.1.318.1.1.26.10.2.2 # rPDU2SensorTempHumidityStatusTable
+    lookups:
+      - source_indexes: [upsOutletGroupStatusIndex]
+        lookup: upsOutletGroupStatusName
+        drop_source_indexes: true
+      - source_indexes: [iemStatusProbeIndex]
+        lookup: iemStatusProbeName
+        drop_source_indexes: true
+    overrides:
+      rPDU2BankStatusLoadState:
+        type: EnumAsStateSet
+      upsAdvBatteryCondition:
+        type: EnumAsStateSet
+      upsAdvBatteryChargingCurrentRestricted:
+        type: EnumAsStateSet
+      upsAdvBatteryChargerStatus:
+        type: EnumAsStateSet
+      upsHighPrecBatteryPackIndex:
+        ignore: true
+      upsHighPrecBatteryCartridgeIndex:
+        ignore: true
+      upsHighPrecBatteryExtraIndex:
+        ignore: true
+      upsHighPrecBatteryPackTemperature:
+        scale: 0.1
+        help: The battery pack temperature measured in degrees Celcius
+      upsBasicBatteryStatus_seconds:
+        scale: 0.01
+      upsHighPrecBatteryCapacity:
+        scale: 0.1
+        help: The remaining battery capacity expressed in percent of full capacity - 1.3.6.1.4.1.318.1.1.1.2.2.1
+      upsHighPrecBatteryActualVoltage:
+        scale: 0.1
+        help: The actual battery bus voltage in Volts. - 1.3.6.1.4.1.318.1.1.1.2.3.4
+      upsAdvBatteryRunTimeRemaining:
+        name: upsAdvBatteryRunTimeRemaining_seconds
+        scale: 0.01
+      upsHighPrecBatteryTemperature:
+        scale: 0.1
+        help: The current internal UPS temperature expressed in degrees Celsius - 1.3.6.1.4.1.318.1.1.1.2.3.2
+      upsAdvBatteryReplaceIndicator:
+        name: upsAdvBattery_needsreplacing
+        help: Indicates whether the UPS batteries need replacing. - 1.3.6.1.4.1.318.1.1.1.2.2.4
+        offset: -1.0
+      upsBasicBatteryStatus:
+        type: EnumAsStateSet
+      upsBasicBatteryTimeOnBattery:
+        name: upsBasicBatteryTimeOnBattery_seconds
+        scale: 0.01
+      upsAdvInputLineFailCause:
+        type: EnumAsStateSet
+      upsHighPrecInputFrequency:
+        scale: 0.1
+        help: The current input frequency to the UPS system in Hz. - 1.3.6.1.4.1.318.1.1.1.3.3.4
+      upsHighPrecInputLineVoltage:
+        scale: 0.1
+        help: The current utility line voltage in VAC
+      upsHighPrecInputMaxLineVoltage:
+        scale: 0.1
+        help: The maximum utility line voltage in VAC over the previous 1 minute period. - 1.3.6.1.4.1.318.1.1.1.3.3.2
+      upsHighPrecInputMinLineVoltage:
+        scale: 0.1
+        help: The minimum utility line voltage in VAC over the previous 1 minute period. - 1.3.6.1.4.1.318.1.1.1.3.3.3
+      upsHighPrecOutputCurrent:
+        scale: 0.1
+        help: The current in amperes drawn by the load on the UPS. - 1.3.6.1.4.1.318.1.1.1.4.3.4
+      upsHighPrecOutputEfficiency:
+        scale: 0.1
+        help: The positive values represent efficiency of the UPS in percent - 1.3.6.1.4.1.318.1.1.1.4.3.5
+      upsHighPrecOutputEnergyUsage:
+        scale: 0.01
+        help: The output energy usage of the UPS in kWh. - 1.3.6.1.4.1.318.1.1.1.4.3.6
+      upsHighPrecOutputFrequency:
+        scale: 0.1
+        help: The current output frequency of the UPS system in Hz. - 1.3.6.1.4.1.318.1.1.1.4.3.2
+      upsHighPrecOutputLoad:
+        scale: 0.1
+        help: The current UPS load expressed in percent of rated capacity. - 1.3.6.1.4.1.318.1.1.1.4.3.3
+      upsHighPrecOutputVoltage:
+        scale: 0.1
+        help: The output voltage of the UPS system in VAC. - 1.3.6.1.4.1.318.1.1.1.4.3.1
+      upsBasicOutputStatus:
+        type: EnumAsStateSet
+      upsAdvTestCalibrationResults:
+        type: EnumAsInfo
+      upsAdvTestDiagnosticSchedule:
+        type: EnumAsInfo
+      upsAdvTestDiagnosticsResults:
+        type: EnumAsInfo
+      upsAdvTestDiagnostics:
+        ignore: true
+      upsAdvTestRuntimeCalibration:
+        ignore: true
+      upsAdvTestDiagnosticTime:
+        ignore: true
+      upsAdvTestDiagnosticDay:
+        ignore: true
+      upsAdvTestBatteryInterval:
+        ignore: true
+      upsCommStatus:
+        name: upsCommStatus_ok
+        help: The status of agent's communication with UPS. 1=ok, 0=noComm
+        scale: -1.0
+        offset: 2.0
+      upsHighPrecBatteryNominalVoltage:
+        scale: 0.1
+        help: The nominal battery voltage in Volts. - 1.3.6.1.4.1.318.1.1.1.2.3.3
+      upsHighPrecBatteryCurrent:
+        scale: 0.1
+        help: The battery current in Amps - 1.3.6.1.4.1.318.1.1.1.2.3.5
+      upsHighPrecTotalDCCurrent:
+        scale: 0.1
+        help: The total DC current in Amps. - 1.3.6.1.4.1.318.1.1.1.2.3.6
+      upsHighPrecBatteryVoltage:
+        scale: 0.1
+        help: The actual battery bus voltage expressed as Volts - 1.3.6.1.4.1.318.1.1.1.2.3.7.1.3
+      upsHighPrecTotalDCFrameCurrent:
+        scale: 0.1
+        help: The total DC current in Amperes. - 1.3.6.1.4.1.318.1.1.1.2.3.8.1.3
+      upsHighPrecBatteryFrameCurrent:
+        scale: 0.1
+        help: The Battery current in Amperes. - 1.3.6.1.4.1.318.1.1.1.2.3.9.1.4
+      upsHighPrecActivePower:
+        scale: 0.1
+        help: Active Power of Battery in kW - 1.3.6.1.4.1.318.1.1.1.2.3.12
+      upsHighPrecExtdBatteryTemperature:
+        scale: 0.1
+        help: The current internal UPS temperature expressed in degrees Celsius
+      upsHighPrecMaximumModuleTemperature:
+        scale: 0.1
+        help: The current maximum temperature across all battery modules in degrees Celsius - 1.3.6.1.4.1.318.1.1.1.2.3.14
+      upsHighPrecMinimumModuleTemperature:
+        scale: 0.1
+        help: The current minimum temperature across all battery modules in degrees Celsius - 1.3.6.1.4.1.318.1.1.1.2.3.15
+      upsBatteryCabinetTemperature:
+        scale: 0.1
+        help: The measured temperature of the battery cabinet in degrees Celcius - 1.3.6.1.4.1.318.1.1.1.2.5.1.8
+      upsBatteryCabinetMaxTemperature:
+        scale: 0.1
+        help: The highest temperature measured for the battery in the battery cabinet in degrees Celcius - 1.3.6.1.4.1.318.1.1.1.2.5.1.9
+      upsBatteryCabinetMinTemperature:
+        scale: 0.1
+        help: The lowest temperature measured for the battery in the battery cabinet in degrees Celcius - 1.3.6.1.4.1.318.1.1.1.2.5.1.10
+      upsBatteryCabStringCurrent:
+        scale: 0.1
+        help: The current in a battery string or battery halfstring, in  Amps - 1.3.6.1.4.1.318.1.1.1.2.6.1.4
+      upsBatteryCabStringAverageTemperature:
+        scale: 0.1
+        help: Temperature of the battery string or the average of the aggregated temperature of each battery block/module (in degrees Celcius) - 1.3.6.1.4.1.318.1.1.1.2.6.1.5
+      upsBatteryCabStringMaxTemperature:
+        scale: 0.1
+        help: The actual highest battery temperature measurement for the battery blocks/modules (in degrees Celcius). - 1.3.6.1.4.1.318.1.1.1.2.6.1.6
+      upsBatteryCabStringMinTemperature:
+        scale: 0.1
+        help: The actual lowest battery temperature measurement for the battery blocks/modules (in degrees Celcius). - 1.3.6.1.4.1.318.1.1.1.2.6.1.7
+      upsBatteryCabBlockTemperature:
+        scale: 0.1
+        help: The temperature for the battery block/module in degrees Celcius - 1.3.6.1.4.1.318.1.1.1.2.7.1.6
+      upsBatteryCabBlockCellTemperature:
+        scale: 0.1
+        help: The temperature for the battery cell in degrees Celcius - 1.3.6.1.4.1.318.1.1.1.2.8.1.5
+      upsHighPrecInputBypassVoltage:
+        scale: 0.1
+        help: The current bypass line voltage in VAC. - 1.3.6.1.4.1.318.1.1.1.3.3.6
+      upsHighPrecInputBypassFrequency:
+        scale: 0.1
+        help: The current input bypass frequency to the UPS system in Hz - 1.3.6.1.4.1.318.1.1.1.3.3.7
+      upsHighPrecInputDCVoltage:
+        scale: 0.1
+        help: The DC input voltage, in Volts on the inverter - 1.3.6.1.4.1.318.1.1.1.3.3.8
+      upsHighPrecInputDCCurrent:
+        scale: 0.1
+        help: The DC input current, in amperes, of the inverter. - 1.3.6.1.4.1.318.1.1.1.3.3.9
+      upsAdvOutputCrestFactor:
+        scale: 0.1
+        help: The output current crest factor - 1.3.6.1.4.1.318.1.1.1.4.2.10.1.4
+      upsAdvBatteryEstimatedChargeTime:
+        scale: 0.01
+        name: upsAdvBatteryEstimatedChargeTime_seconds
+        help: The estimated remaining time required to charge the UPS to a full state of charge - 1.3.6.1.4.1.318.1.1.1.2.2.15
+      upsHighPrecInputEnergyUsage:
+        scale: 0.01
+        help: The input energy usage of the UPS in kWh. - 1.3.6.1.4.1.318.1.1.1.3.3.5
+        # ServerTech Sentry 3 MIB
+        #
+        # Used by ServerTech PDUs
+        #
+        # ftp://ftp.servertech.com/Pub/SNMP/sentry3/Sentry3OIDTree.txt
+        # ftp://ftp.servertech.com/Pub/SNMP/sentry3/Sentry3.mib
+  synology:
+    walk:
+      - SYNOLOGY-SYSTEM-MIB::synoSystem # 1.3.6.1.4.1.6574.1
+      - SYNOLOGY-DISK-MIB::synoDisk # 1.3.6.1.4.1.6574.2
+      - SYNOLOGY-RAID-MIB::synoRaid # 1.3.6.1.4.1.6574.3
+      - SYNOLOGY-UPS-MIB::synoUPS # 1.3.6.1.4.1.6574.4
+      - SYNOLOGY-SMART-MIB::synologyDiskSMART # 1.3.6.1.4.1.6574.5
+      - SYNOLOGY-SERVICES-MIB::synologyService # 1.3.6.1.4.1.6574.6
+      - SYNOLOGY-STORAGEIO-MIB::storageIO # 1.3.6.1.4.1.6574.101
+      - SYNOLOGY-SPACEIO-MIB::spaceIO # 1.3.6.1.4.1.6574.102
+      - SYNOLOGY-ISCSILUN-MIB::synologyiSCSILUN # 1.3.6.1.4.1.6574.104
+    lookups:
+      - source_indexes: [spaceIOIndex]
+        lookup: spaceIODevice
+        drop_source_indexes: true
+      - source_indexes: [storageIOIndex]
+        lookup: storageIODevice
+        drop_source_indexes: true
+      - source_indexes: [serviceInfoIndex]
+        lookup: serviceName
+        drop_source_indexes: true
+      - source_indexes: [diskIndex]
+        lookup: diskID
+        drop_source_indexes: true
+      - source_indexes: [raidIndex]
+        lookup: raidName
+        drop_source_indexes: true
+    overrides:
+      SYNOLOGY-DISK-MIB::diskModel:
+        type: DisplayString
+      SYNOLOGY-DISK-MIB::diskType:
+        type: DisplayString
+      SYNOLOGY-RAID-MIB::raidFreeSize:
+        type: gauge
+      SYNOLOGY-RAID-MIB::raidName:
+        type: DisplayString
+      SYNOLOGY-RAID-MIB::raidTotalSize:
+        type: gauge
+      SYNOLOGY-SERVICES-MIB::serviceName:
+        type: DisplayString
+      SYNOLOGY-SMART-MIB::diskSMARTAttrName:
+        type: DisplayString
+      SYNOLOGY-SMART-MIB::diskSMARTAttrStatus:
+        type: DisplayString
+      SYNOLOGY-SMART-MIB::diskSMARTInfoDevName:
+        type: DisplayString
+      SYNOLOGY-SYSTEM-MIB::modelName:
+        type: DisplayString
+      SYNOLOGY-SYSTEM-MIB::serialNumber:
+        type: DisplayString
+      SYNOLOGY-SYSTEM-MIB::version:
+        type: DisplayString
+        # UCD-SNMP-MIB
+        #
+        # University of California, Davis extensions. Commonly used for host
+        # metrics. For example, Linux-based systems, DD-WRT, Synology,
+        # Mikrotik, Kemp LoadMaster, etc.
+        #
+        # http://www.net-snmp.org/docs/mibs/UCD-SNMP-MIB.txt
+        #
+  ubiquiti_unifi:
+    walk:
+      - 1.3.6.1.4.1.41112.1.6 # ubntUniFi
+    lookups:
+      - source_indexes: [unifiVapIndex]
+        lookup: unifiVapName
+      - source_indexes: [unifiVapIndex]
+        lookup: unifiVapEssId
+        # keepalived
+        #
+        # https://github.com/acassen/keepalived/blob/v2.3.4/doc/KEEPALIVED-MIB.txt
+        # https://github.com/acassen/keepalived/blob/v2.3.4/doc/VRRP-MIB.txt
+        # https://github.com/acassen/keepalived/blob/v2.3.4/doc/VRRPv3-MIB.txt
+  printer_mib:
+    walk:
+      - prtGeneralReset
+      - prtConsoleDisable
+      - prtGeneralPrinterName
+      - prtGeneralSerialNumber
+      - prtAlertCriticalEvents
+      - prtAlertAllEvents
+      - prtCoverStatus
+      - prtMarkerLifeCount
+      - prtMarkerPowerOnCount
+      - prtMarkerSuppliesDescription
+      - prtMarkerSuppliesLevel
+      - prtMarkerSuppliesMaxCapacity
+      - prtMarkerSuppliesType
+    lookups:
+      - source_indexes: [hrDeviceIndex, prtMarkerSuppliesIndex]
+        lookup: prtMarkerSuppliesType
+      - source_indexes: [hrDeviceIndex, prtMarkerSuppliesIndex]
+        lookup: prtMarkerSuppliesDescription
+    overrides:
+      prtGeneralReset:
+        type: EnumAsStateSet
+      prtConsoleDisable:
+        type: EnumAsStateSet
+      prtGeneralPrinterName:
+        type: DisplayString
+      prtGeneralSerialNumber:
+        type: DisplayString
+      prtCoverStatus:
+        type: EnumAsStateSet
+      prtMarkerSuppliesDescription:
+        type: DisplayString
+        # NEC IX Router
+        #
+        # https://jpn.nec.com/univerge/ix/Manual/MIB/PICO-SMI-MIB.txt
+        # https://jpn.nec.com/univerge/ix/Manual/MIB/PICO-SMI-ID-MIB.txt
+        # https://jpn.nec.com/univerge/ix/Manual/MIB/PICO-IPSEC-FLOW-MONITOR-MIB.txt
+  mikrotik:
+    walk:
+      - "MIKROTIK-MIB::mikrotik"
+    lookups:
+      - source_indexes: [ifIndex]
+        lookup: ifName
+      - source_indexes: [mtxrInterfaceStatsIndex]
+        lookup: ifName
+      - source_indexes: [mtxrGaugeIndex]
+        lookup: mtxrGaugeName
+        drop_source_indexes: true
+      - source_indexes: [mtxrNeighborIndex]
+        lookup: mtxrNeighborMacAddress
+        drop_source_indexes: true
+      - source_indexes: [mtxrNeighborIndex]
+        lookup: mtxrNeighborInterfaceID
+      - source_indexes: [mtxrNeighborInterfaceID]
+        lookup: ifName
+        drop_source_indexes: true
+      - source_indexes: [mtxrOpticalIndex]
+        lookup: mtxrOpticalName
+      - source_indexes: [mtxrPOEInterfaceIndex]
+        lookup: mtxrPOEName
+      - source_indexes: [mtxrPartitionIndex]
+        lookup: mtxrPartitionName
+      - source_indexes: [mtxrRemoteCapId]
+        lookup: mtxrRemoteCapIdentity
+        drop_source_indexes: true
+      - source_indexes: [mtxrWifiInterfacesId]
+        lookup: ifName
+        drop_source_indexes: true
+      - source_indexes: [mtxrWifiRegistrationInterface]
+        lookup: ifName
+        drop_source_indexes: true
+    overrides:
+      mtxrRemoteCapIdentity:
+        ignore: true # information is redundant
+      mtxrWifiInterfacesName:
+        ignore: true # information is redundant
+      mtxrWifiRegistrationMacAddress:
+        ignore: true # information is redundant
+        # CyberPower
+        #
+        # https://www.cyberpowersystems.com/product/software/mib-files/mib-v211/
+  ups_mib:
+    walk:
+      - "UPS-MIB::upsIdent"
+      - "UPS-MIB::upsBattery"
+      - "UPS-MIB::upsInput"
+      - "UPS-MIB::upsOutput"
+      - "UPS-MIB::upsBypass"
+      - "UPS-MIB::upsAlarm"
+      - "UPS-MIB::upsTest"
+      - "UPS-MIB::upsControl"
+      - "UPS-MIB::upsConfig"
+    overrides:
+      upsInputFrequency:
+        scale: 0.1
+      upsOutputFrequency:
+        scale: 0.1
+      upsBypassFrequency:
+        scale: 0.1
+      upsBatteryVoltage:
+        scale: 0.1

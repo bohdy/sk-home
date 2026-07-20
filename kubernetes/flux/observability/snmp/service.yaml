@@ -1,0 +1,19 @@
+# The exporter remains ClusterIP-only; VMAgent supplies each external target
+# through the /snmp query parameters defined by VMStaticScrape resources.
+apiVersion: v1
+kind: Service
+metadata:
+  name: snmp-exporter
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: snmp-exporter
+    app.kubernetes.io/component: network-monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: snmp-exporter
+  ports:
+    - name: http
+      port: 9116
+      targetPort: http
+      protocol: TCP
