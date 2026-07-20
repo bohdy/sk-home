@@ -1,0 +1,6 @@
+# Namespace ownership is independent of workloads so certificate and metrics
+# components can form an acyclic, rebuild-safe dependency graph.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml

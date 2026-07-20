@@ -3,6 +3,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - base-kustomization.yaml
   - metrics-kustomization.yaml
   - grafana-tls-kustomization.yaml
   - logs-kustomization.yaml
