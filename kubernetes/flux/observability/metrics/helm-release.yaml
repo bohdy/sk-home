@@ -32,6 +32,15 @@ spec:
 
     defaultRules:
       create: true
+      # Talos keeps scheduler and controller-manager metrics private. Disable
+      # rules that otherwise report those intentionally absent jobs forever.
+      groups:
+        kube-scheduler.rules:
+          enabled: false
+        kubernetes-system-controller-manager:
+          enabled: false
+        kubernetes-system-scheduler:
+          enabled: false
 
     defaultDatasources:
       # VictoriaLogs is a separate release, so provision its stable internal
@@ -46,7 +55,6 @@ spec:
           isDefault: false
           jsonData:
             maxLines: 200
-
     victoria-metrics-operator:
       enabled: true
       crds:
@@ -142,9 +150,38 @@ spec:
           group_by:
             - alertname
             - cluster
-          group_wait: 30s
-          group_interval: 5m
+            - site
+          group_wait: 1m
+          group_interval: 10m
           repeat_interval: 12h
+        # Prefer the most severe state when warning and critical thresholds for
+        # the same condition overlap.
+        inhibit_rules:
+          - source_matchers:
+              - severity="critical"
+            target_matchers:
+              - severity=~"warning|info"
+            equal:
+              - alertname
+              - cluster
+              - site
+          # A failed device probe makes future interface symptoms derivative.
+          - source_matchers:
+              - alertname="BlackboxProbeFailed"
+            target_matchers:
+              - alertname=~"SNMPInterfaceDown|SNMPInterfaceErrors"
+            equal:
+              - cluster
+              - site
+              - instance
+          # Read-only log storage explains downstream Vector buffer pressure.
+          - source_matchers:
+              - alertname="VictoriaLogsStorageReadOnly"
+            target_matchers:
+              - alertname=~"VectorBufferFilling|VectorBufferNearlyFull"
+            equal:
+              - cluster
+              - site
         receivers:
           - name: blackhole
 

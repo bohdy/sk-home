@@ -6,6 +6,8 @@ Stable labels are `cluster="sk-talos"` and `site="sk"`. General collection runs 
 
 Grafana and Alertmanager use retained 10 GiB and 1 GiB claims respectively. Grafana's Helm-managed claim carries the `helm.sh/resource-policy: keep` annotation so failed-install remediation and intentional Helm removal preserve it. All services remain cluster-internal in this change; TLS and the fixed LAN/Cloudflare route are separate acceptance-gated changes.
 
+Talos does not expose scheduler or controller-manager metric endpoints, so their default alert and recording-rule groups are explicitly disabled. Alertmanager groups by alert, cluster, and site with bounded delivery intervals. It inhibits lower severities for the same alert and contains dependency rules for future SNMP interface symptoms and VictoriaLogs-induced Vector buffer pressure. The stack's default data sources already expose Alertmanager in Grafana for silence management without a duplicate extra definition. Notification receivers remain the `blackhole` until their Bitwarden-backed Telegram and Discord credentials are bootstrapped.
+
 The shared namespace explicitly uses privileged Pod Security Admission because node exporter requires host namespaces and host mounts, and the later Vector DaemonSet requires host log mounts. This exception does not make every workload privileged; chart and local workload security contexts must still grant only the access each component requires.
 
 ## Grafana credential

@@ -1,0 +1,8 @@
+# Keep scrape coverage and gap-specific rules in one independently reconciled
+# alerting component.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - flux-vm-pod-scrape.yaml
+  - cert-manager-vm-service-scrape.yaml
+  - vm-rules.yaml

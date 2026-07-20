@@ -1,0 +1,149 @@
+# Local rules fill gaps in the reviewed chart defaults. Kubernetes, storage,
+# resource, generic scrape, VMAlert, and Alertmanager health remain owned by the
+# upstream rule set to avoid duplicate notifications.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: homelab-observability
+  namespace: observability
+spec:
+  groups:
+    - name: homelab-synthetic
+      rules:
+        - alert: BlackboxProbeFailed
+          expr: probe_success{availability="always-on"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: synthetic
+          annotations:
+            summary: Synthetic probe failed
+            description: '{{ $labels.probe }} probe for {{ $labels.instance }} has failed for five minutes.'
+
+    - name: homelab-vector
+      rules:
+        - alert: VectorSyslogThrottleDrops
+          expr: |-
+            sum by (cluster, site, component_id) (
+              clamp_min(
+                increase(vector_component_received_events_total{component_id=~"throttle_syslog_(tcp|udp)"}[5m])
+                -
+                increase(vector_component_sent_events_total{component_id=~"throttle_syslog_(tcp|udp)"}[5m]),
+                0
+              )
+            ) > 0
+          for: 2m
+          labels:
+            severity: warning
+            component: vector
+          annotations:
+            summary: Syslog sender exceeded its flood allowance
+            description: '{{ $labels.component_id }} has dropped events for at least two minutes.'
+
+        - alert: VectorEventsDiscarded
+          expr: |-
+            sum by (cluster, site, component_id, host) (
+              increase(vector_component_discarded_events_total[5m])
+            ) > 0
+          for: 2m
+          labels:
+            severity: warning
+            component: vector
+          annotations:
+            summary: Vector discarded telemetry
+            description: 'Vector component {{ $labels.component_id }} on {{ $labels.host }} is discarding events.'
+
+        - alert: VectorBufferFilling
+          expr: |-
+            (
+              vector_buffer_size_bytes{buffer_id="victoria_logs"}
+              /
+              vector_buffer_max_size_bytes{buffer_id="victoria_logs"}
+            ) > 0.70
+          for: 10m
+          labels:
+            severity: warning
+            component: vector
+          annotations:
+            summary: Vector log buffer is filling
+            description: 'The VictoriaLogs buffer on {{ $labels.host }} has remained above 70% for ten minutes.'
+
+        - alert: VectorBufferNearlyFull
+          expr: |-
+            (
+              vector_buffer_size_bytes{buffer_id="victoria_logs"}
+              /
+              vector_buffer_max_size_bytes{buffer_id="victoria_logs"}
+            ) > 0.90
+          for: 5m
+          labels:
+            severity: critical
+            component: vector
+          annotations:
+            summary: Vector log buffer is nearly full
+            description: 'The VictoriaLogs buffer on {{ $labels.host }} has remained above 90% for five minutes.'
+
+    - name: homelab-victorialogs
+      rules:
+        - alert: VictoriaLogsRowsDropped
+          expr: sum by (cluster, site) (increase(vl_rows_dropped_total[5m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+            component: victorialogs
+          annotations:
+            summary: VictoriaLogs dropped ingested rows
+            description: VictoriaLogs has reported dropped rows for at least two minutes.
+
+        - alert: VictoriaLogsStorageReadOnly
+          expr: vl_storage_is_read_only == 1
+          for: 1m
+          labels:
+            severity: critical
+            component: victorialogs
+          annotations:
+            summary: VictoriaLogs storage is read-only
+            description: VictoriaLogs cannot persist new log data because storage is read-only.
+
+    - name: homelab-flux
+      rules:
+        - alert: FluxReconciliationFailed
+          expr: |-
+            max by (cluster, site, kind, name, namespace) (
+              gotk_reconcile_condition{type="Ready",status="False"}
+            ) == 1
+          for: 15m
+          labels:
+            severity: warning
+            component: flux
+          annotations:
+            summary: Flux reconciliation remains failed
+            description: '{{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.name }} has not been Ready for fifteen minutes.'
+
+    - name: homelab-certificates
+      rules:
+        - alert: CertificateExpiringSoon
+          expr: |-
+            (certmanager_certificate_expiration_timestamp_seconds - time() < 14 * 24 * 60 * 60)
+            and
+            (certmanager_certificate_expiration_timestamp_seconds - time() > 0)
+          for: 1h
+          labels:
+            severity: warning
+            component: certificates
+          annotations:
+            summary: Certificate expires within fourteen days
+            description: 'Certificate {{ $labels.namespace }}/{{ $labels.name }} expires within fourteen days.'
+
+        - alert: CertificateExpiringSoon
+          expr: |-
+            (certmanager_certificate_expiration_timestamp_seconds - time() < 3 * 24 * 60 * 60)
+            and
+            (certmanager_certificate_expiration_timestamp_seconds - time() > 0)
+          for: 15m
+          labels:
+            severity: critical
+            component: certificates
+          annotations:
+            summary: Certificate expires within three days
+            description: 'Certificate {{ $labels.namespace }}/{{ $labels.name }} expires within three days.'

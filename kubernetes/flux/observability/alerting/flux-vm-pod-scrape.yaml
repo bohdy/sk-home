@@ -1,0 +1,21 @@
+# Flux exposes unauthenticated controller metrics on each pod's http-prom port.
+# Scrape all four controllers across their dedicated namespace.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: flux-controllers
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - flux-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: flux
+  podMetricsEndpoints:
+    - port: http-prom
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 10000
+      seriesLimit: 10000
