@@ -20,7 +20,7 @@ data:
     $ORIGIN 30.1.10.in-addr.arpa.
     $TTL 300
     @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-        2026060901 ; serial
+        2026072001 ; serial
         300        ; refresh
         120        ; retry
         1209600    ; expire
@@ -28,11 +28,12 @@ data:
     )
     @  IN NS  dns.bohdal.name.
     53 IN PTR dns.bohdal.name.
+    55 IN PTR grafana.bohdal.name.
   bohdal.name.zone: |
     $ORIGIN bohdal.name.
     $TTL 300
     @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-        2026060901 ; serial
+        2026072001 ; serial
         300        ; refresh
         120        ; retry
         1209600    ; expire
@@ -41,4 +42,6 @@ data:
     @      IN NS dns.bohdal.name.
     dns    IN A  10.1.30.53
     blocky IN A  10.1.30.53
+    grafana IN A 10.1.30.55
+    grafana.internal IN A 10.1.30.55
     gw     IN A  10.1.100.1

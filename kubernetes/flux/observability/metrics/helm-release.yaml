@@ -205,6 +205,36 @@ spec:
         existingSecret: grafana-admin
         userKey: admin-user
         passwordKey: admin-password
+      # cert-manager owns this Secret in a dependency-ordered Flux component.
+      # Grafana reads the files directly and terminates HTTPS itself.
+      extraSecretMounts:
+        - name: grafana-tls
+          secretName: grafana-tls
+          mountPath: /etc/grafana/tls
+          readOnly: true
+      service:
+        type: LoadBalancer
+        annotations:
+          lbipam.cilium.io/ips: "10.1.30.55"
+        loadBalancerSourceRanges:
+          - 10.0.0.0/8
+        port: 443
+        targetPort: 3000
+        portName: https
+        appProtocol: https
+      readinessProbe:
+        httpGet:
+          path: /api/health
+          port: grafana
+          scheme: HTTPS
+      livenessProbe:
+        httpGet:
+          path: /api/health
+          port: grafana
+          scheme: HTTPS
+        initialDelaySeconds: 60
+        timeoutSeconds: 30
+        failureThreshold: 10
       persistence:
         enabled: true
         type: pvc
@@ -227,6 +257,14 @@ spec:
         analytics:
           reporting_enabled: false
           check_for_updates: false
+        server:
+          protocol: https
+          http_port: 3000
+          domain: grafana.bohdal.name
+          root_url: https://grafana.bohdal.name/
+          enforce_domain: true
+          cert_file: /etc/grafana/tls/tls.crt
+          cert_key: /etc/grafana/tls/tls.key
         auth.anonymous:
           enabled: false
         security:

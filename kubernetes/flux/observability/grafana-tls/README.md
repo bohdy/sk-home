@@ -2,7 +2,7 @@
 
 This component requests the production certificate that Grafana will serve directly. It covers canonical name `grafana.bohdal.name` and explicit LAN alias `grafana.internal.bohdal.name`, writes standard TLS keys to Secret `grafana-tls` in namespace `observability`, and rotates its ECDSA private key on every issuance.
 
-The separate Flux Kustomization depends on the production ClusterIssuer and the metrics component that owns the namespace. Keeping certificate issuance separate prevents the Grafana Helm release from mounting a Secret that does not exist yet.
+The separate Flux Kustomization depends on the production ClusterIssuer and the base component that owns the namespace. The metrics component in turn depends on this certificate. Keeping those responsibilities separate prevents the Grafana Helm release from mounting a Secret that does not exist yet and keeps fresh-cluster bootstrap acyclic.
 
 ## Validation
 

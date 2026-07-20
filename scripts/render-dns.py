@@ -52,19 +52,23 @@ def next_serial(current: str, today: str) -> str:
     return f"{today}01"
 
 
-def update_zone_serial(content: str, today: str) -> tuple[str, bool]:
-    """Bump the single SOA serial in a zone file."""
+def zone_serial(content: str) -> str:
+    """Return the single SOA serial from a zone file."""
     matches = list(SERIAL_RE.finditer(content))
     if len(matches) != 1:
         raise ValueError("expected exactly one SOA serial marked with '; serial'")
-    match = matches[0]
-    bumped = next_serial(match.group("serial"), today)
-    rendered = (
-        content[: match.start("serial")]
-        + bumped
-        + content[match.end("serial") :]
+    return matches[0].group("serial")
+
+
+def set_zone_serial(content: str, serial: str) -> str:
+    """Replace the single SOA serial in a zone file."""
+    if len(list(SERIAL_RE.finditer(content))) != 1:
+        raise ValueError("expected exactly one SOA serial marked with '; serial'")
+    return SERIAL_RE.sub(
+        lambda match: f"{match.group('indent')}{serial}{match.group('suffix')}",
+        content,
+        count=1,
     )
-    return rendered, rendered != content
 
 
 def changed_zone_files(explicit_files: list[Path]) -> list[tuple[Path, bool]]:
@@ -86,14 +90,16 @@ def update_serials(check: bool, explicit_files: list[Path]) -> bool:
     for path, is_new in changed_zone_files(explicit_files):
         current = path.read_text()
         if is_new:
-            updated = SERIAL_RE.sub(
-                lambda match: f"{match.group('indent')}{today}01{match.group('suffix')}",
-                current,
-                count=1,
-            )
-            did_update = updated != current
+            expected_serial = f"{today}01"
         else:
-            updated, did_update = update_zone_serial(current, today)
+            # Derive the expected serial from the committed baseline instead
+            # of the working file so repeated renders remain idempotent.
+            previous = run_git_show(path)
+            if previous is None:
+                raise ValueError(f"cannot read committed zone file: {path}")
+            expected_serial = next_serial(zone_serial(previous), today)
+        updated = set_zone_serial(current, expected_serial)
+        did_update = updated != current
         if did_update:
             stale = True
             if not check:

@@ -32,6 +32,8 @@ Initial internal records:
 
 - `dns.bohdal.name` -> `10.1.30.53`
 - `blocky.bohdal.name` -> `10.1.30.53`
+- `grafana.bohdal.name` -> `10.1.30.55`
+- `grafana.internal.bohdal.name` -> `10.1.30.55`
 - `gw.bohdal.name` -> `10.1.100.1`
 
 Reverse records are expected for committed infrastructure records.
@@ -43,8 +45,11 @@ Before changing DHCP, test directly from LAN clients on each relevant VLAN:
 ```bash
 dig @10.1.30.53 dns.bohdal.name A
 dig @10.1.30.53 blocky.bohdal.name A
+dig @10.1.30.53 grafana.bohdal.name A
+dig @10.1.30.53 grafana.internal.bohdal.name A
 dig @10.1.30.53 gw.bohdal.name A
 dig @10.1.30.53 -x 10.1.30.53
+dig @10.1.30.53 -x 10.1.30.55
 dig @10.1.30.53 -x 10.1.100.1
 dig @10.1.30.53 www.bohdal.name A
 dig @10.1.30.53 example.com A

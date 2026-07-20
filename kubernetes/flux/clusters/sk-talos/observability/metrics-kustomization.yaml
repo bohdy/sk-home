@@ -1,5 +1,6 @@
-# Metrics starts only after generic storage and networking are healthy because
-# its three retained claims must bind before dependent logging is introduced.
+# Metrics starts only after storage, networking, the namespace, and Grafana's
+# certificate are healthy because its retained claims and TLS mount require
+# those foundations before dependent logging is introduced.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -16,6 +17,8 @@ spec:
     - name: cluster-policy
     - name: cilium
     - name: storage-synology-csi
+    - name: observability-base
+    - name: observability-grafana-tls
   sourceRef:
     kind: GitRepository
     name: flux-system
