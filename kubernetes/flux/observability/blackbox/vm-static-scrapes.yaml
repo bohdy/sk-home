@@ -1,0 +1,61 @@
+# Each endpoint preserves a stable logical instance while relabeling the actual
+# scrape address to the shared multi-target exporter Service.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: blackbox-gateway-icmp
+  namespace: observability
+spec:
+  jobName: blackbox-gateway-icmp
+  targetEndpoints:
+    - targets:
+        - 10.1.100.1
+      labels:
+        instance: mikrotik-gw
+        probe: icmp
+        availability: always-on
+      path: /probe
+      params:
+        module:
+          - gateway_icmp
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 500
+      seriesLimit: 500
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: blackbox-exporter.observability.svc.cluster.local.:9115
+---
+# Query the real client-facing Blocky VIP rather than its internal Service so
+# the probe covers Cilium LoadBalancer routing and the recursive DNS path.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: blackbox-blocky-dns
+  namespace: observability
+spec:
+  jobName: blackbox-blocky-dns
+  targetEndpoints:
+    - targets:
+        - 10.1.30.53:53
+      labels:
+        instance: blocky
+        probe: dns
+        availability: always-on
+      path: /probe
+      params:
+        module:
+          - blocky_dns
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 500
+      seriesLimit: 500
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: blackbox-exporter.observability.svc.cluster.local.:9115

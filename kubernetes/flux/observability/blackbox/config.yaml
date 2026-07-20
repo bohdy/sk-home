@@ -1,0 +1,28 @@
+# Modules remain narrow and deterministic so a successful probe proves the
+# intended home-network path rather than only generic protocol reachability.
+modules:
+  gateway_icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  blocky_dns:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      transport_protocol: udp
+      query_name: gw.bohdal.name
+      query_type: A
+      query_class: IN
+      recursion_desired: true
+      valid_rcodes:
+        - NOERROR
+      # The split-DNS answer proves that Blocky reached the authoritative
+      # CoreDNS zone rather than merely returning any successful response.
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - 'gw\.bohdal\.name\..*10\.1\.100\.1'
