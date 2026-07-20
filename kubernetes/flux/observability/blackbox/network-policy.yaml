@@ -41,3 +41,16 @@ spec:
             # Permit TCP fallback if a future valid response is truncated.
             - port: "53"
               protocol: TCP
+    # Cilium translates an in-cluster LoadBalancer VIP to its selected pod
+    # before egress enforcement, so allow only the actual Blocky backends and
+    # their container DNS port in addition to the logical VIP tuple above.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: dns-system
+            k8s:app.kubernetes.io/name: blocky
+      toPorts:
+        - ports:
+            - port: "1053"
+              protocol: UDP
+            - port: "1053"
+              protocol: TCP

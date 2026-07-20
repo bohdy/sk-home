@@ -4,7 +4,7 @@ This component installs Prometheus Blackbox Exporter 0.28.0 as a single ClusterI
 
 Grafana HTTPS probing is added only after its browser-trusted LAN endpoint exists. A stable external HTTPS endpoint also remains pending explicit selection. Moonraker and outside-cluster path probes are deferred by design.
 
-The pod runs without a service-account token, uses a read-only filesystem, and receives only `NET_RAW` for ICMP. Cilium policy admits HTTP access from VMAgent and kubelet health probes, permits ICMP only to `10.1.100.1`, and permits DNS only to `10.1.30.53` on UDP/TCP port 53.
+The pod runs without a service-account token, uses a read-only filesystem, and receives only `NET_RAW` for ICMP. Cilium policy admits HTTP access from VMAgent and kubelet health probes, permits ICMP only to `10.1.100.1`, and permits DNS only through the `10.1.30.53` VIP to Blocky pods on their UDP/TCP container port 1053. The explicit backend rule is required because Cilium applies in-cluster LoadBalancer translation before egress policy.
 
 ## Validation
 
