@@ -1,0 +1,21 @@
+# Grafana's chart-managed sidecar watches labeled ConfigMaps in this namespace.
+# Content hashes make dashboard changes trigger deterministic sidecar updates.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+configMapGenerator:
+  - name: homelab-observability-dashboards
+    namespace: observability
+    files:
+      - network.json
+      - apc-ups.json
+      - synology.json
+      - proxmox.json
+      - dns.json
+      - ingestion-health.json
+      - cilium-bgp.json
+      - syslog.json
+generatorOptions:
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/component: dashboards
+    app.kubernetes.io/part-of: observability
