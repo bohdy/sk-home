@@ -34,9 +34,23 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Create dedicated Telegram and Discord Bitwarden items, bootstrap the notification Secret without committing or logging its values, and replace the Alertmanager blackhole with severity-based routes.
+1. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, and replace the Alertmanager blackhole with severity-based routes.
 2. Run synthetic notification tests for critical, warning, recovery, grouping, and inhibition behavior, then expire every test alert.
-3. Bootstrap the required SNMPv2c and SNMPv3 credentials, resolve the committed inventory blockers, deploy the prepared SNMP Exporter component, and verify every enabled device.
+3. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
+
+## Grafana LAN acceptance
+
+Acceptance completed on 2026-07-21. PRs #114, #115, and #116 introduced dependency-ordered certificate issuance, direct HTTPS exposure, split DNS, and strict self-monitoring:
+
+- Flux `observability-base`, `observability-grafana-tls`, `observability-metrics`, and `dns` reported Ready at Git revision `7470942`. The metrics Helm release upgraded successfully to revision 7 for LAN exposure and revision 8 for the HTTPS scrape correction.
+- The shared namespace moved from metrics ownership to independent `observability-base` ownership without deletion or label loss. The resulting dependency graph is acyclic on a fresh cluster: base creates the namespace, cert-manager issues `grafana-tls`, and metrics mounts the Ready Secret.
+- Production ACME order `grafana-1-1769370120` became valid. Secret `grafana-tls` has type `kubernetes.io/tls` and only `tls.crt` and `tls.key`; the ECDSA certificate covers `grafana.bohdal.name` and `grafana.internal.bohdal.name` and expires on 2026-10-18.
+- Cilium allocated only fixed VIP `10.1.30.55` to Service `metrics-grafana`. The Service exposes HTTPS on TCP 443, forwards to Grafana port 3000, and limits LoadBalancer sources to `10.0.0.0/8`.
+- Blocky returned both Grafana names as `10.1.30.55` and reverse lookup of `.55` as `grafana.bohdal.name`.
+- The LAN health endpoint returned Grafana 13.1.0 with database `ok` over a browser-trusted chain. Anonymous organization access returned HTTP 401, authenticated admin access succeeded without exposing credentials, the LAN alias redirected to the canonical name, and plaintext port 80 was unreachable.
+- VictoriaMetrics and VictoriaLogs datasource health checks both returned `OK` through the LAN TLS endpoint.
+- Grafana ran Ready on the general-purpose worker with zero restarts. Its stack-owned VMServiceScrape uses HTTPS, validates the public certificate against `grafana.bohdal.name`, returned `up=1`, and stopped the previous plaintext scrape handshake errors.
+- The DNS renderer now derives changed-zone serials from the committed baseline, so repeated renders are idempotent and `dns-check` can pass before commit.
 
 ## Vector acceptance
 
@@ -99,6 +113,14 @@ Acceptance completed on 2026-07-20. PRs #106 and #107 introduced the exporter an
 - Recent exporter logs contained no errors after the policy correction. Current probe-duration samples were below one millisecond, and exporter self-metrics reported approximately 28.3 MiB resident memory.
 - The Kubernetes Metrics API was unavailable during acceptance, so resource evidence came from the exporter's VMSingle process metrics rather than `kubectl top`.
 
+Grafana probe acceptance completed on 2026-07-21 after PR #117:
+
+- Flux `observability-blackbox` applied Git revision `23aeb6e` and reported Ready. The new VMStaticScrape was operational.
+- Blackbox connected through real VIP `10.1.30.55` while supplying `grafana.bohdal.name` for the HTTP Host header and TLS SNI.
+- The Grafana job reported `up=1`, `probe_success=1`, HTTP status 200, a certificate-expiry sample matching the issued certificate, and a current probe duration of approximately 94 ms.
+- The existing sustained `BlackboxProbeFailed` critical rule covers Grafana without duplicate alert definitions. No Grafana probe alert was active during acceptance.
+- Blackbox Exporter remained Ready on the worker with zero restarts, its Cilium policy reported valid, and recent logs contained no errors.
+
 ## Alerting acceptance
 
 Acceptance completed on 2026-07-20. PRs #109 and #110 introduced local coverage, bounded Alertmanager behavior, and a correction for one invalid upstream meta-alert:
@@ -130,9 +152,9 @@ Acceptance completed on 2026-07-17:
 Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-2. Add the read-only Proxmox exporter, then add Grafana HTTPS and one explicitly selected stable external HTTPS target to Blackbox Exporter.
+2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
 3. Add Telegram delivery for critical alerts and Discord delivery for critical and warning alerts; retain info alerts in Alertmanager and Grafana without push delivery.
-4. Publish only Grafana through a fixed LAN VIP, browser-trusted TLS, split DNS, the shared Cloudflare Tunnel, and Cloudflare Access restricted to the approved Gmail identity with MFA.
+4. Publish Grafana through the shared Cloudflare Tunnel and Cloudflare Access restricted to the exact approved Gmail identity with Google MFA.
 5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
@@ -147,8 +169,10 @@ Known item names needed by the rollout are:
 - `SK-TALOS-CLOUDFLARED-TOKEN`: shared Cloudflare Tunnel connector token only
 - `CLOUDFLARE_API_TOKEN`: narrowly scoped DNS-01 token only
 - `SK-TALOS-SYNO-CSI`: Synology CSI DSM password only
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token only
+- `TELEGRAM_CHAT_ID`: Telegram group chat ID only
 
-Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3, Proxmox, Telegram, or Discord credentials. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
+Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3, the Proxmox auditor token, or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
 
 ## Deferred debt
 
