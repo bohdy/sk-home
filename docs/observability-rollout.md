@@ -11,8 +11,8 @@ The cluster foundations are deployed and healthy:
 - Cilium, cert-manager v1.20.1, the production Let's Encrypt `ClusterIssuer`, and Synology CSI are Ready.
 - The `synology-iscsi-retain` StorageClass passed provisioning, persistence, cross-node reattachment, expansion, and retained-volume validation.
 - The shared Cloudflare Tunnel has two `cloudflared` 2026.7.2 replicas and a catch-all 404 route. Grafana is not routed through it yet.
-- Cilium agent, Cilium operator, low-cardinality Hubble DNS/drop/TCP, and Blocky scrape definitions are committed in a dependency-ordered Flux component. The pinned Cilium release must be upgraded with the committed bootstrap values before live acceptance can be recorded.
-- Eight focused, repository-owned Grafana dashboards cover network interfaces, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog without runtime dashboard downloads. Credential-gated SNMP and Proxmox panels remain empty until their collectors are enabled.
+- Cilium agent, Cilium operator, low-cardinality Hubble DNS/drop/TCP, and Blocky telemetry are collected through a dependency-ordered Flux component. The pinned Cilium release runs the merged metric settings as Helm revision 2.
+- Eight focused, repository-owned Grafana dashboards cover network interfaces, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog without runtime dashboard downloads. Grafana has provisioned all eight; credential-gated SNMP and Proxmox panels remain empty until their collectors are enabled.
 - The retained storage validation PV remains intentionally preserved for later manual cleanup.
 
 The metrics stage is deployed and accepted. PRs #85, #86, and #87 introduced the stack, added the namespace-scoped Pod Security exception required by node exporter, and preserved Grafana's Helm-managed PVC during remediation.
@@ -36,9 +36,32 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, and replace the Alertmanager blackhole with severity-based routes.
-2. Run synthetic notification tests for critical, warning, recovery, grouping, and inhibition behavior, then expire every test alert.
-3. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
+1. Refresh the local Bitwarden Secrets Manager machine token, apply the merged gateway OpenTofu plan from PR #121, and require the worker's Cilium BGP session to become established without disturbing the three existing peers.
+2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, and replace the Alertmanager blackhole with severity-based routes.
+3. Run synthetic notification tests for critical, warning, recovery, grouping, and inhibition behavior, then expire every test alert.
+4. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
+
+## Network metrics acceptance
+
+Acceptance completed on 2026-07-21 after PR #120 and the explicit Cilium Helm upgrade:
+
+- Cilium 1.19.4 upgraded successfully to Helm revision 2. All four agents and the singleton operator rolled out with zero restarts, and every Kubernetes node remained Ready.
+- Flux `observability-network-metrics` applied the merged component and reported Ready. Its two `VMPodScrape` and two `VMServiceScrape` resources reported operational.
+- VMAgent discovered four healthy Cilium agent endpoints on port 9962, one healthy operator endpoint on port 9963, four healthy Hubble endpoints on port 9965, and both healthy Blocky endpoints on port 4000.
+- VMSingle returned `up=1` for every new target with stable `cluster="sk-talos"` and `site="sk"` labels. The active series counts measured during acceptance were approximately 6,071 for Cilium agents, 540 for the operator, 1,097 for Hubble, and 213 for Blocky.
+- Hubble is configured with exactly `dns drop tcp` and no context labels. Emitted drop series contain only protocol, reason, and service dimensions; TCP series contain only family, flag, and service dimensions. No pod, workload, identity, IP, or DNS-name context labels were present.
+- Direct Hubble endpoint inspection exposed drop and TCP counters. DNS metric names remained absent after a temporary ordinary pod lookup, so DNS L7 event emission is not yet proven even though the `dns` handler is enabled; do not add query labels or DNS visibility policy without a separate cardinality and enforcement review.
+- Blocky exported query, response, cache, latency, and error families. The client-facing DNS VIP continued resolving `grafana.bohdal.name` to `10.1.30.55` after the Cilium rollout.
+- Three control-plane Cilium BGP sessions remained established. The worker session remained active because the gateway lacked a `.44` peer; PR #121 added the missing desired-state peer, but its reviewed `1 add, 9 change, 0 destroy` gateway plan still requires explicit apply after local Bitwarden authentication is restored.
+
+## Dashboard acceptance
+
+Acceptance completed on 2026-07-21 after PR #122:
+
+- Flux `observability-dashboards` applied exact Git revision `2c45941` and reported Ready. Its generated 32 KiB ConfigMap carried `grafana_dashboard="1"` and contained all eight committed JSON files.
+- Grafana's authenticated search API returned UIDs `sk-network`, `sk-apc-ups`, `sk-synology`, `sk-proxmox`, `sk-dns`, `sk-ingestion`, `sk-cilium-bgp`, and `sk-syslog` as dashboard objects.
+- Grafana's dashboard API reported every object as provisioned and returned the expected 33 panels in total. The dashboard sidecar and Grafana logs contained no recent provisioning errors.
+- All 46 committed PromQL expressions executed successfully against live VictoriaMetrics. Empty results remain expected only where the SNMP and dedicated Proxmox collectors are not yet deployed.
 
 ## Grafana LAN acceptance
 
