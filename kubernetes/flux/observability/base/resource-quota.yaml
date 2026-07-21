@@ -1,0 +1,17 @@
+# Bound aggregate observability growth while retaining headroom for rolling
+# updates, SNMP and Proxmox exporters, and recovery on the general-purpose
+# worker. DaemonSet requests on control-plane nodes also count toward totals.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: observability-capacity
+  namespace: observability
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 6Gi
+    limits.cpu: "16"
+    limits.memory: 20Gi
+    pods: "30"
+    persistentvolumeclaims: "8"
+    requests.storage: 300Gi
