@@ -7,7 +7,7 @@ This stack manages the MikroTik gateway bridge, VLAN interfaces, interface lists
 The gateway peers with the Talos Kubernetes nodes on VLAN 20:
 
 - Gateway address: `10.1.20.1`
-- Node peers: `10.1.20.41`, `10.1.20.42`, `10.1.20.43`
+- Node peers: `10.1.20.41`, `10.1.20.42`, `10.1.20.43`, `10.1.20.44`
 - ASN: `65001` on both sides
 - Accepted routes: `/32` LoadBalancer VIP routes inside `10.1.30.0/24`
 

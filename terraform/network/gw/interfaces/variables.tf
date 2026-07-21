@@ -56,6 +56,10 @@ variable "kubernetes_bgp" {
         address = "10.1.20.43"
         comment = "sk-talos-cp-3"
       }
+      worker1 = {
+        address = "10.1.20.44"
+        comment = "sk-talos-worker-1"
+      }
     })
   })
   default = {}
