@@ -102,6 +102,14 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It is plan-only in GitHub Actions and starts with a terminal `404` route; application DNS, routing, and Access policy are added with the workload that owns each hostname.
 
+The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
+
+```bash
+gh workflow run terraform.yaml --ref main -f apply_gateway=true
+```
+
+The gated gateway job uses the immutable gateway plan artifact produced earlier in the same run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
+
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
 ```bash
