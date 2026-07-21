@@ -6,3 +6,4 @@ resources:
   - flux-vm-pod-scrape.yaml
   - cert-manager-vm-service-scrape.yaml
   - vm-rules.yaml
+  - alertmanager-network-policy.yaml

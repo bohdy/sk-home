@@ -1,0 +1,46 @@
+# Alertmanager and its config sidecars share one pod network namespace. Permit
+# only Kubernetes config watches, constrained DNS, and Telegram notification
+# delivery; ingress remains governed by existing cluster policy.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alertmanager-egress
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: vmalertmanager
+      app.kubernetes.io/instance: metrics-victoria-metrics-k8s-stack
+  egress:
+    # The operator config-init and config-reloader sidecars watch Kubernetes
+    # Secrets. Cilium evaluates Service translation against node API backends,
+    # so admit only internal HTTPS and kube-apiserver ports in the home range.
+    - toCIDR:
+        - 10.0.0.0/8
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+            - port: "6443"
+              protocol: TCP
+    # Cilium's DNS proxy learns only Telegram's exact API name. Both transports
+    # are present because truncated responses may retry over TCP.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchName: api.telegram.org
+    - toFQDNs:
+        - matchName: api.telegram.org
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
