@@ -19,6 +19,16 @@ The metrics stage is deployed and accepted. PRs #85, #86, and #87 introduced the
 
 The in-cluster `observability` namespace and `grafana-admin` Secret have already been bootstrapped. Bitwarden Secrets Manager item `SK-TALOS-GRAFANA-ADMIN-PASSWORD` stores only the Grafana administrator password; the Kubernetes Secret uses the `admin-user` and `admin-password` keys. Never print the secret value or commit rendered Secret data.
 
+## Resource guardrail acceptance
+
+Acceptance completed on 2026-07-21 after PR #128:
+
+- Flux `observability-base` applied exact revision `cc6b3e9`, and every observability Kustomization subsequently reported Ready at that revision.
+- The live `observability-capacity` quota reported 1.705 of 4 requested CPU cores, 3,243 MiB of 6 GiB requested memory, 8.8 of 16 limited CPU cores, 11,520 MiB of 20 GiB limited memory, 17 of 30 active pods, 4 of 8 claims, and 161 of 300 GiB requested storage.
+- A server-side dry-run pod without resource declarations received the exact LimitRange defaults: 25 millicores and 32 MiB requested, with 250 millicores and 256 MiB limited. No test pod was persisted.
+- Kube-state-metrics exposed matching hard and used quota samples through VictoriaMetrics. `KubeCPUQuotaOvercommit`, `KubeMemoryQuotaOvercommit`, `KubeQuotaAlmostFull`, `KubeQuotaFullyUsed`, and `KubeQuotaExceeded` were loaded with evaluation health `ok` and remained inactive.
+- Applying the admission controls did not initiate a workload rollout. Every active workload pod remained Running, and the namespace had no Warning events during acceptance.
+
 ## Metrics acceptance
 
 Acceptance completed on 2026-07-17:
