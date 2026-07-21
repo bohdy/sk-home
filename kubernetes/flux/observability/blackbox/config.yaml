@@ -26,3 +26,15 @@ modules:
       validate_answer_rrs:
         fail_if_none_matches_regexp:
           - 'gw\.bohdal\.name\..*10\.1\.100\.1'
+
+  grafana_https:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes:
+        - 200
+      method: GET
+      fail_if_not_ssl: true
+      follow_redirects: false
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false

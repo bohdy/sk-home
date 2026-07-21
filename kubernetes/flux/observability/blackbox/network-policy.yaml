@@ -41,6 +41,12 @@ spec:
             # Permit TCP fallback if a future valid response is truncated.
             - port: "53"
               protocol: TCP
+    - toCIDR:
+        - 10.1.30.55/32
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
     # Cilium translates an in-cluster LoadBalancer VIP to its selected pod
     # before egress enforcement, so allow only the actual Blocky backends and
     # their container DNS port in addition to the logical VIP tuple above.
@@ -53,4 +59,15 @@ spec:
             - port: "1053"
               protocol: UDP
             - port: "1053"
+              protocol: TCP
+    # Grafana's LoadBalancer VIP is likewise translated before enforcement.
+    # Select only the chart-managed Grafana backend and its HTTPS listener.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/instance: metrics
+            k8s:app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "3000"
               protocol: TCP
