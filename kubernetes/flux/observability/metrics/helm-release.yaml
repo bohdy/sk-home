@@ -222,6 +222,16 @@ spec:
         targetPort: 3000
         portName: https
         appProtocol: https
+      # The parent stack owns this VMServiceScrape. Validate the public
+      # certificate against its DNS name even though discovery connects through
+      # the Kubernetes Service and pod address.
+      vmScrape:
+        spec:
+          endpoints:
+            - port: https
+              scheme: https
+              tlsConfig:
+                serverName: grafana.bohdal.name
       readinessProbe:
         httpGet:
           path: /api/health
