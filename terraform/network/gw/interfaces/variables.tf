@@ -78,6 +78,52 @@ variable "kubernetes_bgp_tcp_md5_key" {
   }
 }
 
+# Keep SNMP community and user identities sensitive because RouterOS represents
+# both as the community `name`, and v2c uses that value as its shared secret.
+variable "snmp_v2_community" {
+  description = "Read-only SNMPv2c community used by compatibility collectors."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.snmp_v2_community) >= 8
+    error_message = "The SNMPv2c community must contain at least eight characters."
+  }
+}
+
+variable "snmp_v3_username" {
+  description = "Security name for the read-only SNMPv3 collector identity."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.snmp_v3_username) >= 8
+    error_message = "The SNMPv3 username must contain at least eight characters."
+  }
+}
+
+variable "snmp_v3_auth_password" {
+  description = "Authentication password for the SNMPv3 collector identity."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.snmp_v3_auth_password) >= 8
+    error_message = "The SNMPv3 authentication password must contain at least eight characters."
+  }
+}
+
+variable "snmp_v3_priv_password" {
+  description = "Privacy password for the SNMPv3 collector identity."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.snmp_v3_priv_password) >= 8
+    error_message = "The SNMPv3 privacy password must contain at least eight characters."
+  }
+}
+
 variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.

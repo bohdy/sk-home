@@ -110,6 +110,14 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=true
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
 
+Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
+
+```bash
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true
+```
+
+The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment. Do not set both gateway apply inputs to `true`; mutually exclusive job conditions intentionally skip both mutation paths in that case.
+
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
 ```bash
