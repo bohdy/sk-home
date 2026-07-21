@@ -37,8 +37,8 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Refresh the local Bitwarden Secrets Manager machine token, apply the merged gateway OpenTofu plan from PR #121, and require the worker's Cilium BGP session to become established without disturbing the three existing peers.
-2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, and replace the Alertmanager blackhole with severity-based routes.
-3. Run synthetic notification tests for critical, warning, recovery, grouping, and inhibition behavior, then expire every test alert.
+2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
+3. Run Discord synthetic tests for critical fan-out, warning delivery, recovery, grouping, and inhibition behavior, then expire every test alert.
 4. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
 
 ## Network metrics acceptance
@@ -155,10 +155,15 @@ Acceptance completed on 2026-07-20. PRs #109 and #110 introduced local coverage,
 - Local rules cover sustained Blackbox failure, derived Vector syslog throttle drops, Vector discarded events and buffer pressure, VictoriaLogs dropped rows and read-only storage, Flux reconciliation failure, and certificate expiry.
 - Talos-only scheduler and controller-manager rules were disabled because their private metrics endpoints are intentionally unavailable. The resulting false `KubeSchedulerDown` and `KubeControllerManagerDown` alerts cleared.
 - The chart's generic `RecordingRulesNoData` alert was disabled because `count:up0` correctly emits no sample while every target is healthy. The other 248 live rules remained loaded after the change, and the stale false alert cleared from Alertmanager.
-- The live Alertmanager configuration passed `amtool` validation with one blackhole receiver and three inhibition rules. A temporary matching critical and warning pair proved that the warning was suppressed while the critical remained active; both test alerts were then expired.
+- The initial live Alertmanager configuration passed `amtool` validation with one blackhole receiver and three inhibition rules. A temporary matching critical and warning pair proved that the warning was suppressed while the critical remained active; both test alerts were then expired.
 - Grafana provisioned exactly one read-only Alertmanager data source. Its server-side proxy reached Alertmanager 0.32.1 successfully; the generic health endpoint is not implemented for Grafana's built-in Alertmanager data-source type and returns `plugin.unavailable`.
 - All serving metrics pods were Ready after reconciliation. Grafana and node exporters had zero restarts; kube-state-metrics and the operator retained historical restart counts from the earlier Kubernetes API audit rollout.
-- Notification delivery remains intentionally disabled. Telegram critical delivery and Discord critical-and-warning delivery require dedicated Bitwarden credentials, a securely bootstrapped Kubernetes Secret, restricted egress, and synthetic delivery and recovery tests.
+- PR #124 enabled critical Telegram delivery through native `bot_token_file` and `chat_id_file` references to the mounted Secret. No credential value is present in Helm output or the generated Alertmanager configuration.
+- Flux `observability-metrics` and `observability-alerting` applied exact revision `60fede7`; the metrics Helm release reached revision 9. Alertmanager 0.32.1 and its config reloader remained Ready with zero restarts, runtime `amtool` validation succeeded, and config reload completed under the valid Cilium egress policy.
+- The policy permits internal HTTPS/kube-apiserver access for config sidecars, resolves only `api.telegram.org` through kube-dns, and allows external HTTPS only to that FQDN. The accepted `10.0.0.0/8` internal boundary accommodates Cilium's translated Kubernetes API backend.
+- A synthetic critical alert produced one firing and one resolved Telegram notification. `alertmanager_notifications_total{integration="telegram"}` advanced from 0 to 2, every Telegram failure-reason counter remained zero, and no notification error appeared in recent logs.
+- A synthetic warning remained active through the one-minute group delay without increasing the Telegram counter, proving the channel receives only critical alerts. Both synthetic alert groups were then expired, leaving zero active acceptance alerts.
+- Discord critical-and-warning delivery remains blocked on its absent dedicated Bitwarden webhook. Until it is added, warning and info alerts remain retained in Alertmanager and Grafana without push delivery.
 
 ## VictoriaLogs acceptance
 
@@ -178,7 +183,7 @@ Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
 2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
-3. Add Telegram delivery for critical alerts and Discord delivery for critical and warning alerts; retain info alerts in Alertmanager and Grafana without push delivery.
+3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
 4. Publish Grafana through the shared Cloudflare Tunnel and Cloudflare Access restricted to the exact approved Gmail identity with Google MFA.
 5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
