@@ -29,6 +29,39 @@ spec:
         - targetLabel: __address__
           replacement: blackbox-exporter.observability.svc.cluster.local.:9115
 ---
+# Probe the real LAN VIP while supplying Grafana's canonical hostname for both
+# the HTTP Host header and TLS SNI/certificate verification.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: blackbox-grafana-https
+  namespace: observability
+spec:
+  jobName: blackbox-grafana-https
+  targetEndpoints:
+    - targets:
+        - https://10.1.30.55/api/health
+      labels:
+        instance: grafana
+        probe: https
+        availability: always-on
+      path: /probe
+      params:
+        module:
+          - grafana_https
+        hostname:
+          - grafana.bohdal.name
+      interval: 30s
+      scrapeTimeout: 15s
+      sampleLimit: 500
+      seriesLimit: 500
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: blackbox-exporter.observability.svc.cluster.local.:9115
+---
 # Query the real client-facing Blocky VIP rather than its internal Service so
 # the probe covers Cilium LoadBalancer routing and the recursive DNS path.
 apiVersion: operator.victoriametrics.com/v1beta1
