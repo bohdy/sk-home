@@ -164,6 +164,14 @@ spec:
           group_wait: 1m
           group_interval: 10m
           repeat_interval: 12h
+          routes:
+            # Critical alerts are immediately actionable. Warning and info
+            # alerts continue to terminate at the blackhole root receiver
+            # until the dedicated Discord webhook is available.
+            - receiver: telegram-critical
+              matchers:
+                - severity="critical"
+              continue: false
         # Prefer the most severe state when warning and critical thresholds for
         # the same condition overlap.
         inhibit_rules:
@@ -194,6 +202,14 @@ spec:
               - site
         receivers:
           - name: blackhole
+          - name: telegram-critical
+            telegram_configs:
+              # Alertmanager 0.32 reads both values directly from Secret files;
+              # neither value enters Helm output or generated config Secrets.
+              - bot_token_file: /etc/vm/secrets/alertmanager-notifications/telegram-bot-token
+                chat_id_file: /etc/vm/secrets/alertmanager-notifications/telegram-chat-id
+                send_resolved: true
+                parse_mode: HTML
 
     grafana:
       enabled: true
