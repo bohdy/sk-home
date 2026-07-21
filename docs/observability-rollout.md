@@ -36,7 +36,7 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Merge the manually gated gateway apply workflow, dispatch it from `main` with `apply_gateway=true`, and require the worker's Cilium BGP session to become established without disturbing the three existing peers. This path uses the working GitHub Actions Bitwarden integration because the local machine credential currently returns `invalid_client`.
+1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
 2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
 3. Run Discord synthetic tests for critical fan-out, warning delivery, recovery, grouping, and inhibition behavior, then expire every test alert.
 4. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
@@ -52,7 +52,9 @@ Acceptance completed on 2026-07-21 after PR #120 and the explicit Cilium Helm up
 - Hubble is configured with exactly `dns drop tcp` and no context labels. Emitted drop series contain only protocol, reason, and service dimensions; TCP series contain only family, flag, and service dimensions. No pod, workload, identity, IP, or DNS-name context labels were present.
 - Direct Hubble endpoint inspection exposed drop and TCP counters. DNS metric names remained absent after a temporary ordinary pod lookup, so DNS L7 event emission is not yet proven even though the `dns` handler is enabled; do not add query labels or DNS visibility policy without a separate cardinality and enforcement review.
 - Blocky exported query, response, cache, latency, and error families. The client-facing DNS VIP continued resolving `grafana.bohdal.name` to `10.1.30.55` after the Cilium rollout.
-- Three control-plane Cilium BGP sessions remained established. The worker session remained active because the gateway lacked a `.44` peer; PR #121 added the missing desired-state peer, but its reviewed `1 add, 9 change, 0 destroy` gateway plan still requires explicit apply after local Bitwarden authentication is restored.
+- Three control-plane Cilium BGP sessions remained established. The worker session remained active because the gateway lacked a `.44` peer; PR #121 added the missing desired-state peer and its reviewed gateway plan was `1 add, 9 change, 0 destroy`.
+- PR #126 added an explicit `apply_gateway` dispatch path that consumes the immutable plan from the same GitHub Actions run and uses the working Bitwarden integration. Dispatch run `29851783524` planned successfully but failed during apply because provider 1.99.1 sent RouterOS 7.21/7.22-incompatible `vrf` and `add-path-out` fields. The failure matches open upstream issues `#944` and `#959`; upstream fix PR `#910` is not yet merged or released.
+- The failed apply did not interrupt the three existing control-plane sessions, which remained established with their prior uptime. The worker session remained active. Do not retry the unchanged plan because it will repeat unsupported updates against existing IP addresses and BGP connections.
 
 ## Dashboard acceptance
 
