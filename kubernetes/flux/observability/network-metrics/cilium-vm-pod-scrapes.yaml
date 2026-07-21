@@ -1,0 +1,44 @@
+# Cilium exposes one agent endpoint per node. Pod discovery preserves that
+# topology without adding a cluster-facing metrics Service.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cilium-agent
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      k8s-app: cilium
+  podMetricsEndpoints:
+    - port: prometheus
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 10000
+      seriesLimit: 10000
+---
+# The singleton operator has a distinct metric vocabulary and lifecycle, so it
+# receives its own job and tighter cardinality bounds.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cilium-operator
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      io.cilium/app: operator
+      name: cilium-operator
+  podMetricsEndpoints:
+    - port: prometheus
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 5000
+      seriesLimit: 5000

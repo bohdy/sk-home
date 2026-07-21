@@ -1,0 +1,22 @@
+# The headless chart-managed Service selects every Cilium agent's local Hubble
+# exporter. Only DNS, drop, and TCP metrics are enabled in bootstrap values.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: hubble
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hubble
+      app.kubernetes.io/part-of: cilium
+  endpoints:
+    - port: hubble-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 5000
+      seriesLimit: 5000
