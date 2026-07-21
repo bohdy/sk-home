@@ -11,6 +11,7 @@ The cluster foundations are deployed and healthy:
 - Cilium, cert-manager v1.20.1, the production Let's Encrypt `ClusterIssuer`, and Synology CSI are Ready.
 - The `synology-iscsi-retain` StorageClass passed provisioning, persistence, cross-node reattachment, expansion, and retained-volume validation.
 - The shared Cloudflare Tunnel has two `cloudflared` 2026.7.2 replicas and a catch-all 404 route. Grafana is not routed through it yet.
+- Cilium agent, Cilium operator, low-cardinality Hubble DNS/drop/TCP, and Blocky scrape definitions are committed in a dependency-ordered Flux component. The pinned Cilium release must be upgraded with the committed bootstrap values before live acceptance can be recorded.
 - The retained storage validation PV remains intentionally preserved for later manual cleanup.
 
 The metrics stage is deployed and accepted. PRs #85, #86, and #87 introduced the stack, added the namespace-scoped Pod Security exception required by node exporter, and preserved Grafana's Helm-managed PVC during remediation.

@@ -1,0 +1,22 @@
+# Scrape Blocky's internal HTTP Service rather than the LAN DNS VIP. The DNS
+# namespace policy already admits port 4000 only from Kubernetes namespaces.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: blocky
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - dns-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+      app.kubernetes.io/component: dns-front
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 5000
+      seriesLimit: 5000

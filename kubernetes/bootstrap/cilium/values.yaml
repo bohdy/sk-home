@@ -23,6 +23,29 @@ bgpControlPlane:
     # the peer config, so keep the secret in the Cilium namespace.
     name: kube-system
 
+# Export agent and operator health without enabling broad flow labels. The
+# observability stack discovers these pod-local listeners through VMPodScrape.
+prometheus:
+  enabled: true
+
+operator:
+  # One operator replica is enough for the current cluster; its metrics remain
+  # explicit here so future chart-default changes cannot silently remove them.
+  prometheus:
+    enabled: true
+  replicas: 1
+  tolerations:
+    - operator: Exists
+
+hubble:
+  metrics:
+    # Keep the first-release set deliberately low-cardinality. No pod, IP,
+    # identity, workload, or DNS-name context labels are added.
+    enabled:
+      - dns
+      - drop
+      - tcp
+
 cgroup:
   # Talos already mounts cgroupv2 for the host; Cilium should reuse that mount
   # instead of trying to mount it inside the agent pod.
@@ -55,10 +78,3 @@ tolerations:
   # System networking must remain schedulable on control planes so adding or
   # losing the single worker cannot prevent Cilium from running cluster-wide.
   - operator: Exists
-
-operator:
-  # One operator replica is enough for the current three-node learning cluster
-  # and avoids scheduling a redundant operator during early bootstrap.
-  replicas: 1
-  tolerations:
-    - operator: Exists
