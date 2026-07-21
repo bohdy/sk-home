@@ -1,0 +1,32 @@
+# Supply conservative resource defaults for chart-managed sidecars that omit
+# their own declarations, while allowing explicitly sized telemetry stores to
+# retain their reviewed larger envelopes.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: observability-container-resources
+  namespace: observability
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 25m
+        memory: 32Mi
+      default:
+        cpu: 250m
+        memory: 256Mi
+      # Prevent one future collector or plugin from consuming the worker while
+      # remaining above the current VMSingle 2 CPU and 3 GiB limits.
+      max:
+        cpu: "4"
+        memory: 4Gi
+      min:
+        cpu: 5m
+        memory: 16Mi
+    - type: PersistentVolumeClaim
+      # The current largest claim is VMSingle at 100 GiB. This ceiling leaves
+      # expansion room without permitting an accidental unbounded allocation.
+      max:
+        storage: 150Gi
+      min:
+        storage: 1Gi
