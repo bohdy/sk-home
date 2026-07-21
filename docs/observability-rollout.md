@@ -36,7 +36,7 @@ Acceptance completed on 2026-07-17:
 
 ## Immediate next actions
 
-1. Refresh the local Bitwarden Secrets Manager machine token, apply the merged gateway OpenTofu plan from PR #121, and require the worker's Cilium BGP session to become established without disturbing the three existing peers.
+1. Merge the manually gated gateway apply workflow, dispatch it from `main` with `apply_gateway=true`, and require the worker's Cilium BGP session to become established without disturbing the three existing peers. This path uses the working GitHub Actions Bitwarden integration because the local machine credential currently returns `invalid_client`.
 2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
 3. Run Discord synthetic tests for critical fan-out, warning delivery, recovery, grouping, and inhibition behavior, then expire every test alert.
 4. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
