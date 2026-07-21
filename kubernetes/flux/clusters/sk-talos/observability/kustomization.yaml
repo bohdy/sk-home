@@ -6,6 +6,7 @@ resources:
   - base-kustomization.yaml
   - metrics-kustomization.yaml
   - network-metrics-kustomization.yaml
+  - dashboards-kustomization.yaml
   - grafana-tls-kustomization.yaml
   - logs-kustomization.yaml
   - vector-kustomization.yaml
