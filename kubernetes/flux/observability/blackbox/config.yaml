@@ -27,7 +27,7 @@ modules:
         fail_if_none_matches_regexp:
           - 'gw\.bohdal\.name\..*10\.1\.100\.1'
 
-  grafana_https:
+  strict_https_200:
     prober: http
     timeout: 10s
     http:
