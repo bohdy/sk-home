@@ -88,7 +88,9 @@ resource "cloudflare_zero_trust_organization" "account" {
 }
 
 # Cloudflare Access is an additional perimeter. The exact Google identity must
-# complete an independent Access-managed factor before Grafana's own login.
+# authenticate through the configured Google IdP before Grafana's own login.
+# Independent Access MFA stays disabled for this single-user homelab app; the
+# owner's Google account is responsible for enforcing its own strong MFA.
 resource "cloudflare_zero_trust_access_application" "grafana" {
   account_id                 = var.cloudflare_account_id
   name                       = "Grafana"
@@ -101,13 +103,13 @@ resource "cloudflare_zero_trust_access_application" "grafana" {
   same_site_cookie_attribute = "strict"
   mfa_config = {
     allowed_authenticators = ["totp", "security_key", "biometrics"]
-    mfa_disabled           = false
+    mfa_disabled           = true
     session_duration       = "8h"
   }
 
   policies = [
     {
-      name       = "Allow exact owner through Google and independent MFA"
+      name       = "Allow exact owner through Google"
       decision   = "allow"
       precedence = 1
       include = [

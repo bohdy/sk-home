@@ -153,7 +153,7 @@ Use `grafana.bohdal.name` as the canonical name. Internal split DNS resolves it 
 
 Install cert-manager and issue a browser-trusted certificate through ACME DNS-01 using a narrowly scoped Cloudflare token. Grafana serves HTTPS directly, so do not add an ingress controller solely for observability.
 
-Configure Cloudflare Access with Google as the identity provider, allow only the exact approved Gmail account, require Google MFA, and deny all other identities. Cloudflare Access is an additional perimeter and does not replace Grafana authentication.
+Configure Cloudflare Access with Google as the identity provider, allow only the exact approved Gmail account, and deny all other identities. The owner must retain strong authentication on the Google account; Grafana does not add a separate Cloudflare-managed MFA prompt. Cloudflare Access is an additional perimeter and does not replace Grafana authentication.
 
 Keep data sources, folders, dashboards, alert-related data sources, and supported provisioning in Git. UI experiments may live in a scratch folder but must be exported to Git before they become operational dependencies.
 
