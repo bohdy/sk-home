@@ -100,7 +100,7 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by OpenTofu's S3-compatible backend. If they are missing from the shell environment, `tofu init` and `tofu plan` will fail before evaluating stack resources with `No valid credential sources found`.
 
-The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's public DNS, HTTPS tunnel route, exact Google identity plus independent Access MFA policy, and the terminal `404` fallback.
+The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's public DNS, HTTPS tunnel route, exact Google identity policy, and the terminal `404` fallback. Grafana relies on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
 
 The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
 

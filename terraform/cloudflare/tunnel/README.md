@@ -2,7 +2,7 @@
 
 This OpenTofu stack owns the remotely managed `sk-talos` Cloudflare Tunnel and Grafana's public perimeter. It routes only `grafana.bohdal.name` to Grafana's in-cluster HTTPS Service, retains a terminal `http_status:404` rule, adopts the proxied public CNAME, and creates the self-hosted Cloudflare Access application.
 
-The Access application allows one exact Gmail identity through the existing Google identity provider and then requires an independent Cloudflare Access MFA factor. Google is not relied on to emit an authentication-method claim. Unmatched identities have no allow policy and are denied by Access. Grafana's own login remains enabled behind Access.
+The Access application allows one exact Gmail identity through the existing Google identity provider. Independent Cloudflare Access MFA is disabled for Grafana, so the owner must enforce strong authentication on the Google account; unmatched identities have no allow policy and are denied by Access. Grafana's own login remains enabled behind Access.
 
 Application routes, proxied DNS records, and Cloudflare Access applications remain owned by the workload change that introduces each public hostname. Grafana is the first planned route.
 
