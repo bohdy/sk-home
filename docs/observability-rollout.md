@@ -170,6 +170,12 @@ Grafana probe acceptance completed on 2026-07-21 after PR #117:
 - The existing sustained `BlackboxProbeFailed` critical rule covers Grafana without duplicate alert definitions. No Grafana probe alert was active during acceptance.
 - Blackbox Exporter remained Ready on the worker with zero restarts, its Cilium policy reported valid, and recent logs contained no errors.
 
+External HTTPS probe acceptance completed on 2026-07-22:
+
+- The explicit stable target connects directly to Cloudflare's documented `1.1.1.1` anycast address while supplying `one.one.one.one` for the HTTP Host header and TLS SNI, avoiding broad DNS or network egress.
+- VictoriaMetrics reported `up=1`, `probe_success=1`, HTTP status 200, a valid TLS certificate-expiry sample, and a current probe duration of approximately 33 ms with stable `cluster="sk-talos"`, `site="sk"`, and `instance="cloudflare-one"` labels.
+- Blackbox Exporter remained Ready with zero restarts and no errors in its recent logs. The existing sustained `BlackboxProbeFailed` critical rule covers this always-on target.
+
 ## Alerting acceptance
 
 Acceptance completed on 2026-07-20. PRs #109 and #110 introduced local coverage, bounded Alertmanager behavior, and a correction for one invalid upstream meta-alert:
@@ -219,7 +225,7 @@ Acceptance completed on 2026-07-22 for the production SNMPv3 path:
 Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
+2. Add the read-only Proxmox exporter with its dedicated `PVEAuditor` token; the stable external HTTPS target is already accepted.
 3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
 4. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
