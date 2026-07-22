@@ -10,7 +10,7 @@ The cluster foundations are deployed and healthy:
 - Flux v2.8.8 reconciles the cluster from `main`.
 - Cilium, cert-manager v1.20.1, the production Let's Encrypt `ClusterIssuer`, and Synology CSI are Ready.
 - The `synology-iscsi-retain` StorageClass passed provisioning, persistence, cross-node reattachment, expansion, and retained-volume validation.
-- The shared Cloudflare Tunnel has two `cloudflared` 2026.7.2 replicas and a catch-all 404 route. Grafana is not routed through it yet.
+- The shared Cloudflare Tunnel has two Ready `cloudflared` 2026.7.2 replicas, routes only public Grafana traffic to the in-cluster HTTPS Service, and retains a catch-all 404 route.
 - Cilium agent, Cilium operator, low-cardinality Hubble DNS/drop/TCP, and Blocky telemetry are collected through a dependency-ordered Flux component. The pinned Cilium release runs the merged metric settings as Helm revision 2.
 - Eight focused, repository-owned Grafana dashboards cover network interfaces, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog without runtime dashboard downloads. Grafana has provisioned all eight; credential-gated SNMP and Proxmox panels remain empty until their collectors are enabled.
 - The retained storage validation PV remains intentionally preserved for later manual cleanup.
@@ -88,6 +88,18 @@ Acceptance completed on 2026-07-21. PRs #114, #115, and #116 introduced dependen
 - VictoriaMetrics and VictoriaLogs datasource health checks both returned `OK` through the LAN TLS endpoint.
 - Grafana ran Ready on the general-purpose worker with zero restarts. Its stack-owned VMServiceScrape uses HTTPS, validates the public certificate against `grafana.bohdal.name`, returned `up=1`, and stopped the previous plaintext scrape handshake errors.
 - The DNS renderer now derives changed-zone serials from the committed baseline, so repeated renders are idempotent and `dns-check` can pass before commit.
+
+## Grafana Cloudflare acceptance
+
+Acceptance completed on 2026-07-22 after PRs #134 and #135:
+
+- The shared tunnel routes only `grafana.bohdal.name` to `https://metrics-grafana.observability.svc.cluster.local:443`, supplies the canonical host name for HTTP and TLS validation, and retains the terminal `http_status:404` rule.
+- Public DNS is a proxied CNAME to the stack-owned tunnel. A request pinned to a public Cloudflare edge returned HTTP 302 to `bohdy.cloudflareaccess.com/cdn-cgi/access/login/grafana.bohdal.name`, proving that unauthenticated internet traffic stops at Access rather than reaching Grafana.
+- The self-hosted Access application permits exactly the Bitwarden-managed Gmail identity, accepts only the existing Google identity provider, redirects directly to that provider, and has one default-deny-compatible allow policy requiring the same Google login method.
+- Independent Cloudflare-managed MFA is disabled for this single-user application. The owner must retain strong authentication on the Google account; Grafana authentication remains enabled behind Access.
+- Split DNS remains independent of Cloudflare. A request pinned to LAN VIP `10.1.30.55` returned Grafana 13.1.0 with database `ok` over HTTPS.
+- Production workflow runs `29924453217` and `29928401304` applied the initial publication and MFA simplification from immutable reviewed plans. The latter reported `0 added, 1 changed, 0 destroyed`, and a post-apply authenticated OpenTofu plan reported no changes.
+- Both `cloudflared` replicas and Grafana were Ready during final acceptance. Grafana had zero restarts; the tunnel replicas retained six historical restarts each from more than four hours earlier and logged no errors during the 30-minute acceptance window.
 
 ## Vector acceptance
 
@@ -209,8 +221,7 @@ Continue with a fresh branch from current `main` for each coherent stage:
 1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
 2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
 3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
-4. Publish Grafana through the shared Cloudflare Tunnel and Cloudflare Access restricted to the exact approved Gmail identity with Google MFA.
-5. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
+4. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
