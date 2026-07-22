@@ -56,6 +56,8 @@ Replace each placeholder ID only after creating the named Bitwarden item. The Se
 
 Every enabled target must have no blockers and one matching `VMStaticScrape` endpoint. Disabled entries remain documentation only. Do not infer missing addresses or scan a subnet.
 
+The MikroTik gateway is polled at `10.1.20.1`, where RouterOS exposes SNMP. Its separate `10.1.100.1` management address remains the Terraform provider endpoint and rejects SNMP traffic.
+
 Perform narrow discovery of `sysName.0`, `sysDescr.0`, and `sysObjectID.0` from the confirmed seed list before finalizing modules. Use a 60-second interval for ordinary network devices, 30 seconds for APC UPS devices, and suppress offline alerts for the intermittent Brother printer.
 
 ## Validation
