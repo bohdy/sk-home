@@ -216,6 +216,7 @@ jobs:
             bec590dc-5777-441f-8f4b-b41c00c84280 > PROXMOX_VE_API_TOKEN
             f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
+            2ea66873-6852-4af9-bca2-b48f00f84a0a > PROXMOX_EXPORTER_API_TOKEN
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ matrix.stacks }} init
@@ -236,9 +237,9 @@ jobs:
           TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
           TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
 
-      - name: Store Proxmox exporter token in Bitwarden
-        # The generated token is creation-only in the Proxmox API. Persist it
-        # immediately after apply and fail closed if the secure handoff fails.
+      - name: Verify Proxmox exporter token handoff
+        # The GitHub Bitwarden identity is intentionally read-only. Compare its
+        # injected value with encrypted state and fail closed on any mismatch.
         run: |
           set +x
           exporter_token="$(tofu -chdir=terraform/${{ matrix.stacks }} output -raw proxmox_exporter_api_token)"
@@ -252,13 +253,13 @@ jobs:
           esac
 
           echo "::add-mask::${exporter_token}"
-          bws secret edit \
-            --value "${exporter_token}" \
-            --output none \
-            2ea66873-6852-4af9-bca2-b48f00f84a0a
+          if [[ "${exporter_token}" != "${PROXMOX_EXPORTER_API_TOKEN}" ]]; then
+            echo "Bitwarden does not match the OpenTofu-managed Proxmox exporter token." >&2
+            exit 1
+          fi
           unset exporter_token
         env:
-          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+          PROXMOX_EXPORTER_API_TOKEN: ${{ env.PROXMOX_EXPORTER_API_TOKEN }}
 
   gateway-apply:
     name: Apply reviewed gateway plan
