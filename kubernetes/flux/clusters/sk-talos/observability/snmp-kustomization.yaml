@@ -1,0 +1,20 @@
+# SNMP polling depends on the metrics operator and VMAgent that consume the
+# exporter's self-scrape and per-device VMStaticScrape resources.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-snmp
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 10m
+  retryInterval: 2m
+  path: ./kubernetes/flux/observability/snmp
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-metrics
+    - name: cilium

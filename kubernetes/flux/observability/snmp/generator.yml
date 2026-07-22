@@ -16,6 +16,15 @@ auths:
     priv_password: ${SNMP_V3_PRIV_PASSWORD}
     priv_protocol: AES
     version: 3
+  # RouterOS 7 supports SHA1 authentication with AES privacy for SNMPv3.
+  snmp_v3_routeros:
+    username: ${SNMP_V3_USERNAME}
+    security_level: authPriv
+    password: ${SNMP_V3_AUTH_PASSWORD}
+    auth_protocol: SHA
+    priv_password: ${SNMP_V3_PRIV_PASSWORD}
+    priv_protocol: AES
+    version: 3
 modules:
   # SNMPv2-MIB for things like sysDescr, sysUpTime, etc.
   system:

@@ -13,13 +13,9 @@ targets:
     interval: 60s
     availability: always-on
     address_stability: static
-    auth_profile: snmp_v2
-    enabled: false
-    blockers:
-      # Live inspection confirmed read-only v2c, but its current ACL includes
-      # 0.0.0.0/0 and must be narrowed to the accepted 10.0.0.0/8 boundary.
-      - narrow-snmp-acl
-      - bootstrap-v2-secret
+    auth_profile: snmp_v3_routeros
+    enabled: true
+    blockers: []
 
   - name: synology
     address: 10.1.100.10
