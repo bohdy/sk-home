@@ -100,7 +100,7 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by OpenTofu's S3-compatible backend. If they are missing from the shell environment, `tofu init` and `tofu plan` will fail before evaluating stack resources with `No valid credential sources found`.
 
-The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It is plan-only in GitHub Actions and starts with a terminal `404` route; application DNS, routing, and Access policy are added with the workload that owns each hostname.
+The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's public DNS, HTTPS tunnel route, exact Google identity plus independent Access MFA policy, and the terminal `404` fallback.
 
 The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
 
@@ -117,6 +117,14 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gatewa
 ```
 
 The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment. Do not set both gateway apply inputs to `true`; mutually exclusive job conditions intentionally skip both mutation paths in that case.
+
+Publish or update Grafana's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
+
+```sh
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_cloudflare=true
+```
+
+The three manual apply inputs are mutually exclusive. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
 
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 

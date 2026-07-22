@@ -2,7 +2,7 @@
 
 This component runs two fixed `cloudflared` 2026.7.2 replicas for the remotely managed shared `sk-talos` tunnel. The replicas provide process and rollout redundancy; preferred anti-affinity will spread them across nodes when another schedulable worker exists.
 
-The base Cloudflare configuration returns `404` for every request. Deploying this connector alone does not publish an application.
+The Cloudflare control-plane stack routes only `grafana.bohdal.name` through these connectors and leaves a terminal `404` rule for every unmatched hostname. Deploying the connector alone still cannot publish an application; public DNS, tunnel ingress, and Access remain OpenTofu-owned resources.
 
 ## Token bootstrap
 
@@ -32,4 +32,4 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n cloudflare-tunnel get pods -o w
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n cloudflare-tunnel logs deployment/cloudflared
 ```
 
-Both pods must be Ready and report registered tunnel connections. Public hostname routing and Cloudflare Access remain separate workload-owned changes.
+Both pods must be Ready and report registered tunnel connections. Validate public hostname routing and Cloudflare Access through the OpenTofu stack's acceptance procedure rather than mutating the remotely managed tunnel in the dashboard.

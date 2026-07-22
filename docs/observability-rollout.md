@@ -230,6 +230,7 @@ Known item names needed by the rollout are:
 - `SK-TALOS-SNMP-V3-USERNAME`: SNMPv3 security name only
 - `SK-TALOS-SNMP-V3-AUTH-PASSWORD`: SNMPv3 authentication password only
 - `SK-TALOS-SNMP-V3-PRIV-PASSWORD`: SNMPv3 privacy password only
+- `SK-TALOS-GRAFANA-ACCESS-EMAIL`: exact Gmail address allowed by Cloudflare Access only
 
 Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3, the Proxmox auditor token, or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
 
