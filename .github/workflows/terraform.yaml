@@ -236,6 +236,30 @@ jobs:
           TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
           TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
 
+      - name: Store Proxmox exporter token in Bitwarden
+        # The generated token is creation-only in the Proxmox API. Persist it
+        # immediately after apply and fail closed if the secure handoff fails.
+        run: |
+          set +x
+          exporter_token="$(tofu -chdir=terraform/${{ matrix.stacks }} output -raw proxmox_exporter_api_token)"
+
+          case "${exporter_token}" in
+            observability@pve!exporter=*) ;;
+            *)
+              echo "Proxmox exporter token output has an unexpected identity." >&2
+              exit 1
+              ;;
+          esac
+
+          echo "::add-mask::${exporter_token}"
+          bws secret edit \
+            --value "${exporter_token}" \
+            --output none \
+            2ea66873-6852-4af9-bca2-b48f00f84a0a
+          unset exporter_token
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+
   gateway-apply:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against

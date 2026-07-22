@@ -45,6 +45,10 @@ export TF_VAR_proxmox_ssh_username="$(bws secret get f6a9155e-b392-45b8-8254-b41
 export TF_VAR_proxmox_ssh_private_key="$(bws secret get a64de379-c939-4d47-841e-b41c00c8641d -o json | jq -r .value)"
 ```
 
+This stack also owns the shared read-only Proxmox exporter identity. It creates `observability@pve`, a privilege-separated `exporter` API token, and a token-specific propagated `PVEAuditor` ACL at `/`. The sensitive output contains the full `observability@pve!exporter=<secret>` credential and remains in encrypted remote state.
+
+After a reviewed `main` apply, the workflow masks that output and writes it directly to Bitwarden item `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN` (`2ea66873-6852-4af9-bca2-b48f00f84a0a`). The item contains the full API token string only. The workflow fails if the output identity is unexpected or the Bitwarden write fails; never print or manually split the value.
+
 Keep shell tracing disabled while these variables are present.
 
 ## Usage

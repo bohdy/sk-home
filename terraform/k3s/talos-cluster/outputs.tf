@@ -46,3 +46,12 @@ output "cluster_endpoint" {
   description = "Kubernetes API endpoint backed by the Talos VIP."
   value       = "https://${var.cluster_endpoint_vip}:6443"
 }
+
+output "proxmox_exporter_api_token" {
+  # The provider returns only the secret value on creation. Remote state keeps
+  # the complete credential so the apply workflow can hand it directly to the
+  # dedicated Bitwarden item without exposing it in logs or repository files.
+  description = "Sensitive full API token for the read-only Proxmox exporter identity."
+  value       = "${proxmox_user_token.observability_exporter.id}=${proxmox_user_token.observability_exporter.value}"
+  sensitive   = true
+}

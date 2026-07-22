@@ -156,6 +156,8 @@ export TF_VAR_proxmox_ssh_username="$(bws secret get f6a9155e-b392-45b8-8254-b41
 export TF_VAR_proxmox_ssh_private_key="$(bws secret get a64de379-c939-4d47-841e-b41c00c8641d -o json | jq -r .value)"
 ```
 
+The Talos stack also manages the shared read-only Proxmox exporter identity and its root `PVEAuditor` ACL. Its generated full API token is a sensitive OpenTofu output that the post-apply workflow masks and writes directly to dedicated Bitwarden item `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN`; a failed handoff fails the workflow.
+
 Run the plan for the selected stack:
 
 ```bash
