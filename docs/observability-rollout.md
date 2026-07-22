@@ -189,11 +189,24 @@ Acceptance completed on 2026-07-17:
 - Grafana loaded signed plugin `victoriametrics-logs-datasource` version 0.29.0, its real-query health check returned OK, and its data-source query API returned the persisted acceptance record.
 - VictoriaLogs and Grafana remained Ready with zero restarts after acceptance.
 
+## MikroTik SNMP acceptance
+
+Acceptance completed on 2026-07-22 for the production SNMPv3 path:
+
+- OpenTofu imported the existing RouterOS v2c and v3 communities with `2 imported, 0 added, 0 changed, 0 destroyed`; the follow-up plan reported no changes.
+- Both communities are enabled, read-only, and scoped to `10.0.0.0/8`. The production v3 profile uses RouterOS-supported SHA1 authentication with AES privacy.
+- Flux `observability-snmp` applied Git revision `c0a3384` and reported Ready after the polling target was corrected from the REST management address `10.1.100.1` to the RouterOS SNMP listener at `10.1.20.1`.
+- Direct v3 discovery across the `system`, `if_mib`, and `mikrotik` modules returned 447 samples across 95 metric names, including system uptime, high-capacity interface counters, and MikroTik vendor metrics.
+- VictoriaMetrics reported the production target and exporter self-scrape at `up=1`, with stable `cluster="sk-talos"`, `site="sk"`, `instance="mikrotik-gw"`, and `vendor="mikrotik"` labels.
+- The production target exposed 2,464 series, below its 10,000-series limit. The exporter pod was Ready with zero restarts and no scrape errors after the target correction.
+- Exporter arguments, rendered manifests, logs, and metrics contained credential variable names or masked values only; the four actual Bitwarden values were absent from the Git diff.
+- The optional v2c compatibility probe times out even though Bitwarden, the Kubernetes Secret, OpenTofu state, and the live RouterOS community agree. Production remains on healthy SNMPv3; diagnose v2c without weakening or interrupting that path.
+
 ## Remaining stages
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Complete live acceptance for the SNMP Exporter gateway scrape, then add targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
+1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
 2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
 3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
 4. Publish Grafana through the shared Cloudflare Tunnel and Cloudflare Access restricted to the exact approved Gmail identity with Google MFA.
@@ -222,4 +235,4 @@ Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3,
 
 ## Deferred debt
 
-Keep the design document's follow-up list authoritative. In particular, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred.
+Keep the design document's follow-up list authoritative. In particular, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3.

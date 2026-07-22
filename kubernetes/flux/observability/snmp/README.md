@@ -71,6 +71,6 @@ kubectl kustomize kubernetes/flux/observability/snmp | kubectl apply --server-si
 
 Use server-side apply for validation because the selected generated modules exceed Kubernetes' client-side last-applied annotation limit. The ConfigMap itself remains below the Kubernetes object-size limit, and Flux also reconciles it with server-side apply.
 
-Require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful SNMPv2c and SNMPv3 discovery, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics. The MikroTik production scrape uses `snmp_v3_routeros`; SNMPv2c remains available only for explicit compatibility testing.
+Require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful discovery with every production target's configured auth profile, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics. The MikroTik production scrape uses `snmp_v3_routeros`; SNMPv2c remains available only for explicit compatibility testing and is not a production readiness dependency.
 
 Routine rollback suspends `observability-snmp` or removes it from the cluster Flux tree. The external Secret may remain for redeployment, but delete it explicitly if SNMP monitoring is abandoned.
