@@ -1,0 +1,111 @@
+# One stateless exporter replica is sufficient for this single-node Proxmox
+# deployment; temporary monitoring downtime is acceptable in the home lab.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxmox-exporter
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: proxmox-exporter
+    app.kubernetes.io/component: infrastructure-metrics
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: proxmox-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: proxmox-exporter
+        app.kubernetes.io/component: infrastructure-metrics
+    spec:
+      automountServiceAccountToken: false
+      # Prefer the general-purpose worker while allowing rescheduling during
+      # maintenance because the worker is intentionally not dedicated.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: proxmox-exporter
+          image: prompve/prometheus-pve-exporter:3.8.2@sha256:e3d501a82df58bc0dd0e3f1fb49f4c10d3069e71ddad68b1fbb773b65da0c177
+          # Bitwarden stores the provider-native full token as one atomic
+          # secret. Split only in process memory for the exporter's required
+          # environment variables; no credential enters arguments or files.
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              case "${PVE_API_TOKEN}" in
+                observability@pve!exporter=?*) ;;
+                *)
+                  echo "Proxmox exporter token has an unexpected identity or empty value." >&2
+                  exit 1
+                  ;;
+              esac
+              identity="${PVE_API_TOKEN%%=*}"
+              token_value="${PVE_API_TOKEN#*=}"
+              export PVE_USER="${identity%%!*}"
+              export PVE_TOKEN_NAME="${identity#*!}"
+              export PVE_TOKEN_VALUE="${token_value}"
+              unset PVE_API_TOKEN identity token_value
+              exec /usr/bin/pve_exporter --web.listen-address=:9221
+          env:
+            - name: PVE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: proxmox-exporter-auth
+                  key: api-token
+            - name: PVE_VERIFY_SSL
+              value: "true"
+            - name: REQUESTS_CA_BUNDLE
+              value: /etc/proxmox/ca.crt
+          ports:
+            - name: http
+              containerPort: 9221
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: ca
+              mountPath: /etc/proxmox
+              readOnly: true
+      securityContext:
+        fsGroup: 101
+      volumes:
+        - name: ca
+          configMap:
+            name: proxmox-exporter-ca

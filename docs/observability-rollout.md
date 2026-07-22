@@ -49,7 +49,7 @@ Acceptance completed on 2026-07-17:
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
 2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
 3. Run Discord synthetic tests for critical fan-out, warning delivery, recovery, grouping, and inhibition behavior, then expire every test alert.
-4. Bootstrap the absent SNMPv2c and SNMPv3 credentials, resolve device-side and inventory blockers, and create a dedicated Proxmox `PVEAuditor` token instead of reusing the provisioning identity.
+4. Resolve the remaining device-specific SNMP authentication, address-stability, and inventory blockers without weakening the accepted MikroTik SNMPv3 path.
 
 ## Network metrics acceptance
 
@@ -248,8 +248,9 @@ Known item names needed by the rollout are:
 - `SK-TALOS-SNMP-V3-AUTH-PASSWORD`: SNMPv3 authentication password only
 - `SK-TALOS-SNMP-V3-PRIV-PASSWORD`: SNMPv3 privacy password only
 - `SK-TALOS-GRAFANA-ACCESS-EMAIL`: exact Gmail address allowed by Cloudflare Access only
+- `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN`: full OpenTofu-generated `observability@pve!exporter=<secret>` API token only
 
-Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3, the Proxmox auditor token, or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
+Create dedicated Bitwarden items before the stages that require device-specific SNMP credentials or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
 
 ## Deferred debt
 

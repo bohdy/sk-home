@@ -1,0 +1,19 @@
+# Content-hash the public Proxmox CA so trust rotation causes a deterministic
+# exporter rollout without committing any credential-bearing configuration.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - network-policy.yaml
+  - vm-service-scrape.yaml
+  - vm-static-scrape.yaml
+configMapGenerator:
+  - name: proxmox-exporter-ca
+    namespace: observability
+    files:
+      - ca.crt=pve-root-ca.pem
+generatorOptions:
+  labels:
+    app.kubernetes.io/name: proxmox-exporter
+    app.kubernetes.io/component: infrastructure-metrics

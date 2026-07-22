@@ -1,0 +1,18 @@
+# Exporter process metrics expose Python runtime and scrape-handler health
+# independently from successful Proxmox API collection.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: proxmox-exporter
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: proxmox-exporter
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 1000
+      seriesLimit: 1000

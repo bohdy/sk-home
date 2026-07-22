@@ -6,8 +6,9 @@ resource "proxmox_virtual_environment_user" "observability" {
   enabled = true
 }
 
-# Keep token privileges separate from the user. The explicit token ACL below is
-# therefore the complete authorization boundary for exporter API requests.
+# Keep token privileges separate from the user. Proxmox evaluates separated
+# tokens as the intersection of user and token ACLs, so both receive only the
+# same built-in read-only role at the root path.
 resource "proxmox_user_token" "observability_exporter" {
   user_id               = proxmox_virtual_environment_user.observability.user_id
   token_name            = "exporter"
@@ -15,8 +16,17 @@ resource "proxmox_user_token" "observability_exporter" {
   privileges_separation = true
 }
 
-# PVEAuditor at the root is the built-in read-only role required to discover
-# cluster, node, storage, and guest metrics without granting mutation rights.
+# The passwordless parent user supplies the upper half of the separated-token
+# permission intersection; it has no independent credential used by workloads.
+resource "proxmox_acl" "observability_user" {
+  user_id   = proxmox_virtual_environment_user.observability.user_id
+  role_id   = "PVEAuditor"
+  path      = "/"
+  propagate = true
+}
+
+# The token-specific half prevents this token from inheriting any future user
+# privilege beyond the same built-in read-only PVEAuditor role.
 resource "proxmox_acl" "observability_exporter" {
   token_id  = proxmox_user_token.observability_exporter.id
   role_id   = "PVEAuditor"

@@ -1,7 +1,7 @@
 $ORIGIN 100.1.10.in-addr.arpa.
 $TTL 300
 @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-    2026060901 ; serial
+    2026072201 ; serial
     300        ; refresh
     120        ; retry
     1209600    ; expire
@@ -9,3 +9,4 @@ $TTL 300
 )
 @ IN NS  dns.bohdal.name.
 1 IN PTR gw.bohdal.name.
+201 IN PTR pve.sk.bohdal.name.
