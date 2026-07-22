@@ -1,6 +1,7 @@
 [tools]
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
+"aqua:bitwarden/sdk-sm" = "2.1.0"
 pre-commit = "latest"
 
 [tasks.dns-render]
