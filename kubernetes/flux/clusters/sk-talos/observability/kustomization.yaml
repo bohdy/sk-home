@@ -11,4 +11,5 @@ resources:
   - logs-kustomization.yaml
   - vector-kustomization.yaml
   - blackbox-kustomization.yaml
+  - snmp-kustomization.yaml
   - alerting-kustomization.yaml

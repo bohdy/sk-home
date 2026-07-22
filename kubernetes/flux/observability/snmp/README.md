@@ -1,6 +1,6 @@
 # SNMP Exporter
 
-This component defines Prometheus SNMP Exporter 0.30.1 as a reusable, ClusterIP-only multi-target collector. It is intentionally not added to the cluster Flux tree until the target inventory and external credential Secret are complete.
+This component defines Prometheus SNMP Exporter 0.30.1 as a reusable, ClusterIP-only multi-target collector. Flux deploys it after metrics and Cilium are ready.
 
 ## Configuration
 
@@ -18,7 +18,7 @@ The authoritative source snapshot is the upstream `v0.30.1` tag. Its generator M
 
 Several vendor URLs are unversioned upstream. Treat the committed generated output and the SNMP Exporter v0.30.1 tag as the reproducible review boundary. Do not commit downloaded MIB files unless their redistribution licenses explicitly permit it.
 
-The committed auth definitions contain environment-variable placeholders rather than credentials. `snmp_v2` uses SNMPv2c. `snmp_v3` uses `authPriv` with SHA-256 authentication and AES privacy. Change protocol choices in `generator.yml` and regenerate `snmp.yml` only after confirming device support.
+The committed auth definitions contain environment-variable placeholders rather than credentials. `snmp_v2` uses SNMPv2c. The generic `snmp_v3` profile uses `authPriv` with SHA-256 authentication and AES privacy, while `snmp_v3_routeros` uses RouterOS-compatible SHA1 authentication and AES privacy. Change protocol choices in `generator.yml` and regenerate `snmp.yml` only after confirming device support.
 
 ## Secret
 
@@ -54,7 +54,7 @@ Replace each placeholder ID only after creating the named Bitwarden item. The Se
 
 `targets.yaml` is the explicit external-device inventory. It records stable identity, management address, modules, auth profile, polling interval, availability class, address stability, and deployment blockers. A disabled entry is documentation only and must not produce a scrape endpoint.
 
-Before wiring this component into Flux, remove every target blocker and add one `VMStaticScrape` endpoint per enabled device. Do not infer missing addresses or scan a subnet.
+Every enabled target must have no blockers and one matching `VMStaticScrape` endpoint. Disabled entries remain documentation only. Do not infer missing addresses or scan a subnet.
 
 Perform narrow discovery of `sysName.0`, `sysDescr.0`, and `sysObjectID.0` from the confirmed seed list before finalizing modules. Use a 60-second interval for ordinary network devices, 30 seconds for APC UPS devices, and suppress offline alerts for the intermittent Brother printer.
 
@@ -69,6 +69,6 @@ kubectl kustomize kubernetes/flux/observability/snmp | kubectl apply --server-si
 
 Use server-side apply for validation because the selected generated modules exceed Kubernetes' client-side last-applied annotation limit. The ConfigMap itself remains below the Kubernetes object-size limit, and Flux also reconciles it with server-side apply.
 
-After credentials and targets are present, require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful SNMPv2c and SNMPv3 discovery, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics.
+Require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful SNMPv2c and SNMPv3 discovery, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics. The MikroTik production scrape uses `snmp_v3_routeros`; SNMPv2c remains available only for explicit compatibility testing.
 
-Routine rollback removes or suspends the future Flux Kustomization. The external Secret may remain for redeployment, but delete it explicitly if SNMP monitoring is abandoned.
+Routine rollback suspends `observability-snmp` or removes it from the cluster Flux tree. The external Secret may remain for redeployment, but delete it explicitly if SNMP monitoring is abandoned.

@@ -193,7 +193,7 @@ Acceptance completed on 2026-07-17:
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Add SNMP Exporter, committed target inventory, and reviewed SNMPv2c/SNMPv3 modules for MikroTik, UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
+1. Complete live acceptance for the SNMP Exporter gateway scrape, then add targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
 2. Add the read-only Proxmox exporter and one explicitly selected stable external HTTPS target to Blackbox Exporter.
 3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
 4. Publish Grafana through the shared Cloudflare Tunnel and Cloudflare Access restricted to the exact approved Gmail identity with Google MFA.
@@ -213,6 +213,10 @@ Known item names needed by the rollout are:
 - `SK-TALOS-SYNO-CSI`: Synology CSI DSM password only
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token only
 - `TELEGRAM_CHAT_ID`: Telegram group chat ID only
+- `SK-TALOS-SNMP-V2-COMMUNITY`: SNMPv2c community string only
+- `SK-TALOS-SNMP-V3-USERNAME`: SNMPv3 security name only
+- `SK-TALOS-SNMP-V3-AUTH-PASSWORD`: SNMPv3 authentication password only
+- `SK-TALOS-SNMP-V3-PRIV-PASSWORD`: SNMPv3 privacy password only
 
 Create dedicated Bitwarden items before the stages that require SNMPv2c, SNMPv3, the Proxmox auditor token, or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
 

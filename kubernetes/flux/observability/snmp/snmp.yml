@@ -16,6 +16,14 @@ auths:
     priv_password: ${SNMP_V3_PRIV_PASSWORD}
     priv_protocol: AES
     version: 3
+  snmp_v3_routeros:
+    username: ${SNMP_V3_USERNAME}
+    security_level: authPriv
+    password: ${SNMP_V3_AUTH_PASSWORD}
+    auth_protocol: SHA
+    priv_password: ${SNMP_V3_PRIV_PASSWORD}
+    priv_protocol: AES
+    version: 3
 modules:
   apcups:
     walk:
