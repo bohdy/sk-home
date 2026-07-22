@@ -24,6 +24,13 @@ on:
         required: true
         default: false
         type: boolean
+      apply_cloudflare:
+        # Public routing and Access changes require an explicit reviewed apply
+        # from main and must not share a dispatch with gateway mutation.
+        description: Apply the reviewed Cloudflare tunnel and Access plan
+        required: true
+        default: false
+        type: boolean
 
 # The workflow only reads repository contents; credentials come from the
 # Bitwarden action and are not exposed through the GitHub token.
@@ -100,6 +107,7 @@ jobs:
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
             34461539-ca00-4f0b-b7e0-b41b00c9c243 > CLOUDFLARE_ACCOUNT_ID
             535c2d90-8239-4f6b-a70f-b41b00c9d06c > CLOUDFLARE_API_TOKEN
+            483e35d1-7bd1-46df-9946-b48f00b093d8 > GRAFANA_ACCESS_EMAIL
 
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
@@ -136,6 +144,7 @@ jobs:
           TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
           TF_VAR_cloudflare_account_id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           TF_VAR_cloudflare_api_token: ${{ env.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_access_email: ${{ env.GRAFANA_ACCESS_EMAIL }}
           TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
           TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
@@ -231,7 +240,7 @@ jobs:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against
     # main; pull requests and ordinary main pushes remain plan-only.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
@@ -298,7 +307,7 @@ jobs:
     name: Plan gateway SNMP adoption
     # A separate targeted artifact avoids planning the provider-broken IP and
     # BGP updates while retaining reviewable, immutable OpenTofu execution.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -365,7 +374,7 @@ jobs:
 
   gateway-snmp-apply:
     name: Apply gateway SNMP adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-snmp-plan
     environment: production
@@ -425,3 +434,61 @@ jobs:
           TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+  cloudflare-apply:
+    name: Apply reviewed Cloudflare plan
+    # External publication is opt-in and mutually exclusive with both gateway
+    # mutation paths so one approval always has one operational blast radius.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp
+    runs-on: self-hosted
+    needs: tofu-plan
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: cloudflare/tunnel
+      TOFU_PLAN_ARTIFACT: cloudflare-tunnel-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      # Consume the immutable plan created before the production approval.
+      - name: Download reviewed OpenTofu plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get Cloudflare secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            34461539-ca00-4f0b-b7e0-b41b00c9c243 > CLOUDFLARE_ACCOUNT_ID
+            535c2d90-8239-4f6b-a70f-b41b00c9d06c > CLOUDFLARE_API_TOKEN
+            483e35d1-7bd1-46df-9946-b48f00b093d8 > GRAFANA_ACCESS_EMAIL
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: OpenTofu apply
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_cloudflare_account_id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_api_token: ${{ env.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_access_email: ${{ env.GRAFANA_ACCESS_EMAIL }}
