@@ -12,4 +12,5 @@ resources:
   - vector-kustomization.yaml
   - blackbox-kustomization.yaml
   - snmp-kustomization.yaml
+  - proxmox-kustomization.yaml
   - alerting-kustomization.yaml

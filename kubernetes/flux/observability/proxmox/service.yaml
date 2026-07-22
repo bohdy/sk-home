@@ -1,0 +1,18 @@
+# Keep the exporter cluster-internal; VMAgent is its only metrics consumer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxmox-exporter
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: proxmox-exporter
+    app.kubernetes.io/component: infrastructure-metrics
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: proxmox-exporter
+  ports:
+    - name: http
+      port: 9221
+      targetPort: http
+      protocol: TCP

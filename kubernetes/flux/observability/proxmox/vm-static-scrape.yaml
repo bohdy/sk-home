@@ -1,0 +1,33 @@
+# The exporter is multi-target: preserve the logical Proxmox identity while
+# sending the certificate-valid API host to the shared exporter Service.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: proxmox
+  namespace: observability
+spec:
+  jobName: proxmox
+  targetEndpoints:
+    - targets:
+        - pve.sk.bohdal.name
+      labels:
+        instance: pve
+        availability: always-on
+      path: /pve
+      params:
+        module:
+          - default
+        cluster:
+          - "1"
+        node:
+          - "1"
+      interval: 30s
+      scrapeTimeout: 20s
+      sampleLimit: 5000
+      seriesLimit: 5000
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: proxmox-exporter.observability.svc.cluster.local.:9221

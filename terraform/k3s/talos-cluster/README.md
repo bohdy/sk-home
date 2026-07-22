@@ -45,7 +45,7 @@ export TF_VAR_proxmox_ssh_username="$(bws secret get f6a9155e-b392-45b8-8254-b41
 export TF_VAR_proxmox_ssh_private_key="$(bws secret get a64de379-c939-4d47-841e-b41c00c8641d -o json | jq -r .value)"
 ```
 
-This stack also owns the shared read-only Proxmox exporter identity. It creates `observability@pve`, a privilege-separated `exporter` API token, and a token-specific propagated `PVEAuditor` ACL at `/`. The sensitive output contains the full `observability@pve!exporter=<secret>` credential and remains in encrypted remote state.
+This stack also owns the shared read-only Proxmox exporter identity. It creates passwordless user `observability@pve`, a privilege-separated `exporter` API token, and matching propagated `PVEAuditor` ACLs at `/` for both the user and token. Proxmox evaluates the token through the intersection of those two read-only ACLs. The sensitive output contains the full `observability@pve!exporter=<secret>` credential and remains in encrypted remote state.
 
 Bitwarden item `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN` (`2ea66873-6852-4af9-bca2-b48f00f84a0a`) contains the full `observability@pve!exporter=<secret>` token string only. Because the GitHub Bitwarden identity is intentionally read-only, an authorized operator performs the creation-time handoff from the sensitive OpenTofu output to that item with shell tracing disabled. The post-apply workflow masks the state value and fails unless the Bitwarden-injected value matches exactly; never print or manually split the value.
 
