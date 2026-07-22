@@ -4,7 +4,9 @@
 schema_version: 1
 targets:
   - name: mikrotik-gw
-    address: 10.1.100.1
+    # RouterOS exposes SNMP on its routed gateway address; the separate
+    # 10.1.100.1 management address rejects UDP/161.
+    address: 10.1.20.1
     vendor: mikrotik
     modules:
       - system
