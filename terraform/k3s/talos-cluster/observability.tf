@@ -1,9 +1,15 @@
 # The observability exporter uses its own identity so a compromise cannot reuse
 # the cluster provisioning token or inherit mutation privileges from that user.
+resource "proxmox_virtual_environment_group" "observability" {
+  group_id = "observability"
+  comment  = "Read-only observability identities; managed by OpenTofu"
+}
+
 resource "proxmox_virtual_environment_user" "observability" {
   user_id = "observability@pve"
   comment = "Read-only observability exporters; managed by OpenTofu"
   enabled = true
+  groups  = [proxmox_virtual_environment_group.observability.group_id]
 }
 
 # Keep token privileges separate from the user. Proxmox evaluates separated
@@ -16,10 +22,21 @@ resource "proxmox_user_token" "observability_exporter" {
   privileges_separation = true
 }
 
-# The passwordless parent user supplies the upper half of the separated-token
-# permission intersection; it has no independent credential used by workloads.
-resource "proxmox_acl" "observability_user" {
-  user_id   = proxmox_virtual_environment_user.observability.user_id
+# Provider 0.106.0 recorded the parent-user ACL as present while Proxmox stored
+# only the similarly prefixed token ACL. Forget that phantom state entry without
+# issuing a delete that could remove the real token ACL.
+removed {
+  from = proxmox_acl.observability_user
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+# Group membership supplies the parent user's half of the separated-token
+# permission intersection without colliding with the token's ACL identity.
+resource "proxmox_acl" "observability_group" {
+  group_id  = proxmox_virtual_environment_group.observability.group_id
   role_id   = "PVEAuditor"
   path      = "/"
   propagate = true
