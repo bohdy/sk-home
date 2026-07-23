@@ -270,6 +270,16 @@ Known item names needed by the rollout are:
 - `SK-TALOS-SNMP-V3-PRIV-PASSWORD`: SNMPv3 privacy password only
 - `SK-TALOS-GRAFANA-ACCESS-EMAIL`: exact Gmail address allowed by Cloudflare Access only
 - `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN`: full OpenTofu-generated `observability@pve!exporter=<secret>` API token only
+- `SK-TALOS-UNIFI-CONTROLLER-USERNAME` (`bb9869b1-c721-46b9-a07b-b49000a68fb1`): UniFi Network administrator username used only to configure and verify access-point SNMP
+- `SK-TALOS-UNIFI-CONTROLLER-PASSWORD` (`8fa7fee1-3612-42e7-895f-b49000a68ffd`): matching UniFi Network administrator password only
+- `SK-TALOS-SYNO-MONITORING-USERNAME` (`23d42b1f-323c-4405-b36c-b49000a69047`): dedicated least-privileged Synology DSM monitoring username
+- `SK-TALOS-SYNO-MONITORING-PASSWORD` (`8d9d92fb-aada-4dab-997d-b49000a690a7`): matching Synology DSM monitoring password only
+- `SK-TALOS-APC-UPS-USERNAME` (`88990a45-9e37-4a66-a7c9-b49000a690e7`): APC Network Management Card administrator username used to configure and verify SNMP
+- `SK-TALOS-APC-UPS-PASSWORD` (`b8013434-6712-41f2-b113-b49000a69135`): matching APC Network Management Card administrator password only
+- `SK-TALOS-BROTHER-ADMIN-PASSWORD` (`a0c5ba12-f102-43ca-b8b7-b49000a69182`): Brother printer web-administrator password only
+- `SK-TALOS-DISCORD-WEBHOOK` (`306e8dc6-2df2-4a9e-86ec-b49000a691c7`): complete Discord webhook URL only
+
+The eight device and Discord items initially contain the literal placeholder `__REPLACE_BEFORE_USE__`. Replace every placeholder with the real single-value credential before enabling its dependent configuration; the placeholder is intentionally invalid and must never be used as a working secret.
 
 Create dedicated Bitwarden items before the stages that require device-specific SNMP credentials or the Discord webhook. Document each item's value contract next to its bootstrap procedure; never store a whole configuration block when the documented contract calls for a single credential.
 
