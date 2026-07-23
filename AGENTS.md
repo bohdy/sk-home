@@ -63,6 +63,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer Terraform/OpenTofu for infrastructure and managed-device configuration whenever a suitable provider or existing stack can own the desired state.
 - Direct API, CLI, or UI mutation is a break-glass exception, not an ordinary implementation path. Document the reason before use, minimize its scope, and adopt the resulting state into Terraform/OpenTofu immediately when provider support permits.
 - Do not use an imperative workaround merely because it is faster than correcting or extending the declarative ownership path.
+- RouterOS changes that must avoid known provider-broken resources require a dedicated, mutually exclusive workflow input that plans explicit targets, uploads the immutable plan, and applies only that artifact through the production environment.
 - Prefer the repository devcontainer for local development, OpenTofu work, workflow testing, and validation so tool versions and environment behavior stay close to automation.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
