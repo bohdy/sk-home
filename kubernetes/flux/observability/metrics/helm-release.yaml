@@ -165,12 +165,19 @@ spec:
           group_interval: 10m
           repeat_interval: 12h
           routes:
-            # Critical alerts are immediately actionable. Warning and info
-            # alerts continue to terminate at the blackhole root receiver
-            # until the dedicated Discord webhook is available.
+            # Critical alerts need immediate Telegram delivery and an auditable
+            # Discord record. Continue permits the following Discord route to
+            # receive the same critical group.
             - receiver: telegram-critical
               matchers:
                 - severity="critical"
+              continue: true
+            # Warnings are useful for follow-up, while critical alerts also
+            # reach Discord after Telegram. Informational alerts stay retained
+            # in Alertmanager and Grafana without a push notification.
+            - receiver: discord-actionable
+              matchers:
+                - severity=~"critical|warning"
               continue: false
         # Prefer the most severe state when warning and critical thresholds for
         # the same condition overlap.
@@ -210,6 +217,12 @@ spec:
                 chat_id_file: /etc/vm/secrets/alertmanager-notifications/telegram-chat-id
                 send_resolved: true
                 parse_mode: HTML
+          - name: discord-actionable
+            discord_configs:
+              # The webhook stays in the externally managed Kubernetes Secret.
+              # Alertmanager reads this file at send time, not from Helm values.
+              - webhook_url_file: /etc/vm/secrets/alertmanager-notifications/discord-webhook-url
+                send_resolved: true
 
     grafana:
       enabled: true
