@@ -103,9 +103,17 @@ spec:
             - name: ca
               mountPath: /etc/proxmox
               readOnly: true
+            # Gunicorn creates a worker heartbeat file at startup. Provide the
+            # minimum writable path without relaxing the read-only root filesystem.
+            - name: tmp
+              mountPath: /tmp
       securityContext:
         fsGroup: 101
       volumes:
         - name: ca
           configMap:
             name: proxmox-exporter-ca
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
