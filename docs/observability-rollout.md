@@ -220,6 +220,15 @@ Acceptance completed on 2026-07-22 for the production SNMPv3 path:
 - Exporter arguments, rendered manifests, logs, and metrics contained credential variable names or masked values only; the four actual Bitwarden values were absent from the Git diff.
 - The optional v2c compatibility probe times out even though Bitwarden, the Kubernetes Secret, OpenTofu state, and the live RouterOS community agree. Production remains on healthy SNMPv3; diagnose v2c without weakening or interrupting that path.
 
+## Monitored-device DHCP acceptance
+
+Acceptance completed on 2026-07-23 after PR #148 established declarative RouterOS reservations for the two initially dynamic monitoring targets:
+
+- Production workflow run `29996032535` created an immutable plan containing only two one-shot `make-static` helpers and the imported APC and Brother lease resources. Its apply completed successfully with no destroy action.
+- RouterOS lease `*158A` remains bound at `10.1.10.43` on `server10` for the APC UPS, and lease `*135B` remains bound at `10.1.10.13` on the same server for the Brother printer. Both now report `dynamic=false` and retain their descriptive comments.
+- A post-apply targeted OpenTofu plan refreshed both helpers and both managed lease resources and reported no changes. The provider still emits an unrelated unsupported `age`-field warning when reading RouterOS leases.
+- Address stability is no longer an SNMP inventory blocker for either target. Their authentication profile and Bitwarden bootstrap blockers remain; do not enable a collector until those device-side credentials and read-only SNMP settings are confirmed.
+
 ## Proxmox acceptance
 
 Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the collector and corrected issues found through live verification:

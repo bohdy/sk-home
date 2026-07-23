@@ -93,11 +93,11 @@ targets:
       - apcups
     interval: 30s
     availability: always-on
-    address_stability: dynamic-dhcp
+    # OpenTofu owns the imported RouterOS static reservation for this address.
+    address_stability: static-dhcp
     auth_profile: pending
     enabled: false
     blockers:
-      - create-static-reservation
       - confirm-auth-profile
       - bootstrap-auth-secret
 
@@ -109,10 +109,10 @@ targets:
       - printer_mib
     interval: 60s
     availability: intermittent
-    address_stability: dynamic-dhcp
+    # OpenTofu owns the imported RouterOS static reservation for this address.
+    address_stability: static-dhcp
     auth_profile: pending
     enabled: false
     blockers:
-      - create-static-reservation
       - confirm-auth-profile
       - bootstrap-auth-secret
