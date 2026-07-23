@@ -27,7 +27,7 @@ unset TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID DISCORD_WEBHOOK_URL
 
 The committed grouping and inhibition behavior applies before routes fan out. Critical alerts fan out to Telegram and Discord; warning alerts go only to Discord, and info alerts remain visible without push delivery.
 
-The Cilium egress policy permits the shared pod network namespace to reach internal HTTPS/kube-apiserver ports for VictoriaMetrics config-init and config-reloader, resolve only `api.telegram.org` and `discord.com` through kube-dns, and reach only those FQDNs on TCP 443. The deliberately broad `10.0.0.0/8` internal destination boundary is required because Cilium enforces the translated Kubernetes Service backend and is accepted for this homelab.
+The Cilium egress policy permits the shared pod network namespace to reach internal HTTPS/kube-apiserver ports for VictoriaMetrics config-init and config-reloader through both the accepted `10.0.0.0/8` homelab range and Cilium's explicit `kube-apiserver` entity. The entity is required for a new pod's initial Kubernetes Service VIP request. The policy resolves only `api.telegram.org` and `discord.com` through kube-dns, and reaches only those FQDNs on TCP 443.
 
 ## Validation
 

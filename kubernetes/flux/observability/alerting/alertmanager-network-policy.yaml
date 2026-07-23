@@ -13,10 +13,20 @@ spec:
       app.kubernetes.io/instance: metrics-victoria-metrics-k8s-stack
   egress:
     # The operator config-init and config-reloader sidecars watch Kubernetes
-    # Secrets. Cilium evaluates Service translation against node API backends,
-    # so admit only internal HTTPS and kube-apiserver ports in the home range.
+    # Secrets. The accepted home-range boundary covers translated API backends.
     - toCIDR:
         - 10.0.0.0/8
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+            - port: "6443"
+              protocol: TCP
+    # New pods retrieve their first config through the Kubernetes Service VIP.
+    # The entity admits that control-plane path even when Cilium cannot infer
+    # the translated backend from the workload's initial connection.
+    - toEntities:
+        - kube-apiserver
       toPorts:
         - ports:
             - port: "443"
