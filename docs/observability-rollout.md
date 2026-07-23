@@ -12,7 +12,7 @@ The cluster foundations are deployed and healthy:
 - The `synology-iscsi-retain` StorageClass passed provisioning, persistence, cross-node reattachment, expansion, and retained-volume validation.
 - The shared Cloudflare Tunnel has two Ready `cloudflared` 2026.7.2 replicas, routes only public Grafana traffic to the in-cluster HTTPS Service, and retains a catch-all 404 route.
 - Cilium agent, Cilium operator, low-cardinality Hubble DNS/drop/TCP, and Blocky telemetry are collected through a dependency-ordered Flux component. The pinned Cilium release runs the merged metric settings as Helm revision 2.
-- Eight focused, repository-owned Grafana dashboards cover network interfaces, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog without runtime dashboard downloads. Grafana has provisioned all eight; credential-gated SNMP and Proxmox panels remain empty until their collectors are enabled.
+- Eight focused, repository-owned Grafana dashboards cover network interfaces, APC UPS, Synology, Proxmox, DNS, ingestion health, Cilium/BGP, and syslog without runtime dashboard downloads. Grafana has provisioned all eight; Proxmox panels now receive live data, while the remaining device-specific SNMP panels stay empty until their collectors are enabled.
 - The retained storage validation PV remains intentionally preserved for later manual cleanup.
 
 The metrics stage is deployed and accepted. PRs #85, #86, and #87 introduced the stack, added the namespace-scoped Pod Security exception required by node exporter, and preserved Grafana's Helm-managed PVC during remediation.
@@ -73,7 +73,7 @@ Acceptance completed on 2026-07-21 after PR #122:
 - Flux `observability-dashboards` applied exact Git revision `2c45941` and reported Ready. Its generated 32 KiB ConfigMap carried `grafana_dashboard="1"` and contained all eight committed JSON files.
 - Grafana's authenticated search API returned UIDs `sk-network`, `sk-apc-ups`, `sk-synology`, `sk-proxmox`, `sk-dns`, `sk-ingestion`, `sk-cilium-bgp`, and `sk-syslog` as dashboard objects.
 - Grafana's dashboard API reported every object as provisioned and returned the expected 33 panels in total. The dashboard sidecar and Grafana logs contained no recent provisioning errors.
-- All 46 committed PromQL expressions executed successfully against live VictoriaMetrics. Empty results remain expected only where the SNMP and dedicated Proxmox collectors are not yet deployed.
+- All 46 committed PromQL expressions executed successfully against live VictoriaMetrics. Empty results remain expected only where the device-specific SNMP collectors are not yet deployed; the dedicated Proxmox collector is now live.
 
 ## Grafana LAN acceptance
 
@@ -220,14 +220,26 @@ Acceptance completed on 2026-07-22 for the production SNMPv3 path:
 - Exporter arguments, rendered manifests, logs, and metrics contained credential variable names or masked values only; the four actual Bitwarden values were absent from the Git diff.
 - The optional v2c compatibility probe times out even though Bitwarden, the Kubernetes Secret, OpenTofu state, and the live RouterOS community agree. Production remains on healthy SNMPv3; diagnose v2c without weakening or interrupting that path.
 
+## Proxmox acceptance
+
+Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the collector and corrected issues found through live verification:
+
+- OpenTofu owns passwordless user `observability@pve` in dedicated group `observability`, privilege-separated token `exporter`, and propagated root `PVEAuditor` ACLs for both the group and token. The live API returned both ACL entries, and the token's effective root permissions included `Sys.Audit` with seven read-only privileges.
+- Production workflow run `29992291213` created the group and group ACL, updated user membership, forgot the provider's phantom parent-user ACL state entry without destroying it, and reported `2 added, 1 changed, 0 destroyed, 1 forgotten`. The fail-closed Bitwarden token handoff check passed.
+- Provider 0.106.0 projects the separately managed group ACL into its deprecated inline group field. PR #146 added a narrowly scoped lifecycle ignore so the dedicated ACL resource remains authoritative; both local and attached PR plans subsequently reported no changes.
+- Flux `observability-proxmox` deployed one Ready exporter replica to `sk-talos-worker-1`. The pod used the pinned multi-architecture Prometheus PVE Exporter 3.8.2 digest, had zero restarts, disabled service-account token mounting, retained a read-only root filesystem, and used a bounded memory-backed `/tmp` only for Gunicorn worker state.
+- The static API address is mapped to certificate-valid hostname `pve.sk.bohdal.name` inside the pod. HTTPS validates through the committed Proxmox root CA, and the Cilium policy permits no DNS egress and only `10.1.100.201:8006` for API collection.
+- VictoriaMetrics reported `up=1` for both the exporter self-scrape and logical Proxmox target. The target exposed 626 series across 28 `pve_*` families, all with `cluster="sk-talos"`, `site="sk"`, and `instance="pve"`, below the 5,000-series limit.
+- Live families included node, guest, storage, uptime, resource use, and backup coverage. Acceptance measured one node, 15 guests, four storage objects, and 15 guests not covered by a configured backup job; exporter request errors did not increase after the ACL correction.
+- Every Proxmox dashboard expression matched a live metric family, including `pve_up`, memory, disk, and `pve_not_backed_up_total`. No API token value appeared in manifests, pod arguments, files, logs, metrics, or the Git diff.
+
 ## Remaining stages
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-2. Add the read-only Proxmox exporter with its dedicated `PVEAuditor` token; the stable external HTTPS target is already accepted.
-3. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
-4. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
+2. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
+3. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
@@ -254,4 +266,4 @@ Create dedicated Bitwarden items before the stages that require device-specific 
 
 ## Deferred debt
 
-Keep the design document's follow-up list authoritative. In particular, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3.
+Keep the design document's follow-up list authoritative. In particular, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3. Reassess the Proxmox ACL `removed` block and group `acl` lifecycle ignore when upgrading beyond provider 0.106.0; remove either workaround only after a live no-destroy plan and effective-permission verification.
