@@ -1,5 +1,7 @@
 # Blocky is the only resolver advertised to every routed DHCP scope. It serves
 # internal split DNS and forwards public recursion through the cluster DNS path.
+mikrotik_gw_hosturl = "https://10.1.100.1"
+
 dhcp_scopes = {
   server10 = {
     interface   = "vlan10"
