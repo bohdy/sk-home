@@ -21,6 +21,12 @@ spec:
         app.kubernetes.io/component: infrastructure-metrics
     spec:
       automountServiceAccountToken: false
+      # Query the externally qualified Proxmox name before Kubernetes search
+      # suffixes so Cilium's exact-name DNS allowlist can admit the request.
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
       # Prefer the general-purpose worker while allowing rescheduling during
       # maintenance because the worker is intentionally not dedicated.
       affinity:
