@@ -3,6 +3,13 @@
 resource "proxmox_virtual_environment_group" "observability" {
   group_id = "observability"
   comment  = "Read-only observability identities; managed by OpenTofu"
+
+  # Provider 0.106.0 reads separately managed ACLs into this resource's
+  # deprecated inline block. Ignore that projection so the dedicated ACL
+  # resource remains authoritative and later applies cannot remove it.
+  lifecycle {
+    ignore_changes = [acl]
+  }
 }
 
 resource "proxmox_virtual_environment_user" "observability" {
