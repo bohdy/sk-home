@@ -21,16 +21,12 @@ spec:
         app.kubernetes.io/component: infrastructure-metrics
     spec:
       automountServiceAccountToken: false
-      # The built-in cluster resolver intentionally serves Kubernetes discovery,
-      # while Blocky owns the LAN split-DNS view. Use its stable client VIP so
-      # the certificate-valid Proxmox name resolves to the private API address.
-      dnsPolicy: None
-      dnsConfig:
-        nameservers:
-          - 10.1.30.53
-        options:
-          - name: ndots
-            value: "1"
+      # Pin the static API address under its certificate-valid hostname. This
+      # removes DNS egress while retaining hostname and CA verification.
+      hostAliases:
+        - ip: 10.1.100.201
+          hostnames:
+            - pve.sk.bohdal.name
       # Prefer the general-purpose worker while allowing rescheduling during
       # maintenance because the worker is intentionally not dedicated.
       affinity:

@@ -1,5 +1,5 @@
 # Place the exporter in ingress and egress default-deny, admitting only VMAgent
-# scrapes, kubelet probes, restricted DNS, and the single Proxmox API endpoint.
+# scrapes, kubelet probes, and the single Proxmox API endpoint.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -26,21 +26,6 @@ spec:
             - port: "9221"
               protocol: TCP
   egress:
-    # Resolve only the certificate-valid internal Proxmox name through Blocky,
-    # which owns the LAN split-DNS view at its stable LoadBalancer address.
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: dns-system
-            k8s:app.kubernetes.io/name: blocky
-      toPorts:
-        - ports:
-            - port: "53"
-              protocol: UDP
-            - port: "53"
-              protocol: TCP
-          rules:
-            dns:
-              - matchName: pve.sk.bohdal.name
     - toCIDR:
         - 10.1.100.201/32
       toPorts:
