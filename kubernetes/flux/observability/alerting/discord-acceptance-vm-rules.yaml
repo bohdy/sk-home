@@ -1,0 +1,58 @@
+# Temporary, Git-managed routing acceptance rules. They do not inspect or alter
+# production services; remove this file and its kustomization reference after
+# the firing, recovery, grouping, and inhibition results are recorded.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: discord-routing-acceptance
+  namespace: observability
+spec:
+  groups:
+    - name: discord-routing-acceptance
+      rules:
+        # A critical group must fan out to both Telegram and Discord.
+        - alert: DiscordAcceptanceCriticalDelivery
+          expr: vector(1)
+          for: 1m
+          labels:
+            severity: critical
+            component: alerting
+            acceptance: discord-routing
+          annotations:
+            summary: Discord critical routing acceptance
+            description: Temporary critical routing acceptance alert.
+
+        # A warning group must reach Discord without invoking Telegram.
+        - alert: DiscordAcceptanceWarningDelivery
+          expr: vector(1)
+          for: 1m
+          labels:
+            severity: warning
+            component: alerting
+            acceptance: discord-routing
+          annotations:
+            summary: Discord warning routing acceptance
+            description: Temporary warning routing acceptance alert.
+
+        # These matching groups prove that the critical inhibition rule
+        # suppresses its lower-severity counterpart before notification.
+        - alert: DiscordAcceptanceInhibition
+          expr: vector(1)
+          for: 1m
+          labels:
+            severity: critical
+            component: alerting
+            acceptance: discord-routing
+          annotations:
+            summary: Discord inhibition routing acceptance
+            description: Temporary critical inhibition acceptance alert.
+        - alert: DiscordAcceptanceInhibition
+          expr: vector(1)
+          for: 1m
+          labels:
+            severity: warning
+            component: alerting
+            acceptance: discord-routing
+          annotations:
+            summary: Discord inhibition routing acceptance
+            description: Temporary warning inhibition acceptance alert.
