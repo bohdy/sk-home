@@ -47,7 +47,7 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Create Bitwarden item `SK-TALOS-DISCORD-WEBHOOK-URL`, add its `discord-webhook-url` key to the existing `alertmanager-notifications` Secret, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
+2. Bootstrap the complete `SK-TALOS-DISCORD-WEBHOOK` Bitwarden value into the existing `alertmanager-notifications` Secret as `discord-webhook-url`, route critical alerts to both Telegram and Discord, and route warnings only to Discord.
 3. Run Discord synthetic tests for critical fan-out, warning delivery, recovery, grouping, and inhibition behavior, then expire every test alert.
 4. Resolve the remaining device-specific SNMP authentication, address-stability, and inventory blockers without weakening the accepted MikroTik SNMPv3 path.
 
@@ -193,7 +193,7 @@ Acceptance completed on 2026-07-20. PRs #109 and #110 introduced local coverage,
 - The policy permits internal HTTPS/kube-apiserver access for config sidecars, resolves only `api.telegram.org` through kube-dns, and allows external HTTPS only to that FQDN. The accepted `10.0.0.0/8` internal boundary accommodates Cilium's translated Kubernetes API backend.
 - A synthetic critical alert produced one firing and one resolved Telegram notification. `alertmanager_notifications_total{integration="telegram"}` advanced from 0 to 2, every Telegram failure-reason counter remained zero, and no notification error appeared in recent logs.
 - A synthetic warning remained active through the one-minute group delay without increasing the Telegram counter, proving the channel receives only critical alerts. Both synthetic alert groups were then expired, leaving zero active acceptance alerts.
-- Discord critical-and-warning delivery remains blocked on its absent dedicated Bitwarden webhook. Until it is added, warning and info alerts remain retained in Alertmanager and Grafana without push delivery.
+- Discord critical-and-warning delivery is configured from the dedicated Bitwarden webhook. Its live synthetic delivery acceptance remains pending; info alerts remain retained in Alertmanager and Grafana without push delivery.
 
 ## VictoriaLogs acceptance
 
@@ -247,7 +247,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 Continue with a fresh branch from current `main` for each coherent stage:
 
 1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
-2. Add Discord delivery for critical and warning alerts while retaining info alerts in Alertmanager and Grafana without push delivery; Telegram critical firing and recovery delivery are already accepted.
+2. Run Discord synthetic delivery tests for critical fan-out, warning-only delivery, resolved notifications, grouping, and inhibition; Telegram critical firing and recovery delivery are already accepted.
 3. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
