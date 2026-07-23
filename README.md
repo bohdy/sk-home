@@ -105,7 +105,7 @@ The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflar
 The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
 
 ```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=true
+gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_cloudflare=false
 ```
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
@@ -113,18 +113,26 @@ The gated gateway job uses the immutable gateway plan artifact produced earlier 
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
 ```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true -f apply_gateway_dhcp=false -f apply_cloudflare=false
 ```
 
-The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment. Do not set both gateway apply inputs to `true`; mutually exclusive job conditions intentionally skip both mutation paths in that case.
+The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment.
+
+Adopt and stabilize only the monitored APC UPS and Brother printer DHCP leases through their separate targeted path:
+
+```bash
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=true -f apply_cloudflare=false
+```
+
+That job runs the documented RouterOS `make-static` operation only for the two known lease IDs, verifies each result, then imports the resulting static records through their `routeros_ip_dhcp_server_lease` resources. The pinned provider cannot model this conversion directly, so the narrowly scoped and idempotent Terraform `local-exec` helper is the documented break-glass exception. It must not evaluate or mutate the provider-broken address and BGP resources.
 
 Publish or update Grafana's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
 
 ```sh
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_cloudflare=true
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_cloudflare=true
 ```
 
-The three manual apply inputs are mutually exclusive. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
+The four manual apply inputs are mutually exclusive; setting more than one skips every mutation path. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
 
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
