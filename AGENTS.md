@@ -68,6 +68,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
+- Treat OpenTofu `import`, `moved`, `removed`, and equivalent state-migration constructs as temporary migration scaffolding. Use them only to complete a specific state transition, verify that transition, and remove them in the same logical task; do not leave them in the long-term desired-state configuration.
 - If introducing a new configurable value, document how it is set and why it exists.
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
 - Remove placeholder directories and helper files when they are no longer actively serving the current learning task.

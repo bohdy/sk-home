@@ -134,6 +134,7 @@ The initial forward records should include:
 - `dns.bohdal.name. A 10.1.30.53`
 - `blocky.bohdal.name. A 10.1.30.53`
 - `gw.bohdal.name. A 10.1.100.1`
+- `printer.sk.bohdal.name. A 10.1.10.13`
 
 Do not add initial AAAA records until reachable IPv6 addresses exist.
 
