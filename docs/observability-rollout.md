@@ -229,6 +229,15 @@ Acceptance completed on 2026-07-23 after PR #148 established declarative RouterO
 - A post-apply targeted OpenTofu plan refreshed both helpers and both managed lease resources and reported no changes. The provider still emits an unrelated unsupported `age`-field warning when reading RouterOS leases.
 - Address stability is no longer an SNMP inventory blocker for either target. Their authentication profile and Bitwarden bootstrap blockers remain; do not enable a collector until those device-side credentials and read-only SNMP settings are confirmed.
 
+## UniFi SNMP discovery
+
+Discovery completed on 2026-07-23; collection remains intentionally disabled:
+
+- The legacy controller at `unifi.bohdal.name` accepted the dedicated Bitwarden administrator through its legacy API. Its controller-level SNMPv2c setting is enabled with the shared community, whose value is absent from command output and Git.
+- Read-only discovery returned `sysName.0` values `AP-1PP`, `AP-1NP`, and `AP-temp`; all three targets report U7-Pro firmware `8.6.11.18870` and the Ubiquiti enterprise object identifier.
+- A temporary collector deployment proved Cilium SNATs the worker pod to `10.1.20.44` and forwards UDP/161 to the AP VLAN, but no AP reply returns. The same discovery succeeds from VLAN 10 source `10.1.10.10`; the remaining blocker is the missing VLAN 20 to AP-management UDP/161 allowance.
+- PR #157 removed the failing scrape endpoints and records `allow-worker-vlan-snmp` on every UniFi target. Do not re-enable collection until that exact path returns SNMP replies from the worker source.
+
 ## Proxmox acceptance
 
 Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the collector and corrected issues found through live verification:
@@ -246,7 +255,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Add SNMP targets individually for UniFi APs, Synology, APC UPS, and Brother printer; treat the printer as intermittent.
+1. Allow `10.1.20.44` or the worker VLAN to reach the UniFi management subnet on UDP/161, then re-enable and verify the three UniFi AP targets. Add Synology and APC only after their placeholder credentials are populated; treat the Brother printer as intermittent.
 2. Run Discord synthetic delivery tests for critical fan-out, warning-only delivery, resolved notifications, grouping, and inhibition; Telegram critical firing and recovery delivery are already accepted.
 3. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
