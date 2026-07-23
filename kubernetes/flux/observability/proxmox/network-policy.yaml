@@ -26,11 +26,12 @@ spec:
             - port: "9221"
               protocol: TCP
   egress:
-    # Resolve only the certificate-valid internal Proxmox name through CoreDNS.
+    # Resolve only the certificate-valid internal Proxmox name through Blocky,
+    # which owns the LAN split-DNS view at its stable LoadBalancer address.
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: kube-system
-            k8s:k8s-app: kube-dns
+            k8s:io.kubernetes.pod.namespace: dns-system
+            k8s:app.kubernetes.io/name: blocky
       toPorts:
         - ports:
             - port: "53"

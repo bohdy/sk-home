@@ -2,6 +2,8 @@
 
 This component deploys Prometheus PVE Exporter 3.8.2 as one stateless, ClusterIP-only replica. It collects cluster and node data every 30 seconds from `pve.sk.bohdal.name`, which split DNS resolves to `10.1.100.201`, and exposes separate process metrics for exporter self-monitoring.
 
+The pod uses Blocky's stable `10.1.30.53` client VIP directly because the built-in Kubernetes resolver intentionally serves cluster discovery instead of the LAN split-DNS view. Its Cilium policy permits only the exact Proxmox DNS question to Blocky and HTTPS to `10.1.100.201:8006`; the exporter does not require Kubernetes service-name resolution.
+
 OpenTofu owns passwordless user `observability@pve`, its privilege-separated `exporter` token, and matching propagated `PVEAuditor` ACLs at `/` for both identities. The token's effective permission is their read-only intersection. Bitwarden item `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN` (`2ea66873-6852-4af9-bca2-b48f00f84a0a`) contains exactly the full `observability@pve!exporter=<secret>` token. The exporter splits that atomic value only in process memory; pod arguments, manifests, and files never contain credential material.
 
 Bootstrap the namespace Secret without printing or writing the token to disk:
