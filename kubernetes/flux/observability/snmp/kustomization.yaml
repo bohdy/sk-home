@@ -8,7 +8,6 @@ resources:
   - network-policy.yaml
   - vm-service-scrape.yaml
   - vm-static-scrape.yaml
-  - vm-static-scrape-unifi.yaml
 configMapGenerator:
   - name: snmp-exporter-config
     namespace: observability

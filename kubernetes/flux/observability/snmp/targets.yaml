@@ -30,8 +30,9 @@ targets:
     availability: always-on
     address_stability: static
     auth_profile: snmp_v2
-    enabled: true
-    blockers: []
+    enabled: false
+    blockers:
+      - allow-worker-vlan-snmp
 
   - name: unifi-ap-1pp
     address: 10.1.102.10
@@ -44,8 +45,9 @@ targets:
     availability: always-on
     address_stability: static-dhcp
     auth_profile: snmp_v2
-    enabled: true
-    blockers: []
+    enabled: false
+    blockers:
+      - allow-worker-vlan-snmp
 
   - name: unifi-ap-1np
     address: 10.1.102.11
@@ -74,8 +76,9 @@ targets:
     availability: always-on
     address_stability: static-dhcp
     auth_profile: snmp_v2
-    enabled: true
-    blockers: []
+    enabled: false
+    blockers:
+      - allow-worker-vlan-snmp
 
   - name: apc-ups
     address: 10.1.10.43
