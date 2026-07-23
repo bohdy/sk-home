@@ -25,9 +25,9 @@ on:
         default: false
         type: boolean
       apply_gateway_dhcp:
-        # Import and stabilize only the external-device reservations without
-        # evaluating provider-broken IP-address or BGP resources.
-        description: Import or apply only monitored-device DHCP reservations
+        # Keep network-wide DHCP changes explicitly opt-in and independently
+        # reviewable from unrelated gateway interface and BGP resources.
+        description: Apply the reviewed gateway DHCP plan
         required: true
         default: false
         type: boolean
@@ -58,7 +58,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        stacks: [network/gw/interfaces, k3s/talos-cluster, cloudflare/tunnel]
+        stacks: [network/gw/interfaces, network/gw/dhcp, k3s/talos-cluster, cloudflare/tunnel]
 
     steps:
       # Check out the repository with full history so the workflow can compare
@@ -73,7 +73,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, k3s/talos-cluster, cloudflare/tunnel]
+        stacks: [network/gw/interfaces, network/gw/dhcp, k3s/talos-cluster, cloudflare/tunnel]
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -468,16 +468,16 @@ jobs:
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
   gateway-dhcp-plan:
-    name: Plan monitored-device DHCP adoption
-    # Target only the two import-first reservations while unrelated RouterOS
-    # resources remain blocked on upstream provider compatibility fixes.
+    name: Plan gateway DHCP
+    # Keep the dedicated DHCP plan isolated from the provider-blocked interface
+    # and BGP stack while preserving immutable review before production apply.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
-      STACK_PATH: network/gw/interfaces
+      STACK_PATH: network/gw/dhcp
       TOFU_PLAN_ARTIFACT: network-gw-dhcp-tofuplan
 
     steps:
@@ -499,11 +499,6 @@ jobs:
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
-            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
-            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
-            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
-            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
-            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
@@ -511,26 +506,15 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Plan monitored-device DHCP resources
-        run: >-
-          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
-          -target=terraform_data.make_brother_printer_lease_static
-          -target=terraform_data.make_apc_ups_lease_static
-          -target=routeros_ip_dhcp_server_lease.brother_printer
-          -target=routeros_ip_dhcp_server_lease.apc_ups
-          -out=dhcp-tofuplan
+      - name: Plan gateway DHCP
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} plan -out=dhcp-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
-          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
-          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
-          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
-          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
-          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
-      - name: Upload monitored-device DHCP plan
+      - name: Upload gateway DHCP plan
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
@@ -539,7 +523,7 @@ jobs:
           retention-days: 7
 
   gateway-dhcp-apply:
-    name: Apply monitored-device DHCP adoption
+    name: Apply gateway DHCP
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-dhcp-plan
@@ -548,7 +532,7 @@ jobs:
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
-      STACK_PATH: network/gw/interfaces
+      STACK_PATH: network/gw/dhcp
       TOFU_PLAN_ARTIFACT: network-gw-dhcp-tofuplan
 
     steps:
@@ -560,7 +544,7 @@ jobs:
         with:
           install: true
 
-      - name: Download monitored-device DHCP plan
+      - name: Download gateway DHCP plan
         uses: actions/download-artifact@v8
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
@@ -576,11 +560,6 @@ jobs:
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
-            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
-            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
-            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
-            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
-            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
@@ -588,18 +567,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Apply monitored-device DHCP plan
+      - name: Apply gateway DHCP plan
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve dhcp-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
-          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
-          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
-          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
-          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
-          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
   cloudflare-apply:
     name: Apply reviewed Cloudflare plan

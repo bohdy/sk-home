@@ -34,7 +34,7 @@ data:
     $ORIGIN bohdal.name.
     $TTL 300
     @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-        2026072201 ; serial
+        2026072301 ; serial
         300        ; refresh
         120        ; retry
         1209600    ; expire
@@ -46,4 +46,6 @@ data:
     grafana IN A 10.1.30.55
     grafana.internal IN A 10.1.30.55
     gw     IN A  10.1.100.1
+    ; The Brother printer receives this address from the MikroTik DHCP reservation.
+    printer.sk IN A  10.1.10.13
     pve.sk IN A  10.1.100.201

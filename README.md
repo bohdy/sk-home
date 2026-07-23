@@ -118,13 +118,13 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gatewa
 
 The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment.
 
-Adopt and stabilize only the monitored APC UPS and Brother printer DHCP leases through their separate targeted path:
+Apply the reviewed DHCP plan, including DNS servers advertised to LAN clients, through its separate targeted path:
 
 ```bash
 gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=true -f apply_cloudflare=false
 ```
 
-That job runs the documented RouterOS `make-static` operation only for the two known lease IDs, verifies each result, then imports the resulting static records through their `routeros_ip_dhcp_server_lease` resources. The pinned provider cannot model this conversion directly, so the narrowly scoped and idempotent Terraform `local-exec` helper is the documented break-glass exception. It must not evaluate or mutate the provider-broken address and BGP resources.
+That job applies the immutable full DHCP-stack plan in the `production` environment without evaluating the provider-blocked gateway interface and BGP resources. DHCP leases must already be static before they are added as `routeros_ip_dhcp_server_lease` resources; the repository does not use imperative dynamic-to-static conversion helpers.
 
 Publish or update Grafana's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
 
