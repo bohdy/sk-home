@@ -11,7 +11,9 @@ data:
     #!/bin/sh
     set -eu
     mongosh --quiet --authenticationDatabase admin --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" <<'EOF'
-    db = db.getSiblingDB("unifi")
+    // LinuxServer's controller URI authenticates this user through admin,
+    // while its roles retain access only to the dedicated UniFi databases.
+    db = db.getSiblingDB("admin")
     db.createUser({
       user: process.env.MONGO_APP_USERNAME,
       pwd: process.env.MONGO_APP_PASSWORD,
