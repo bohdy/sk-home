@@ -1,0 +1,18 @@
+# The database is reachable only through this namespace-local ClusterIP service;
+# it deliberately has no LoadBalancer, Ingress, or public DNS record.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-mongodb
+  namespace: unifi
+  labels:
+    app.kubernetes.io/name: unifi-mongodb
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: unifi-mongodb
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP

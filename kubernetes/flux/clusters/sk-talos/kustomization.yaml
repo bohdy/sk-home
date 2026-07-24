@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - infrastructure
   - observability
+  - apps

@@ -238,6 +238,15 @@ Discovery completed on 2026-07-23; collection remains intentionally disabled:
 - A temporary collector deployment proved Cilium SNATs the worker pod to `10.1.20.44` and forwards UDP/161 to the AP VLAN, but no AP reply returns. The same discovery succeeds from VLAN 10 source `10.1.10.10`; the remaining blocker is the missing VLAN 20 to AP-management UDP/161 allowance.
 - PR #157 removed the failing scrape endpoints and records `allow-worker-vlan-snmp` on every UniFi target. Do not re-enable collection until that exact path returns SNMP replies from the worker source.
 
+## UniFi controller migration
+
+Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed:
+
+- A fresh native backup `10.1.89.unf` was created on the legacy controller through its private authenticated API. It is 15.2 MB and remains outside Git and Kubernetes secret storage.
+- The Talos `unifi` Flux component provisions a private restore stage with retained Synology iSCSI volumes, a controller image digest matching the backup source, MongoDB 8.0.28, and separately bootstrapped Bitwarden credentials for MongoDB root and the least-privilege UniFi database user.
+- The stage intentionally exposes only the ClusterIP `unifi-console` service. It must not claim `10.1.30.1`, receive AP inform traffic, or add public Cloudflare routing until restore validation is complete and the legacy controller is stopped.
+- Restore verification must confirm the `default` site, all adopted APs, and the controller-level SNMPv2c setting before the later dedicated cutover change. The existing worker-VLAN UDP/161 return-path blocker remains independent of controller placement.
+
 ## Proxmox acceptance
 
 Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the collector and corrected issues found through live verification:
@@ -255,7 +264,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Allow `10.1.20.44` or the worker VLAN to reach the UniFi management subnet on UDP/161, then re-enable and verify the three UniFi AP targets. Add Synology and APC only after their placeholder credentials are populated; treat the Brother printer as intermittent.
+1. Restore and validate the private Talos UniFi controller stage, then perform a dedicated cutover that transfers `10.1.30.1` only after the legacy controller is stopped. Allow `10.1.20.44` or the worker VLAN to reach the UniFi management subnet on UDP/161, then re-enable and verify the three UniFi AP targets. Add Synology and APC only after their placeholder credentials are populated; treat the Brother printer as intermittent.
 2. Run Discord synthetic delivery tests for critical fan-out, warning-only delivery, resolved notifications, grouping, and inhibition; Telegram critical firing and recovery delivery are already accepted.
 3. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
@@ -281,6 +290,8 @@ Known item names needed by the rollout are:
 - `SK-TALOS-PROXMOX-EXPORTER-API-TOKEN`: full OpenTofu-generated `observability@pve!exporter=<secret>` API token only
 - `SK-TALOS-UNIFI-CONTROLLER-USERNAME` (`bb9869b1-c721-46b9-a07b-b49000a68fb1`): UniFi Network administrator username used only to configure and verify access-point SNMP
 - `SK-TALOS-UNIFI-CONTROLLER-PASSWORD` (`8fa7fee1-3612-42e7-895f-b49000a68ffd`): matching UniFi Network administrator password only
+- `SK-TALOS-UNIFI-MONGODB-ROOT-PASSWORD` (`989143be-3e3e-4a66-b85c-b4910055b1bf`): Talos UniFi MongoDB root password used only to initialize the database
+- `SK-TALOS-UNIFI-MONGODB-APPLICATION-PASSWORD` (`ab3695d6-f31d-4a66-a324-b491006ce8d3`): Talos UniFi least-privilege MongoDB application-user password only
 - `SK-TALOS-SYNO-MONITORING-USERNAME` (`23d42b1f-323c-4405-b36c-b49000a69047`): dedicated temporary Synology DSM administrator setup username used only to enable and verify SNMP
 - `SK-TALOS-SYNO-MONITORING-PASSWORD` (`8d9d92fb-aada-4dab-997d-b49000a690a7`): matching temporary Synology DSM administrator setup password only
 - `SK-TALOS-APC-UPS-USERNAME` (`88990a45-9e37-4a66-a7c9-b49000a690e7`): APC Network Management Card administrator username used to configure and verify SNMP
