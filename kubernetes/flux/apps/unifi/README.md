@@ -1,6 +1,6 @@
 # UniFi controller
 
-This component stages the self-hosted UniFi Network Application on Talos before the legacy controller is retired. It uses retained Synology iSCSI volumes, a pinned controller image matching the source backup, and MongoDB 8.0.28 with a dedicated database user. It deliberately publishes only `unifi-console` as a `ClusterIP` service and allows network traffic only for node-originated console access, DNS, and the controller-to-database path. Both supported container entrypoints receive only `CHOWN`, `DAC_OVERRIDE`, `SETGID`, and `SETUID` for first-run template and ownership setup and their required subsequent user drop.
+This component stages the self-hosted UniFi Network Application on Talos before the legacy controller is retired. It uses retained Synology iSCSI volumes, a pinned controller image matching the source backup, and MongoDB 8.0.28 with a dedicated database user. It deliberately publishes only `unifi-console` as a `ClusterIP` service and allows network traffic only for node-originated console access, DNS, and the controller-to-database path. MongoDB receives only the four capabilities needed for its first-run ownership setup and user drop. The LinuxServer controller retains its runtime baseline only during its incompatible `s6` template-initialization phase, while still using no-new-privileges, RuntimeDefault seccomp, and the private-stage Cilium policy.
 
 ## Bootstrap
 

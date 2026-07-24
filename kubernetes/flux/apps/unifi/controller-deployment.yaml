@@ -98,16 +98,11 @@ spec:
               memory: 3Gi
           securityContext:
             allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-              # LinuxServer's supported first-run path rewrites its packaged
-              # template, assigns /config to PUID and PGID, then drops root.
-              add:
-                - CHOWN
-                - DAC_OVERRIDE
-                - SETGID
-                - SETUID
+            # This LinuxServer image's s6 first-run path switches its own
+            # capability set before rewriting /defaults/system.properties.
+            # Retain the runtime baseline until it drops to PUID/PGID; Cilium,
+            # no-new-privileges, seccomp, and private-only exposure constrain
+            # the resulting controller stage.
           volumeMounts:
             - name: config
               mountPath: /config
