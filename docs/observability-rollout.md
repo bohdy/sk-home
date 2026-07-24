@@ -246,7 +246,7 @@ Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed:
 - The Talos `unifi` Flux component provisions a private restore stage with retained Synology iSCSI volumes, a controller image digest matching the backup source, MongoDB 8.0.28, and separately bootstrapped Bitwarden credentials for MongoDB root and the least-privilege UniFi database user.
 - The stage intentionally exposes only the ClusterIP `unifi-console` service. It must not claim `10.1.30.1`, receive AP inform traffic, or add public Cloudflare routing until restore validation is complete and the legacy controller is stopped.
 - Restore verification must confirm the `default` site, all adopted APs, and the controller-level SNMPv2c setting before the later dedicated cutover change. The existing worker-VLAN UDP/161 return-path blocker remains independent of controller placement.
-- Initial live reconciliation showed that MongoDB requires `CHOWN`, `DAC_OVERRIDE`, `SETGID`, and `SETUID` for first-run setup. The LinuxServer controller's `s6` phase clears an explicitly supplied capability set before it can rewrite its packaged template, so it retains the runtime baseline only until its own PUID/PGID user drop. It remains constrained by no-new-privileges, RuntimeDefault seccomp, private-only exposure, and Cilium policy.
+- Initial live reconciliation showed that MongoDB requires `CHOWN`, `DAC_OVERRIDE`, `SETGID`, and `SETUID` for first-run setup. The LinuxServer controller's `s6` phase fails to render its packaged template under no-new-privileges, so it uses the supported image initialization context. Pod-level RuntimeDefault seccomp, private-only exposure, and Cilium policy remain enforced.
 
 ## Proxmox acceptance
 

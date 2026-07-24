@@ -96,13 +96,6 @@ spec:
             limits:
               cpu: "2"
               memory: 3Gi
-          securityContext:
-            allowPrivilegeEscalation: false
-            # This LinuxServer image's s6 first-run path switches its own
-            # capability set before rewriting /defaults/system.properties.
-            # Retain the runtime baseline until it drops to PUID/PGID; Cilium,
-            # no-new-privileges, seccomp, and private-only exposure constrain
-            # the resulting controller stage.
           volumeMounts:
             - name: config
               mountPath: /config
