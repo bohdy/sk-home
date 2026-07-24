@@ -246,7 +246,7 @@ Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed:
 - The Talos `unifi` Flux component provisions a private restore stage with retained Synology iSCSI volumes, a controller image digest matching the backup source, MongoDB 8.0.28, and separately bootstrapped Bitwarden credentials for MongoDB root and the least-privilege UniFi database user.
 - The stage intentionally exposes only the ClusterIP `unifi-console` service. It must not claim `10.1.30.1`, receive AP inform traffic, or add public Cloudflare routing until restore validation is complete and the legacy controller is stopped.
 - Restore verification must confirm the `default` site, all adopted APs, and the controller-level SNMPv2c setting before the later dedicated cutover change. The existing worker-VLAN UDP/161 return-path blocker remains independent of controller placement.
-- Initial live reconciliation showed that both supported container entrypoints require `CHOWN` to assign their mounted data paths and `SETGID` plus `SETUID` to drop to their configured users. The private-stage security contexts therefore drop every capability except those three; no broad privileged exception is used.
+- Initial live reconciliation showed that both supported container entrypoints require `CHOWN` to assign mounted data, `DAC_OVERRIDE` to rewrite their packaged first-run template, and `SETGID` plus `SETUID` to drop to configured users. The private-stage security contexts therefore drop every capability except those four; no broad privileged exception is used.
 
 ## Proxmox acceptance
 

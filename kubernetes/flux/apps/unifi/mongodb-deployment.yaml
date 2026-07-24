@@ -80,6 +80,7 @@ spec:
               # starts. It needs no other ambient Linux capability.
               add:
                 - CHOWN
+                - DAC_OVERRIDE
                 - SETGID
                 - SETUID
           volumeMounts:
