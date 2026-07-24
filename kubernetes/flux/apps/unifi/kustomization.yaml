@@ -1,0 +1,13 @@
+# Keep every persistent UniFi object together so the staged controller can be
+# rendered, validated, and later extended by a focused cutover change.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - mongodb-init-configmap.yaml
+  - persistent-volume-claims.yaml
+  - mongodb-service.yaml
+  - mongodb-deployment.yaml
+  - controller-service.yaml
+  - controller-deployment.yaml
+  - network-policy.yaml

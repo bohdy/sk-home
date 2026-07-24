@@ -1,0 +1,68 @@
+# The private restore stage admits only console access from cluster nodes,
+# controller-to-database traffic, and DNS. It has no permitted LAN or internet
+# egress, so restoring the backup cannot accidentally start device management.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi-controller-stage
+  namespace: unifi
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-controller
+  ingress:
+    # Kubelet probes and kubectl port-forward traffic originate from nodes.
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-mongodb
+      toPorts:
+        - ports:
+            - port: "27017"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+---
+# MongoDB accepts only the controller and node-originated health probes. It has
+# no egress requirements during this stage and remains unreachable externally.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi-mongodb-stage
+  namespace: unifi
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-mongodb
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-controller
+      toPorts:
+        - ports:
+            - port: "27017"
+              protocol: TCP
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "27017"
+              protocol: TCP

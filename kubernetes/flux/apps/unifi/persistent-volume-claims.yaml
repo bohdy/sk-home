@@ -1,0 +1,27 @@
+# Retain both volumes explicitly so controller and database recovery never
+# depends on the lifecycle of a Kubernetes claim or a Flux reconciliation.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unifi-mongodb
+  namespace: unifi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unifi-config
+  namespace: unifi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 10Gi

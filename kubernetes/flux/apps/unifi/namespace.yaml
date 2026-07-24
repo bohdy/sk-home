@@ -1,0 +1,10 @@
+# UniFi needs a baseline namespace because its supported container performs
+# initialization as root before dropping to its configured application user.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unifi
+  labels:
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline

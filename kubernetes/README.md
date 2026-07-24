@@ -106,6 +106,10 @@ The `base` component owns the shared namespace, its resource defaults, and its a
 
 Use `docs/observability-rollout.md` as the resumable deployment checkpoint and update it after each accepted stage.
 
+## Applications
+
+Stateful application workloads live in `kubernetes/flux/apps` and reconcile through the separate `apps` cluster tree. The initial `unifi` component is intentionally a private migration stage: it provisions retained iSCSI storage, a pinned controller image, and a `ClusterIP` restore console, but no device-facing VIP, public DNS, Cloudflare Tunnel route, or Access application. Its component README defines the required Bitwarden Secret bootstrap and the separately reviewed restore/cutover sequence.
+
 ## Storage
 
 Generic cluster storage lives in `kubernetes/flux/infrastructure/storage-synology-csi`. It installs the Talos-compatible Synology CSI driver and the explicit-only `synology-iscsi-retain` StorageClass. The Talos image must include `siderolabs/iscsi-tools`, and the `synology-csi/client-info-secret` secret must exist before the component can become ready.

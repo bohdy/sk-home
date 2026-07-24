@@ -1,0 +1,26 @@
+# MongoDB runs this script only when its retained data directory is empty. It
+# creates the least-privilege UniFi database user rather than giving the
+# controller the root credential used solely to bootstrap MongoDB.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unifi-mongodb-init
+  namespace: unifi
+data:
+  init-mongo.sh: |
+    #!/bin/sh
+    set -eu
+    mongosh --quiet --authenticationDatabase admin --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" <<'EOF'
+    db = db.getSiblingDB("unifi")
+    db.createUser({
+      user: process.env.MONGO_APP_USERNAME,
+      pwd: process.env.MONGO_APP_PASSWORD,
+      roles: [
+        { role: "clusterMonitor", db: "admin" },
+        { role: "dbOwner", db: "unifi" },
+        { role: "dbOwner", db: "unifi_stat" },
+        { role: "dbOwner", db: "unifi_audit" },
+        { role: "dbOwner", db: "unifi_restore" }
+      ]
+    })
+    EOF

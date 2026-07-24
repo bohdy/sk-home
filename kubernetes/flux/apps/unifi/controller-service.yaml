@@ -1,0 +1,18 @@
+# This private service exposes only the setup and restore console. A later,
+# separately reviewed cutover adds the fixed device VIP and Cloudflare route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-console
+  namespace: unifi
+  labels:
+    app.kubernetes.io/name: unifi-controller
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: unifi-controller
+  ports:
+    - name: https-console
+      port: 8443
+      targetPort: https-console
+      protocol: TCP
