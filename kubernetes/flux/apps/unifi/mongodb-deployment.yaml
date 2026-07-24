@@ -75,6 +75,11 @@ spec:
             capabilities:
               drop:
                 - ALL
+              # The official entrypoint assigns the retained data directory to
+              # its database user before starting MongoDB. It needs no other
+              # ambient Linux capability.
+              add:
+                - CHOWN
           volumeMounts:
             - name: data
               mountPath: /data/db
