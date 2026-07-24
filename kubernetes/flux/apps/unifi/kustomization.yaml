@@ -9,5 +9,6 @@ resources:
   - mongodb-service.yaml
   - mongodb-deployment.yaml
   - controller-service.yaml
+  - controller-device-service.yaml
   - controller-deployment.yaml
   - network-policy.yaml
