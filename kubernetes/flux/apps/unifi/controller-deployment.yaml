@@ -105,6 +105,8 @@ spec:
               # application directories to PUID and PGID before dropping root.
               add:
                 - CHOWN
+                - SETGID
+                - SETUID
           volumeMounts:
             - name: config
               mountPath: /config
