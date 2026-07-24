@@ -101,10 +101,11 @@ spec:
             capabilities:
               drop:
                 - ALL
-              # LinuxServer's supported first-run path assigns /config and its
-              # application directories to PUID and PGID before dropping root.
+              # LinuxServer's supported first-run path rewrites its packaged
+              # template, assigns /config to PUID and PGID, then drops root.
               add:
                 - CHOWN
+                - DAC_OVERRIDE
                 - SETGID
                 - SETUID
           volumeMounts:
