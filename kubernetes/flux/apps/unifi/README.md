@@ -1,6 +1,6 @@
 # UniFi controller
 
-This component stages the self-hosted UniFi Network Application on Talos before the legacy controller is retired. It uses retained Synology iSCSI volumes, a pinned controller image matching the source backup, and MongoDB 8.0.28 with a dedicated database user. It deliberately publishes only `unifi-console` as a `ClusterIP` service and allows network traffic only for node-originated console access, DNS, and the controller-to-database path. MongoDB receives only the four capabilities needed for its first-run ownership setup and user drop. The LinuxServer controller uses its supported `s6` initialization context because its template rendering fails under no-new-privileges; the Pod-level RuntimeDefault seccomp, private-stage Cilium policy, and lack of a device or public service remain enforced.
+This component stages the self-hosted UniFi Network Application on Talos before the legacy controller is retired. It uses retained Synology iSCSI volumes, a pinned controller image matching the source backup, and MongoDB 8.0.28 with a dedicated database user authenticated through `admin` and authorized only for UniFi databases. It deliberately publishes only `unifi-console` as a `ClusterIP` service and allows network traffic only for node-originated console access, DNS, and the controller-to-database path. MongoDB receives only the four capabilities needed for its first-run ownership setup and user drop. The LinuxServer controller uses its supported `s6` initialization context because its template rendering fails under no-new-privileges; the Pod-level RuntimeDefault seccomp, private-stage Cilium policy, and lack of a device or public service remain enforced.
 
 ## Bootstrap
 
@@ -9,7 +9,7 @@ Before Flux can reconcile this component, create the two Kubernetes Secrets in n
 ```sh
 set +x
 export UNIFI_MONGODB_ROOT_PASSWORD="$(bws secret get 989143be-3e3e-4a66-b85c-b4910055b1bf -o json | jq -r .value)"
-export UNIFI_MONGODB_APPLICATION_PASSWORD="$(bws secret get ab3695d6-f31d-4a66-a324-b491006ce8d3 -o json | jq -r .value)"
+export UNIFI_MONGODB_APPLICATION_PASSWORD="$(bws secret get be72e505-dffe-41ac-aca8-b49100b86d86 -o json | jq -r .value)"
 
 kubectl create namespace unifi --dry-run=client -o yaml | kubectl apply -f -
 printf '%s' "${UNIFI_MONGODB_ROOT_PASSWORD}" | kubectl -n unifi create secret generic unifi-mongodb-auth --from-file=mongo-root-password=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
