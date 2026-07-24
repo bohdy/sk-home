@@ -101,6 +101,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+              # LinuxServer's supported first-run path assigns /config and its
+              # application directories to PUID and PGID before dropping root.
+              add:
+                - CHOWN
           volumeMounts:
             - name: config
               mountPath: /config
