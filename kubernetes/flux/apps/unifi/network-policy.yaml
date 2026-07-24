@@ -1,6 +1,6 @@
-# The private restore stage admits only console access from cluster nodes,
-# controller-to-database traffic, and DNS. It has no permitted LAN or internet
-# egress, so restoring the backup cannot accidentally start device management.
+# The controller accepts node-originated console checks and LAN device traffic
+# only on UniFi's inform, STUN, and discovery ports. The console itself remains
+# private until a separately accepted public-routing change exposes it.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -19,6 +19,18 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
+    # Preserve the original AP source address through the fixed VIP while
+    # limiting device communication to the home-network trust boundary.
+    - fromCIDR:
+        - 10.0.0.0/8
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "3478"
+              protocol: UDP
+            - port: "10001"
+              protocol: UDP
   egress:
     - toEndpoints:
         - matchLabels:

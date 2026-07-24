@@ -1,0 +1,36 @@
+# This fixed VIP replaces the stopped legacy controller's device endpoint. It
+# carries only UniFi inform, STUN, and discovery traffic; the administrator
+# console remains private until a separately accepted public-routing change.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-device-communication
+  namespace: unifi
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.1"
+  labels:
+    app.kubernetes.io/name: unifi-controller
+    app.kubernetes.io/component: device-communication
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+  selector:
+    app.kubernetes.io/name: unifi-controller
+  ports:
+    - name: inform
+      port: 8080
+      targetPort: inform
+      protocol: TCP
+    - name: stun
+      port: 3478
+      targetPort: stun
+      protocol: UDP
+    - name: discovery
+      port: 10001
+      targetPort: discovery
+      protocol: UDP
