@@ -35,6 +35,29 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # UniFi only reads this setting during startup. Updating it before the
+        # controller runs follows UniFi's self-hosted system.properties guidance
+        # and keeps the device inform destination under GitOps control.
+        - name: configure-inform-vip
+          image: linuxserver/unifi-network-application@sha256:f86da30498d3f6c00b403e6d2e32dfd012b531f87cad5bd9a270c35aceedbd7a
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              config_path=/config/data/system.properties
+              temporary_path="$(mktemp "${config_path}.tmp.XXXXXX")"
+
+              test -f "${config_path}"
+              sed '/^[[:space:]]*system_ip[[:space:]]*=/d' "${config_path}" > "${temporary_path}"
+              printf '%s\n' 'system_ip=10.1.30.1' >> "${temporary_path}"
+              chown 1000:1000 "${temporary_path}"
+              chmod 0644 "${temporary_path}"
+              mv "${temporary_path}" "${config_path}"
+          volumeMounts:
+            - name: config
+              mountPath: /config
       containers:
         - name: unifi-controller
           image: linuxserver/unifi-network-application@sha256:f86da30498d3f6c00b403e6d2e32dfd012b531f87cad5bd9a270c35aceedbd7a
