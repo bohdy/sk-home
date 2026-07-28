@@ -19,8 +19,8 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
-    # Preserve the original AP source address through the fixed VIP while
-    # limiting device communication to the home-network trust boundary.
+    # Cluster traffic policy can forward device traffic through a control-plane
+    # BGP speaker, so keep the same home-network boundary after translation.
     - fromCIDR:
         - 10.0.0.0/8
       toPorts:
