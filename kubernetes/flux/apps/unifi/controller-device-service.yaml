@@ -1,6 +1,8 @@
 # This fixed VIP replaces the stopped legacy controller's device endpoint. It
 # carries only UniFi inform, STUN, and discovery traffic; the administrator
 # console remains private until a separately accepted public-routing change.
+# Cluster traffic policy lets every established BGP speaker advertise the VIP
+# while the sole controller endpoint remains on the unpeered worker node.
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,7 +15,7 @@ metadata:
     app.kubernetes.io/component: device-communication
 spec:
   type: LoadBalancer
-  externalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster
   ipFamilyPolicy: SingleStack
   ipFamilies:
     - IPv4
