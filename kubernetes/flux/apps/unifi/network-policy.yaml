@@ -19,10 +19,24 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
-    # Cluster traffic policy can forward device traffic through a control-plane
-    # BGP speaker, so keep the same home-network boundary after translation.
+    # Preserve the direct source-CIDR allowance for paths that reach the
+    # endpoint without Cilium's per-node proxy translation.
     - fromCIDR:
         - 10.0.0.0/8
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "3478"
+              protocol: UDP
+            - port: "10001"
+              protocol: UDP
+    # Cluster LoadBalancer traffic forwarded through an advertising BGP node
+    # reaches the backend with Cilium's `world` identity. The Service's explicit
+    # source-range allow policy enforces the 10.0.0.0/8 boundary before this
+    # backend rule, so accepting `world` here does not expose the VIP publicly.
+    - fromEntities:
+        - world
       toPorts:
         - ports:
             - port: "8080"

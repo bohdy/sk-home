@@ -10,6 +10,9 @@ metadata:
   namespace: unifi
   annotations:
     lbipam.cilium.io/ips: "10.1.30.1"
+    # Cilium does not enforce Service source ranges unless this policy is set.
+    # Keep the externally reachable device endpoint limited to the home network.
+    service.cilium.io/src-ranges-policy: allow
   labels:
     app.kubernetes.io/name: unifi-controller
     app.kubernetes.io/component: device-communication
