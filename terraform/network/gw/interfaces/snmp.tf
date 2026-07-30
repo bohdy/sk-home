@@ -1,10 +1,5 @@
-# Adopt the existing RouterOS default community after its break-glass
-# remediation so all subsequent ACL and credential changes remain declarative.
-import {
-  to = routeros_snmp_community.observability_v2
-  id = "*0"
-}
-
+# Maintain the read-only RouterOS SNMPv2c compatibility identity after its
+# one-time adoption completed, without retaining migration scaffolding.
 resource "routeros_snmp_community" "observability_v2" {
   provider = routeros.gw
 
@@ -20,11 +15,6 @@ resource "routeros_snmp_community" "observability_v2" {
 # RouterOS exposes the SNMPv3 security name through the same community model.
 # SHA1 and AES are the strongest authPriv combination supported by this device;
 # write access and traps remain outside the monitoring identity's scope.
-import {
-  to = routeros_snmp_community.observability_v3
-  id = "*2"
-}
-
 resource "routeros_snmp_community" "observability_v3" {
   provider = routeros.gw
 

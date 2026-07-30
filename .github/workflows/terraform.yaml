@@ -18,9 +18,17 @@ on:
         default: false
         type: boolean
       apply_gateway_snmp:
-        # Keep the provider-compatible SNMP subset independently applicable
-        # while RouterOS 7.21/7.22 breaks unrelated gateway resource updates.
-        description: Import or apply only gateway SNMP communities
+        # Keep the provider-compatible SNMP identities and device-access rule
+        # independently applicable while RouterOS 7.21/7.22 breaks unrelated
+        # gateway resource updates.
+        description: Apply only the dedicated SNMP resources
+        required: true
+        default: false
+        type: boolean
+      plan_gateway_snmp:
+        # Permit an explicit reviewable SNMP-only plan without also opening a
+        # production apply. This isolates the provider-broken interface stack.
+        description: Plan only the dedicated SNMP resources
         required: true
         default: false
         type: boolean
@@ -272,7 +280,7 @@ jobs:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against
     # main; pull requests and ordinary main pushes remain plan-only.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
@@ -339,7 +347,7 @@ jobs:
     name: Plan gateway SNMP adoption
     # A separate targeted artifact avoids planning the provider-broken IP and
     # BGP updates while retaining reviewable, immutable OpenTofu execution.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -384,6 +392,7 @@ jobs:
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
           -target=routeros_snmp_community.observability_v2
           -target=routeros_snmp_community.observability_v3
+          -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
           -out=snmp-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -406,7 +415,7 @@ jobs:
 
   gateway-snmp-apply:
     name: Apply gateway SNMP adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-snmp-plan
     environment: production
@@ -471,7 +480,7 @@ jobs:
     name: Plan gateway DHCP
     # Keep the dedicated DHCP plan isolated from the provider-blocked interface
     # and BGP stack while preserving immutable review before production apply.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -579,7 +588,7 @@ jobs:
     name: Apply reviewed Cloudflare plan
     # External publication is opt-in and mutually exclusive with every gateway
     # mutation path so one approval always has one operational blast radius.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_gateway_dhcp
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
