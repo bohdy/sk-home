@@ -154,6 +154,22 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
   comment      = "Allow Kubernetes worker VLAN to poll Synology SNMP"
 }
 
+# Allow only replies to worker-initiated Synology SNMP polls. UDP replies do
+# not rely on a generic stateful forward-policy allowance in this homelab, so
+# this rule keeps the return path as narrow and explicit as the request path.
+resource "routeros_ip_firewall_filter" "allow_synology_snmp_responses" {
+  provider = routeros.gw
+
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.100.10"
+  dst_address  = "10.1.20.0/24"
+  protocol     = "udp"
+  src_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id
+  comment      = "Allow Synology SNMP replies to Kubernetes worker VLAN"
+}
+
 resource "routeros_routing_filter_rule" "kubernetes_bgp_in" {
   count    = var.kubernetes_bgp.enabled ? 1 : 0
   provider = routeros.gw
