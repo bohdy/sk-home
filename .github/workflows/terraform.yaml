@@ -393,6 +393,7 @@ jobs:
           -target=routeros_snmp_community.observability_v2
           -target=routeros_snmp_community.observability_v3
           -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
+          -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -out=snmp-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}

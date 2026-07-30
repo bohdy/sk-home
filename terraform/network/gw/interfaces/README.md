@@ -26,7 +26,7 @@ The gateway peers with the Talos Kubernetes nodes on VLAN 20:
 
 ## Synology SNMP
 
-The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to Synology at `10.1.100.10`. The rule is inserted before existing forwarding rules so the NAS polling path remains available when broader inter-VLAN filtering is present; it does not expose DSM management ports or SNMP to other VLANs.
+The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to Synology at `10.1.100.10`, plus return packets from Synology source port UDP/161 back to that worker VLAN. The reply exception is inserted before the request exception, so both remain ahead of broader inter-VLAN filtering; neither rule exposes DSM management ports or SNMP to other VLANs.
 
 The BGP sessions use TCP MD5 authentication. Export the shared key from Bitwarden before running `tofu plan` or `tofu apply`:
 
