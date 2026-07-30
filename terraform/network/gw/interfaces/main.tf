@@ -138,6 +138,22 @@ resource "routeros_ip_firewall_addr_list" "kubernetes_service_vips" {
   comment = "Kubernetes LoadBalancer VIPs advertised by Cilium"
 }
 
+# Permit the SNMP exporter on the Kubernetes worker VLAN to poll only the
+# Synology NAS. This rule must precede broad inter-VLAN drop rules because DSM
+# responds to the same community from other sources but not from worker NAT.
+resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
+  provider = routeros.gw
+
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.20.0/24"
+  dst_address  = "10.1.100.10"
+  protocol     = "udp"
+  dst_port     = "161"
+  place_before = 0
+  comment      = "Allow Kubernetes worker VLAN to poll Synology SNMP"
+}
+
 resource "routeros_routing_filter_rule" "kubernetes_bgp_in" {
   count    = var.kubernetes_bgp.enabled ? 1 : 0
   provider = routeros.gw

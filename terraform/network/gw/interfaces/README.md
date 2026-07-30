@@ -13,7 +13,7 @@ Bitwarden Secrets Manager items contain one value each:
 - `SK-TALOS-SNMP-V3-AUTH-PASSWORD` (`12e0ba06-701b-400d-821d-b48e015b74cd`): authentication password only
 - `SK-TALOS-SNMP-V3-PRIV-PASSWORD` (`90e81979-e50d-46e9-9177-b48e015b751a`): privacy password only
 
-The first declarative application imports the remediated live communities by RouterOS IDs `*0` and `*2`. Until the pinned provider's RouterOS 7.21/7.22 IP-address and BGP defects are fixed, dispatch the OpenTofu workflow from `main` with `apply_gateway_snmp=true`. That path creates and applies an immutable plan targeted only at the two SNMP resources. Do not combine it with `apply_gateway=true`.
+The two gateway SNMP identities are already represented in remote OpenTofu state; no migration blocks remain in the desired-state configuration. Until the pinned provider's RouterOS 7.21/7.22 IP-address and BGP defects are fixed, dispatch the OpenTofu workflow from `main` with `plan_gateway_snmp=true` to produce an immutable plan targeted only at the two SNMP identities and the Synology SNMP forwarding rule. Review it before dispatching the separate `apply_gateway_snmp=true` production-gated apply. Do not combine either input with another gateway or Cloudflare control.
 
 ## Kubernetes BGP
 
@@ -23,6 +23,10 @@ The gateway peers with the Talos Kubernetes nodes on VLAN 20:
 - Node peers: `10.1.20.41`, `10.1.20.42`, `10.1.20.43`, `10.1.20.44`
 - ASN: `65001` on both sides
 - Accepted routes: `/32` LoadBalancer VIP routes inside `10.1.30.0/24`
+
+## Synology SNMP
+
+The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to Synology at `10.1.100.10`. The rule is inserted before existing forwarding rules so the NAS polling path remains available when broader inter-VLAN filtering is present; it does not expose DSM management ports or SNMP to other VLANs.
 
 The BGP sessions use TCP MD5 authentication. Export the shared key from Bitwarden before running `tofu plan` or `tofu apply`:
 
