@@ -138,6 +138,19 @@ resource "routeros_ip_firewall_addr_list" "kubernetes_service_vips" {
   comment = "Kubernetes LoadBalancer VIPs advertised by Cilium"
 }
 
+# Read the current forward-chain order so the SNMP exception can be inserted
+# before the first manually managed forwarding policy. The RouterOS provider
+# requires an existing rule ID here; a numeric ordinal does not order the rule.
+data "routeros_ip_firewall" "forward_rules" {
+  provider = routeros.gw
+
+  rules {
+    filter = {
+      chain = "forward"
+    }
+  }
+}
+
 # Permit the SNMP exporter on the Kubernetes worker VLAN to poll only the
 # Synology NAS. This rule must precede broad inter-VLAN drop rules because DSM
 # responds to the same community from other sources but not from worker NAT.
@@ -150,7 +163,7 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
   dst_address  = "10.1.100.10"
   protocol     = "udp"
   dst_port     = "161"
-  place_before = 0
+  place_before = data.routeros_ip_firewall.forward_rules.rules[0].id
   comment      = "Allow Kubernetes worker VLAN to poll Synology SNMP"
 }
 
