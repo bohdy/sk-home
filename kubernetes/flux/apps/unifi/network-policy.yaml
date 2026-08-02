@@ -84,6 +84,12 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
+          # Make the resolver traffic visible to Cilium's DNS proxy so its
+          # FQDN cache can authorize the dynamic CDN addresses for the narrow
+          # HTTPS rule below. This remains a resolver-only egress path.
+          rules:
+            dns:
+              - matchPattern: "*"
     # The self-hosted Network application synchronously contacts UniFi service
     # endpoints while handling legacy local-login requests. Restrict that
     # compatibility path to the Ubiquiti domain over HTTPS rather than granting
