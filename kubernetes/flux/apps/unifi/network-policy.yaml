@@ -165,13 +165,10 @@ spec:
               protocol: TCP
           rules:
             dns:
-              # Kubernetes resolver search paths try these short forms before
-              # the canonical service FQDN. Each resolves to the same private
-              # ClusterIP; listing them keeps the proxy's egress least-privilege.
-              - matchName: unifi-console
-              - matchName: unifi-console.unifi
-              - matchName: unifi-console.unifi.svc
-              - matchName: unifi-console.unifi.svc.cluster.local
+              # Cilium evaluates the canonical Kubernetes DNS query, including
+              # its trailing dot, as a DNS pattern. This exact Service name
+              # resolves only to the controller's private ClusterIP.
+              - matchPattern: unifi-console.unifi.svc.cluster.local.
 ---
 # MongoDB accepts only the controller and node-originated health probes. It has
 # no egress requirements during this stage and remains unreachable externally.
