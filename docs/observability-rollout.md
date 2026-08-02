@@ -255,6 +255,7 @@ Discovery completed on 2026-07-23; initial production collection was enabled on 
 - All three UniFi APs are enabled after independent full-profile probes. The shared controller-managed SNMPv2c profile works for each device, so no extra AP-specific Bitwarden secret is needed.
 - Flux applied the `snmp-unifi-ap-1pp` VMStaticScrape at revision `15202fe`. VictoriaMetrics reported `up=1` with the expected cluster, site, instance, vendor, and availability labels, and 1,387 series, below the 10,000-series limit.
 - Flux applied the `snmp-unifi-ap-temp` VMStaticScrape at revision `61c1e08`. VictoriaMetrics reported the same expected labels with `up=1` and 1,543 series, below the 10,000-series limit.
+- Flux applied the `snmp-unifi-ap-1np` VMStaticScrape at revision `d544d38`. VictoriaMetrics reported the same expected labels with `up=1` and 1,542 series, below the 10,000-series limit.
 
 ## UniFi controller migration
 
