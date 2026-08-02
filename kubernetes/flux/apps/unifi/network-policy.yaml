@@ -165,6 +165,12 @@ spec:
               protocol: TCP
           rules:
             dns:
+              # Kubernetes resolver search paths try these short forms before
+              # the canonical service FQDN. Each resolves to the same private
+              # ClusterIP; listing them keeps the proxy's egress least-privilege.
+              - matchName: unifi-console
+              - matchName: unifi-console.unifi
+              - matchName: unifi-console.unifi.svc
               - matchName: unifi-console.unifi.svc.cluster.local
 ---
 # MongoDB accepts only the controller and node-originated health probes. It has
