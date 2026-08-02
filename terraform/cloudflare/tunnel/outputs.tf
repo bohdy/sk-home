@@ -18,3 +18,13 @@ output "grafana_access_application_id" {
   description = "Cloudflare Access application UUID protecting Grafana."
   value       = cloudflare_zero_trust_access_application.grafana.id
 }
+
+output "unifi_public_hostname" {
+  description = "Public UniFi hostname protected by Cloudflare Access."
+  value       = cloudflare_dns_record.unifi.name
+}
+
+output "unifi_access_application_id" {
+  description = "Cloudflare Access application ID enforcing the UniFi owner policy."
+  value       = cloudflare_zero_trust_access_application.unifi.id
+}

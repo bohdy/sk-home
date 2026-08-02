@@ -21,7 +21,7 @@ data:
     $ORIGIN 30.1.10.in-addr.arpa.
     $TTL 300
     @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-        2026072001 ; serial
+        2026080201 ; serial
         300        ; refresh
         120        ; retry
         1209600    ; expire
@@ -30,11 +30,12 @@ data:
     @  IN NS  dns.bohdal.name.
     53 IN PTR dns.bohdal.name.
     55 IN PTR grafana.bohdal.name.
+    56 IN PTR unifi.bohdal.name.
   bohdal.name.zone: |
     $ORIGIN bohdal.name.
     $TTL 300
     @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-        2026072901 ; serial
+        2026080201 ; serial
         300        ; refresh
         120        ; retry
         1209600    ; expire
@@ -45,6 +46,9 @@ data:
     blocky IN A  10.1.30.53
     grafana IN A 10.1.30.55
     grafana.internal IN A 10.1.30.55
+    ; The canonical console hostname resolves directly to the LAN-only HTTPS VIP.
+    ; Public resolvers continue returning the proxied Cloudflare Tunnel record.
+    unifi IN A 10.1.30.56
     gw     IN A  10.1.100.1
     ; Adopted UniFi devices persist the short `unifi` inform hostname and receive
     ; `ap.sk.bohdal.name` as their DHCP search domain.

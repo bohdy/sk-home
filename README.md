@@ -100,7 +100,7 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are the Cloudflare R2 credentials used by OpenTofu's S3-compatible backend. If they are missing from the shell environment, `tofu init` and `tofu plan` will fail before evaluating stack resources with `No valid credential sources found`.
 
-The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's public DNS, HTTPS tunnel route, exact Google identity policy, and the terminal `404` fallback. Grafana relies on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
+The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's and UniFi's public DNS, HTTPS tunnel routes, exact Google identity policies, and the terminal `404` fallback. Both applications rely on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
 
 The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
 
@@ -126,7 +126,7 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gatewa
 
 That job applies the immutable full DHCP-stack plan in the `production` environment without evaluating the provider-blocked gateway interface and BGP resources. DHCP leases must already be static before they are added as `routeros_ip_dhcp_server_lease` resources; the repository does not use imperative dynamic-to-static conversion helpers.
 
-Publish or update Grafana's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
+Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
 
 ```sh
 gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_cloudflare=true

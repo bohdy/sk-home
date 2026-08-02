@@ -6,8 +6,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "cluster" {
   config_src = "cloudflare"
 }
 
-# Route only Grafana through the shared tunnel. The origin keeps end-to-end TLS
-# and validates the cert-manager certificate against the canonical hostname.
+# Route Grafana and UniFi through the shared tunnel. Grafana validates its
+# cert-manager certificate; UniFi retains its self-hosted keystore, so the
+# private in-cluster hop stays encrypted while Cloudflare skips its unknown
+# local issuer until a controller-managed certificate is introduced.
 resource "cloudflare_zero_trust_tunnel_cloudflared_config" "cluster" {
   account_id = var.cloudflare_account_id
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.cluster.id
@@ -23,6 +25,16 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "cluster" {
           no_tls_verify      = false
           connect_timeout    = 10
           tls_timeout        = 10
+        }
+      },
+      {
+        hostname = var.unifi_hostname
+        service  = var.unifi_origin_service
+        origin_request = {
+          http_host_header = var.unifi_hostname
+          no_tls_verify    = true
+          connect_timeout  = 10
+          tls_timeout      = 10
         }
       },
       {
@@ -49,6 +61,36 @@ resource "cloudflare_dns_record" "grafana" {
   proxied = true
   ttl     = 1
   comment = "Grafana through the shared sk-talos tunnel; managed by OpenTofu"
+}
+
+# Discover and adopt the existing proxied public record rather than replacing
+# it. Its target changes atomically with the tunnel configuration during the
+# reviewed Cloudflare apply, while LAN split DNS remains independent.
+data "cloudflare_dns_record" "unifi" {
+  zone_id = var.cloudflare_zone_id
+
+  filter = {
+    match = "all"
+    name = {
+      exact = var.unifi_hostname
+    }
+    type = "CNAME"
+  }
+}
+
+import {
+  to = cloudflare_dns_record.unifi
+  id = "${var.cloudflare_zone_id}/${data.cloudflare_dns_record.unifi.id}"
+}
+
+resource "cloudflare_dns_record" "unifi" {
+  zone_id = var.cloudflare_zone_id
+  name    = var.unifi_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.cluster.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+  comment = "UniFi through the shared sk-talos tunnel; managed by OpenTofu"
 }
 
 # Resolve the committed ID through the API so a deleted or replaced identity
@@ -95,6 +137,69 @@ resource "cloudflare_zero_trust_access_application" "grafana" {
   account_id                 = var.cloudflare_account_id
   name                       = "Grafana"
   domain                     = var.grafana_hostname
+  type                       = "self_hosted"
+  allowed_idps               = [data.cloudflare_zero_trust_access_identity_provider.google.id]
+  auto_redirect_to_identity  = true
+  session_duration           = "8h"
+  http_only_cookie_attribute = true
+  same_site_cookie_attribute = "strict"
+  mfa_config = {
+    allowed_authenticators = ["totp", "security_key", "biometrics"]
+    mfa_disabled           = true
+    session_duration       = "8h"
+  }
+
+  policies = [
+    {
+      name       = "Allow exact owner through Google"
+      decision   = "allow"
+      precedence = 1
+      include = [
+        {
+          email = {
+            email = lower(trimspace(var.grafana_access_email))
+          }
+        },
+      ]
+      require = [
+        {
+          login_method = {
+            id = data.cloudflare_zero_trust_access_identity_provider.google.id
+          }
+        },
+      ]
+    },
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = data.cloudflare_zero_trust_access_identity_provider.google.type == "google"
+      error_message = "The configured Cloudflare Access identity provider must remain Google."
+    }
+  }
+
+  depends_on = [cloudflare_zero_trust_organization.account]
+}
+
+# The old UniFi Access application is already active but unmanaged. Locate it
+# by its exact hostname and adopt it so the single-owner policy is reviewed in
+# Git before the route moves to the Talos controller.
+data "cloudflare_zero_trust_access_applications" "unifi" {
+  account_id = var.cloudflare_account_id
+  domain     = var.unifi_hostname
+  exact      = true
+  max_items  = 1
+}
+
+import {
+  to = cloudflare_zero_trust_access_application.unifi
+  id = "accounts/${var.cloudflare_account_id}/${one(data.cloudflare_zero_trust_access_applications.unifi.result).id}"
+}
+
+resource "cloudflare_zero_trust_access_application" "unifi" {
+  account_id                 = var.cloudflare_account_id
+  name                       = "UniFi"
+  domain                     = var.unifi_hostname
   type                       = "self_hosted"
   allowed_idps               = [data.cloudflare_zero_trust_access_identity_provider.google.id]
   auto_redirect_to_identity  = true

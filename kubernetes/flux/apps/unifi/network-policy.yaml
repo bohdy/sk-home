@@ -1,6 +1,7 @@
 # The controller accepts node-originated console checks and LAN device traffic
-# only on UniFi's inform, STUN, and discovery ports. The console itself remains
-# private until a separately accepted public-routing change exposes it.
+# only on UniFi's inform, STUN, discovery, and explicitly authorized console
+# paths. Cloudflare Access remains the public perimeter; the LAN VIP admits
+# only private source ranges before Cilium proxies traffic to this Pod.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -15,6 +16,25 @@ spec:
     - fromEntities:
         - host
         - remote-node
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    # The in-cluster connector uses the private ClusterIP origin after
+    # Cloudflare Access authenticates the Internet request at the edge.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cloudflare-tunnel
+            k8s:app.kubernetes.io/name: cloudflared
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    # LoadBalancer proxying presents LAN console traffic with Cilium's world
+    # identity. The Service source-range policy above is the authoritative
+    # 10.0.0.0/8 admission boundary for this particular path.
+    - fromEntities:
+        - world
       toPorts:
         - ports:
             - port: "8443"

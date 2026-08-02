@@ -1,5 +1,6 @@
-# This private service exposes only the setup and restore console. A later,
-# separately reviewed cutover adds the fixed device VIP and Cloudflare route.
+# This private service is the tunnel origin and keeps direct pod-to-console
+# traffic inside the cluster. LAN clients use the separately constrained
+# `unifi-console-lan` LoadBalancer rather than reaching this Service directly.
 apiVersion: v1
 kind: Service
 metadata:

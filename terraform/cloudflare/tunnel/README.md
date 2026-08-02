@@ -1,10 +1,10 @@
 # Shared Cloudflare Tunnel
 
-This OpenTofu stack owns the remotely managed `sk-talos` Cloudflare Tunnel and Grafana's public perimeter. It routes only `grafana.bohdal.name` to Grafana's in-cluster HTTPS Service, retains a terminal `http_status:404` rule, adopts the proxied public CNAME, and creates the self-hosted Cloudflare Access application.
+This OpenTofu stack owns the remotely managed `sk-talos` Cloudflare Tunnel plus Grafana's and UniFi's public perimeters. It routes `grafana.bohdal.name` to Grafana's in-cluster HTTPS Service and `unifi.bohdal.name` to UniFi's private console origin, retains a terminal `http_status:404` rule, adopts both proxied public CNAMEs, and manages their self-hosted Cloudflare Access applications.
 
-The Access application allows one exact Gmail identity through the existing Google identity provider. Independent Cloudflare Access MFA is disabled for Grafana, so the owner must enforce strong authentication on the Google account; unmatched identities have no allow policy and are denied by Access. Grafana's own login remains enabled behind Access.
+Each Access application allows the same one exact Gmail identity through the existing Google identity provider. Independent Cloudflare Access MFA is disabled, so the owner must enforce strong authentication on the Google account; unmatched identities have no allow policy and are denied by Access. Grafana's and UniFi's own logins remain enabled behind Access.
 
-Application routes, proxied DNS records, and Cloudflare Access applications remain owned by the workload change that introduces each public hostname. Grafana is the first planned route.
+Application routes, proxied DNS records, and Cloudflare Access applications remain owned by the workload change that introduces each public hostname. Grafana and UniFi are the current routes.
 
 ## Credentials
 
