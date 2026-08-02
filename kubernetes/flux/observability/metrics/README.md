@@ -4,6 +4,8 @@ This component installs the official `victoria-metrics-k8s-stack` chart 0.86.1 t
 
 Stable labels are `cluster="sk-talos"` and `site="sk"`. General collection runs every 30 seconds. VMSingle retains raw metrics for one year on a retained 100 GiB Synology iSCSI claim.
 
+Each node exporter requests 20m CPU and is limited to 500m. The higher limit is deliberate: its former 150m limit caused sustained cgroup throttling on healthy nodes and fired the chart's `CPUThrottlingHigh` informational rule. The four 500m limits remain within the namespace quota while preserving sufficient worker headroom.
+
 Grafana and Alertmanager use retained 10 GiB and 1 GiB claims respectively. Grafana's Helm-managed claim carries the `helm.sh/resource-policy: keep` annotation so failed-install remediation and intentional Helm removal preserve it.
 
 Grafana terminates HTTPS directly with cert-manager Secret `grafana-tls`. Cilium exposes it to `10.0.0.0/8` on fixed LoadBalancer VIP `10.1.30.55`; the Service forwards TCP 443 to Grafana's HTTPS listener on port 3000. Internal split DNS maps canonical name `grafana.bohdal.name` and explicit LAN alias `grafana.internal.bohdal.name` to the VIP. Grafana enforces the canonical root URL, keeps its own login enabled, and has no ingress-controller dependency. Its generated VMServiceScrape also uses HTTPS and verifies the public certificate against `grafana.bohdal.name`.
