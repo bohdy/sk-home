@@ -18,7 +18,7 @@ The authoritative source snapshot is the upstream `v0.30.1` tag. Its generator M
 
 Several vendor URLs are unversioned upstream. Treat the committed generated output and the SNMP Exporter v0.30.1 tag as the reproducible review boundary. Do not commit downloaded MIB files unless their redistribution licenses explicitly permit it.
 
-The committed auth definitions contain environment-variable placeholders rather than credentials. `snmp_v2` uses SNMPv2c. The generic `snmp_v3` profile uses `authPriv` with SHA-256 authentication and AES privacy, while `snmp_v3_routeros` uses RouterOS-compatible SHA1 authentication and AES privacy. Change protocol choices in `generator.yml` and regenerate `snmp.yml` only after confirming device support.
+The committed auth definitions contain environment-variable placeholders rather than credentials. SNMP Exporter v0.30.1 expands SNMPv3 username and password fields, but not the SNMPv2c `community` field. The Deployment therefore renders the `snmp_v2` auth definition from its Secret into a memory-backed volume before the exporter starts; the community is not present in Git, a ConfigMap, pod arguments, or the main container environment. The generic `snmp_v3` profile uses `authPriv` with SHA-256 authentication and AES privacy, while `snmp_v3_routeros` uses RouterOS-compatible SHA1 authentication and AES privacy. Change protocol choices in `generator.yml` and regenerate `snmp.yml` only after confirming device support.
 
 ## Secret
 
@@ -71,6 +71,6 @@ kubectl kustomize kubernetes/flux/observability/snmp | kubectl apply --server-si
 
 Use server-side apply for validation because the selected generated modules exceed Kubernetes' client-side last-applied annotation limit. The ConfigMap itself remains below the Kubernetes object-size limit, and Flux also reconciles it with server-side apply.
 
-Require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful discovery with every production target's configured auth profile, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics. The MikroTik production scrape uses `snmp_v3_routeros`; SNMPv2c remains available only for explicit compatibility testing and is not a production readiness dependency.
+Require a Ready exporter with no repeated restarts, an `up=1` self-scrape, successful discovery with every production target's configured auth profile, stable target labels, bounded series counts, and no credentials in pod arguments, rendered manifests, logs, or metrics. The MikroTik production scrape uses `snmp_v3_routeros`; SNMPv2c remains available only for explicit compatibility testing and is not a production readiness dependency. Verify an SNMPv2c endpoint through the exporter HTTP API rather than packet capture, because packet capture can disclose its community.
 
 Routine rollback suspends `observability-snmp` or removes it from the cluster Flux tree. The external Secret may remain for redeployment, but delete it explicitly if SNMP monitoring is abandoned.

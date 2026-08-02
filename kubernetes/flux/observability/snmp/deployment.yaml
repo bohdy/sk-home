@@ -30,21 +30,71 @@ spec:
                 matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
-      containers:
-        - name: snmp-exporter
-          image: quay.io/prometheus/snmp-exporter:v0.30.1@sha256:e5fd5e8b43ace6c088fe9bf0b37b7fff0e04380bee352be7ec41b853a4dd5859
-          args:
-            - --config.file=/etc/snmp-exporter/snmp.yml
-            - --config.expand-environment-variables
-            - --web.listen-address=:9116
+      initContainers:
+        # v0.30.1 expands only SNMPv3 authentication fields, so render the
+        # SNMPv2c auth separately without persisting the community in Git.
+        - name: render-snmp-v2-auth
+          image: busybox:1.38.0@sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              if [ -z "${SNMP_V2_COMMUNITY}" ] || [ "$(printf %s "${SNMP_V2_COMMUNITY}" | wc -l)" -ne 0 ]; then
+                echo "SNMPv2 community must be non-empty and contain no newlines" >&2
+                exit 1
+              fi
+              escaped_community="$(printf %s "${SNMP_V2_COMMUNITY}" | sed "s/'/''/g")"
+              umask 077
+              {
+                printf '%s\n' 'auths:' '  snmp_v2:'
+                printf "    community: '%s'\n" "${escaped_community}"
+                printf '%s\n' '    security_level: noAuthNoPriv' '    auth_protocol: MD5' '    priv_protocol: DES' '    version: 2'
+              } > /etc/snmp-exporter/config/00-snmp-v2.yml
+              cp /etc/snmp-exporter/config-template/snmp.yml /etc/snmp-exporter/config/10-snmp.yml
+              chmod 0400 /etc/snmp-exporter/config/00-snmp-v2.yml
+              chmod 0444 /etc/snmp-exporter/config/10-snmp.yml
           env:
-            # The external Secret is manually bootstrapped from Bitwarden and
-            # contains values only, while protocols remain reviewed in Git.
+            # The value is mounted only in this init container and rendered
+            # into a memory-backed volume consumed by the exporter.
             - name: SNMP_V2_COMMUNITY
               valueFrom:
                 secretKeyRef:
                   name: snmp-exporter-auth
                   key: v2-community
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/snmp-exporter/config-template
+              readOnly: true
+            - name: rendered-config
+              mountPath: /etc/snmp-exporter/config
+      containers:
+        - name: snmp-exporter
+          image: quay.io/prometheus/snmp-exporter:v0.30.1@sha256:e5fd5e8b43ace6c088fe9bf0b37b7fff0e04380bee352be7ec41b853a4dd5859
+          args:
+            - --config.file=/etc/snmp-exporter/config/*.yml
+            - --config.expand-environment-variables
+            - --web.listen-address=:9116
+          env:
+            # The external Secret is manually bootstrapped from Bitwarden and
+            # contains values only, while protocols remain reviewed in Git.
             - name: SNMP_V3_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -95,12 +145,18 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
-            - name: config
-              mountPath: /etc/snmp-exporter
+            - name: rendered-config
+              mountPath: /etc/snmp-exporter/config
               readOnly: true
       securityContext:
         fsGroup: 65534
       volumes:
-        - name: config
+        - name: config-template
           configMap:
             name: snmp-exporter-config
+        # The init container writes the only v2c-bearing file into memory,
+        # preventing the community from landing in a ConfigMap or node disk.
+        - name: rendered-config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
