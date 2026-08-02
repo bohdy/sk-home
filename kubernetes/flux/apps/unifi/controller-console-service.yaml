@@ -1,7 +1,6 @@
-# Publish the controller console only on the dedicated LAN VIP. Cloudflare
-# reaches the separate ClusterIP origin, so this Service never accepts public
-# Internet traffic even though the same hostname is externally protected by
-# Cloudflare Access.
+# Publish a trusted HTTPS console only on the dedicated LAN VIP. Cloudflare
+# reaches the controller's separate ClusterIP origin, so this Service neither
+# broadens the public boundary nor changes Cloudflare Access enforcement.
 apiVersion: v1
 kind: Service
 metadata:
@@ -23,10 +22,10 @@ spec:
   loadBalancerSourceRanges:
     - 10.0.0.0/8
   selector:
-    app.kubernetes.io/name: unifi-controller
+    app.kubernetes.io/name: unifi-console-tls-proxy
   ports:
-    # Preserve the standard HTTPS port for LAN browsers while UniFi continues
-    # to listen on its native self-hosted console port in the Pod.
+    # Preserve the standard HTTPS port for LAN browsers. The proxy terminates
+    # the cert-manager certificate, then sends traffic to UniFi's native port.
     - name: https-console
       port: 443
       targetPort: https-console

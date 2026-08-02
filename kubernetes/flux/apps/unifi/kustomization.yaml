@@ -10,6 +10,9 @@ resources:
   - mongodb-deployment.yaml
   - controller-service.yaml
   - controller-console-service.yaml
+  - console-tls-certificate.yaml
+  - console-tls-proxy-configmap.yaml
+  - console-tls-proxy-deployment.yaml
   - controller-device-service.yaml
   - controller-deployment.yaml
   - network-policy.yaml

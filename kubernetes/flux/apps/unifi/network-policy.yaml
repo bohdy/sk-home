@@ -30,6 +30,16 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
+    # The LAN TLS proxy has no device-management capability; it only relays
+    # authenticated browser HTTPS requests to UniFi's native console listener.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-console-tls-proxy
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
     # LoadBalancer proxying presents LAN console traffic with Cilium's world
     # identity. The Service source-range policy above is the authoritative
     # 10.0.0.0/8 admission boundary for this particular path.
@@ -107,6 +117,55 @@ spec:
         - ports:
             - port: "443"
               protocol: TCP
+---
+# The proxy is the sole LAN TLS endpoint. It may resolve and relay only to the
+# controller's ClusterIP service; it cannot reach device, database, or Internet
+# endpoints. Cilium's Service source-range rule remains the LAN admission gate.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi-console-tls-proxy
+  namespace: unifi
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-console-tls-proxy
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-controller
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchName: unifi-console.unifi.svc.cluster.local
 ---
 # MongoDB accepts only the controller and node-originated health probes. It has
 # no egress requirements during this stage and remains unreachable externally.
