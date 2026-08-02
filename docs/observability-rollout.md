@@ -43,6 +43,7 @@ Acceptance completed on 2026-07-17:
 - The worker reported no memory, disk, PID, or network pressure with 39% requested CPU and 35% requested memory after deployment.
 - Active retained PVs are `pvc-a1b722da-92ef-4772-b66a-6d89b3b2ce37` for VMSingle, `pvc-3e14274e-2c25-4005-a08e-ef1796fa310b` for Grafana, and `pvc-fe9fd1e9-2fc9-4555-a843-af46e1d73625` for Alertmanager.
 - Released PV `pvc-ac677c3b-8897-43e8-a538-dd34d71a3baf` is the first failed-install Grafana volume. It remains intentionally retained alongside storage-validation PV `pvc-c18327d7-51df-451f-80ac-daac0c4bb6dc`; remove either only through explicit storage cleanup.
+- On 2026-08-02, node exporter CPU limits increased from 150m to 500m after healthy nodes showed sustained 28-51% throttling. The replacement pods reported 0-17.4% after the rollout, and every `CPUThrottlingHigh` alert cleared once retired cgroup series expired.
 
 ## Immediate next actions
 
