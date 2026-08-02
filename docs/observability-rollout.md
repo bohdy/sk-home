@@ -285,7 +285,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Verify the restored UniFi controller's adopted-device state, then independently re-probe and accept `unifi-ap-temp`; bootstrap the dedicated profile and secret for `unifi-ap-1np` before enabling it. Treat the Brother printer as intermittent.
+1. Bring the intermittent Brother printer online and configure or confirm its read-only SNMPv2c service against the existing shared profile. Re-probe `system` and `printer_mib` from the exporter before enabling its bounded scrape; retain its intermittent availability class so powered-off periods do not alert.
 2. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
