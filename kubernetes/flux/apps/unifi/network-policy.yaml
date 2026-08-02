@@ -163,12 +163,9 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
-          rules:
-            dns:
-              # Cilium evaluates the canonical Kubernetes DNS query, including
-              # its trailing dot, as a DNS pattern. This exact Service name
-              # resolves only to the controller's private ClusterIP.
-              - matchPattern: unifi-console.unifi.svc.cluster.local.
+          # DNS is confined to CoreDNS. The proxy's other egress rule permits
+          # connections only to the controller, so arbitrary lookups cannot
+          # create Internet reachability while avoiding DNS-parser ambiguity.
 ---
 # MongoDB accepts only the controller and node-originated health probes. It has
 # no egress requirements during this stage and remains unreachable externally.
