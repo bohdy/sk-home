@@ -215,6 +215,7 @@ Track these items explicitly after the first release:
 - External dead-man heartbeat outside the Kubernetes and home internet failure domains
 - Automated Bitwarden secret reconciliation after its SDK-server and token risks are revisited
 - UniFi Poller after the controller migration
+- Brother printer SNMP after its administrator-password reset; configure or confirm read-only SNMPv2c with the shared profile, validate `system` and `printer_mib` from the exporter, then enable its intermittent scrape without offline alerting
 - Klipper and Moonraker monitoring after exporter and read-only authentication review
 - NetFlow or sFlow design
 - Distributed tracing after applications emit OpenTelemetry spans
