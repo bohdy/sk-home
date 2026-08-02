@@ -84,6 +84,17 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
+    # The self-hosted Network application synchronously contacts UniFi service
+    # endpoints while handling legacy local-login requests. Restrict that
+    # compatibility path to the Ubiquiti domain over HTTPS rather than granting
+    # the controller broad Internet egress; Cilium tracks the dynamic CDN IPs
+    # from the controller's permitted DNS lookups.
+    - toFQDNs:
+        - matchPattern: "*.ui.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
 ---
 # MongoDB accepts only the controller and node-originated health probes. It has
 # no egress requirements during this stage and remains unreachable externally.
