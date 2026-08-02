@@ -64,7 +64,9 @@ spec:
           resources:
             requests:
               cpu: 5m
-              memory: 8Mi
+              # Cluster policy requires every container to request at least
+              # 16Mi, including this short-lived configuration renderer.
+              memory: 16Mi
             limits:
               cpu: 50m
               memory: 32Mi
