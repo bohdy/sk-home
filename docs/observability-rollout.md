@@ -47,7 +47,7 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Resolve the remaining device-specific SNMP authentication, service enablement, and inventory blockers without weakening the accepted MikroTik SNMPv3 path. Synology and its USB-connected APC UPS are accepted on SNMPv2c; UniFi and Brother remain disabled until their documented blockers are resolved.
+2. Bring the intermittent Brother printer online and confirm its read-only SNMPv2c service before enabling its bounded intermittent scrape. MikroTik remains accepted on SNMPv3; Synology, its USB-connected APC UPS, and all three UniFi APs are accepted on SNMPv2c.
 
 ## Network metrics acceptance
 
