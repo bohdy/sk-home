@@ -57,11 +57,9 @@ targets:
     interval: 60s
     availability: always-on
     address_stability: static-dhcp
-    auth_profile: pending
-    enabled: false
-    blockers:
-      - confirm-auth-profile
-      - bootstrap-auth-secret
+    auth_profile: snmp_v2
+    enabled: true
+    blockers: []
 
   - name: unifi-ap-temp
     address: 10.1.102.12
