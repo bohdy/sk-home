@@ -35,9 +35,9 @@ spec:
           replacement: snmp-exporter.observability.svc.cluster.local.:9116
 
 ---
-# Keep the DHCP-reserved AP identity stable while polling it through the shared
-# multi-target exporter. Only AP-1PP is enabled after its full module profile
-# succeeded from the worker VLAN; other AP inventory entries remain gated.
+# Keep each DHCP-reserved AP identity stable while polling it through the shared
+# multi-target exporter. An AP is added only after its full module profile has
+# independently succeeded from the Kubernetes worker VLAN.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMStaticScrape
 metadata:
@@ -50,6 +50,42 @@ spec:
         - 10.1.102.10
       labels:
         instance: unifi-ap-1pp
+        vendor: ubiquiti
+        availability: always-on
+      path: /snmp
+      params:
+        auth:
+          - snmp_v2
+        module:
+          - system
+          - if_mib
+          - ubiquiti_unifi
+      interval: 60s
+      scrapeTimeout: 30s
+      sampleLimit: 10000
+      seriesLimit: 10000
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: snmp-exporter.observability.svc.cluster.local.:9116
+
+---
+# AP-temp passed the same full-profile worker-VLAN probe as AP-1PP. It is a
+# distinct target because individual AP availability must not hide one another.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: snmp-unifi-ap-temp
+  namespace: observability
+spec:
+  jobName: snmp-unifi-ap-temp
+  targetEndpoints:
+    - targets:
+        - 10.1.102.12
+      labels:
+        instance: unifi-ap-temp
         vendor: ubiquiti
         availability: always-on
       path: /snmp
