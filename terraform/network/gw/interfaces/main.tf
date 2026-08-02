@@ -170,6 +170,39 @@ resource "routeros_ip_firewall_filter" "allow_synology_snmp_responses" {
   comment      = "Allow Synology SNMP replies to Kubernetes worker VLAN"
 }
 
+# Permit the SNMP exporter on the Kubernetes worker VLAN to poll UniFi access
+# points on their management VLAN. The target is the management subnet rather
+# than individual APs so newly adopted APs remain observable without firewall
+# edits; UDP/161 is the only exposed service.
+resource "routeros_ip_firewall_filter" "allow_kubernetes_unifi_snmp" {
+  provider = routeros.gw
+
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.20.0/24"
+  dst_address  = "10.1.102.0/24"
+  protocol     = "udp"
+  dst_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_synology_snmp_responses.id
+  comment      = "Allow Kubernetes worker VLAN to poll UniFi SNMP"
+}
+
+# Permit only SNMP replies from the UniFi management VLAN to the workers. This
+# mirrors the Synology exception because the inter-VLAN policy does not grant a
+# generic stateful UDP return path.
+resource "routeros_ip_firewall_filter" "allow_unifi_snmp_responses" {
+  provider = routeros.gw
+
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.102.0/24"
+  dst_address  = "10.1.20.0/24"
+  protocol     = "udp"
+  src_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id
+  comment      = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
+}
+
 resource "routeros_routing_filter_rule" "kubernetes_bgp_in" {
   count    = var.kubernetes_bgp.enabled ? 1 : 0
   provider = routeros.gw
