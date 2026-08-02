@@ -220,12 +220,12 @@ Acceptance completed on 2026-07-22 for the production SNMPv3 path:
 
 ## Synology SNMP acceptance
 
-Acceptance completed on 2026-08-02 after PRs #176 and #177:
+Acceptance completed on 2026-08-02 after PRs #176, #177, and #178:
 
 - The exporter sends the SNMPv2c community from an init-container-rendered auth file on a memory-backed volume. The community is absent from Git, ConfigMaps, pod arguments, and the main exporter container environment.
 - The Synology DSM SNMPv2c `system`, `if_mib`, and `synology` modules all returned successful metrics through the exporter from the Kubernetes worker source.
 - Flux `observability-snmp` applied Git revision `00fd064` and reported Ready after the init container completed with no restarts.
-- The production `snmp-synology` scrape polls `10.1.100.10` every 60 seconds with stable `instance="synology"`, `vendor="synology"`, and `availability="always-on"` labels. It enforces 10,000-sample and 10,000-series bounds.
+- The production `snmp-synology` scrape polls `10.1.100.10` every 60 seconds with stable `instance="synology"`, `vendor="synology"`, and `availability="always-on"` labels. VictoriaMetrics reports `up=1` and 1,609 active series, below its 10,000-sample and 10,000-series bounds.
 
 ## Monitored-device DHCP acceptance
 
