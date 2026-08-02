@@ -1,6 +1,6 @@
 # Shared Cloudflare Tunnel
 
-This OpenTofu stack owns the remotely managed `sk-talos` Cloudflare Tunnel plus Grafana's and UniFi's public perimeters. It routes `grafana.bohdal.name` to Grafana's in-cluster HTTPS Service and `unifi.bohdal.name` to UniFi's private console origin, retains a terminal `http_status:404` rule, adopts both proxied public CNAMEs, and manages their self-hosted Cloudflare Access applications.
+This OpenTofu stack owns the remotely managed `sk-talos` Cloudflare Tunnel plus Grafana's and UniFi's public perimeters. It routes `grafana.bohdal.name` to Grafana's in-cluster HTTPS Service and `unifi.bohdal.name` to UniFi's private console origin, retains a terminal `http_status:404` rule, manages both proxied public CNAMEs, and manages their self-hosted Cloudflare Access applications.
 
 Each Access application allows the same one exact Gmail identity through the existing Google identity provider. Independent Cloudflare Access MFA is disabled, so the owner must enforce strong authentication on the Google account; unmatched identities have no allow policy and are denied by Access. Grafana's and UniFi's own logins remain enabled behind Access.
 
@@ -37,4 +37,4 @@ rm -f terraform/cloudflare/tunnel/tofuplan
 
 This stack is intentionally not auto-applied from `main`. After merging a reviewed change, dispatch `.github/workflows/terraform.yaml` with only `apply_cloudflare=true`; the production job applies the immutable Cloudflare plan artifact from that run. The connector token remains in its dedicated Bitwarden item and must never be printed or committed.
 
-The imported CNAME previously targeted an unmanaged legacy tunnel. The first reviewed apply repoints it to the stack-owned tunnel without deleting the DNS record.
+The initially imported CNAME targeted an unmanaged legacy tunnel. Its first reviewed apply repointed it to the stack-owned tunnel without deleting the DNS record; the live record is now managed normally.
