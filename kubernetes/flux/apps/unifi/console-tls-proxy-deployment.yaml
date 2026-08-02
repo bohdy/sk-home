@@ -24,6 +24,11 @@ spec:
         runAsNonRoot: true
         runAsUser: 101
         runAsGroup: 101
+        # EmptyDir volumes need the proxy group so its unprivileged worker can
+        # write only transient runtime files while the root filesystem remains
+        # read-only.
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -69,6 +74,8 @@ spec:
               mountPath: /var/cache/nginx
             - name: nginx-run
               mountPath: /var/run
+            - name: nginx-tmp
+              mountPath: /tmp
       volumes:
         - name: configuration
           configMap:
@@ -79,4 +86,6 @@ spec:
         - name: nginx-cache
           emptyDir: {}
         - name: nginx-run
+          emptyDir: {}
+        - name: nginx-tmp
           emptyDir: {}
