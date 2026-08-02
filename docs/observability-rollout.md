@@ -257,13 +257,13 @@ Discovery completed on 2026-07-23; initial production collection was enabled on 
 
 ## UniFi controller migration
 
-Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed:
+Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed. Restore and device-service cutover are accepted as of 2026-08-02:
 
 - A fresh native backup `10.1.89.unf` was created on the legacy controller through its private authenticated API. It is 15.2 MB and remains outside Git and Kubernetes secret storage.
 - The Talos `unifi` Flux component provisions a private restore stage with retained Synology iSCSI volumes, a controller image digest matching the backup source, MongoDB 8.0.28, and separately bootstrapped Bitwarden credentials for MongoDB root and the least-privilege UniFi database user.
 - The application user is created in MongoDB's `admin` authentication database, with roles restricted to `unifi`, `unifi_stat`, `unifi_audit`, and `unifi_restore`; this matches the controller's supported URI while preserving database-level least privilege.
-- The stage intentionally exposes only the ClusterIP `unifi-console` service. It must not claim `10.1.30.1`, receive AP inform traffic, or add public Cloudflare routing until restore validation is complete and the legacy controller is stopped.
-- Restore verification must confirm the `default` site, all adopted APs, and the controller-level SNMPv2c setting before the later dedicated cutover change. The existing worker-VLAN UDP/161 return-path blocker remains independent of controller placement.
+- The administrator console remains the private ClusterIP `unifi-console` service. The dedicated device service now owns Cilium LoadBalancer VIP `10.1.30.1` for AP inform, STUN, and discovery only; no Cloudflare route, DNS record, or Access application has been added for the console.
+- A read-only query through the least-privilege application user found both `default` and `super` sites, one SNMP settings record, and three adopted AP records: `AP-1NP` (`10.1.102.11`), `AP-1PP` (`10.1.102.10`), and `AP-temp` (`10.1.102.12`). The setting value was not read. The independently verified `AP-1PP` SNMPv2c scrape proves the deployed device-side compatibility profile works through the new worker VLAN path.
 - Initial live reconciliation showed that MongoDB requires `CHOWN`, `DAC_OVERRIDE`, `SETGID`, and `SETUID` for first-run setup. The LinuxServer controller's `s6` phase fails to render its packaged template under no-new-privileges, so it uses the supported image initialization context. Pod-level RuntimeDefault seccomp, private-only exposure, and Cilium policy remain enforced.
 
 ## Proxmox acceptance
