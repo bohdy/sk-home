@@ -247,12 +247,12 @@ Acceptance completed on 2026-07-23 after PR #148 established declarative RouterO
 
 ## UniFi SNMP discovery
 
-Discovery completed on 2026-07-23; collection remains intentionally disabled:
+Discovery completed on 2026-07-23; initial production collection was enabled on 2026-08-02:
 
 - The legacy controller at `unifi.bohdal.name` accepted the dedicated Bitwarden administrator through its legacy API. Its controller-level SNMPv2c setting is enabled with the shared community, whose value is absent from command output and Git.
 - Read-only discovery returned `sysName.0` values `AP-1PP`, `AP-1NP`, and `AP-temp`; all three targets report U7-Pro firmware `8.6.11.18870` and the Ubiquiti enterprise object identifier.
-- A temporary collector deployment proved Cilium SNATs the worker pod to `10.1.20.44` and forwards UDP/161 to the AP VLAN, but no AP reply returns. The same discovery succeeds from VLAN 10 source `10.1.10.10`; the remaining blocker is the missing VLAN 20 to AP-management UDP/161 allowance.
-- PR #157 removed the failing scrape endpoints and records `allow-worker-vlan-snmp` on every UniFi target. Do not re-enable collection until that exact path returns SNMP replies from the worker source.
+- OpenTofu now owns narrow worker-to-AP-management UDP/161 and SNMP reply exceptions. A direct exporter probe to `AP-1PP` at `10.1.102.10` returned all configured modules from the worker path: 32 `system`, 1,241 `if_mib`, and 181 `ubiquiti_unifi` PDUs.
+- `unifi-ap-1pp` is the sole enabled UniFi target. `unifi-ap-1np` remains blocked on its auth profile and bootstrap secret; `unifi-ap-temp` remains deliberately disabled until it is independently reprobed and accepted.
 
 ## UniFi controller migration
 
@@ -282,7 +282,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Restore and validate the private Talos UniFi controller stage, then perform a dedicated cutover that transfers `10.1.30.1` only after the legacy controller is stopped. Allow `10.1.20.44` or the worker VLAN to reach the UniFi management subnet on UDP/161, then re-enable and verify the three UniFi AP targets. Add Synology and APC only after their placeholder credentials are populated; treat the Brother printer as intermittent.
+1. Verify the restored UniFi controller's adopted-device state, then independently re-probe and accept `unifi-ap-temp`; bootstrap the dedicated profile and secret for `unifi-ap-1np` before enabling it. Treat the Brother printer as intermittent.
 2. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
