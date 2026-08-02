@@ -99,6 +99,9 @@ spec:
     - toFQDNs:
         - matchName: trace.svc.ui.com
         - matchName: static.ui.com
+        # The controller invokes this Ubiquiti service while processing its
+        # local-login flow; Cloudflare Access remains the public identity gate.
+        - matchName: sso.ui.com
       toPorts:
         - ports:
             - port: "443"
