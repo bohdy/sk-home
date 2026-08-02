@@ -47,7 +47,7 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Resolve the remaining device-specific SNMP authentication, service enablement, and inventory blockers without weakening the accepted MikroTik SNMPv3 path. Synology is accepted on SNMPv2c; UniFi, APC, and Brother remain disabled until their documented blockers are resolved.
+2. Resolve the remaining device-specific SNMP authentication, service enablement, and inventory blockers without weakening the accepted MikroTik SNMPv3 path. Synology and its USB-connected APC UPS are accepted on SNMPv2c; UniFi and Brother remain disabled until their documented blockers are resolved.
 
 ## Network metrics acceptance
 
@@ -226,6 +226,15 @@ Acceptance completed on 2026-08-02 after PRs #176, #177, and #178:
 - The Synology DSM SNMPv2c `system`, `if_mib`, and `synology` modules all returned successful metrics through the exporter from the Kubernetes worker source.
 - Flux `observability-snmp` applied Git revision `00fd064` and reported Ready after the init container completed with no restarts.
 - The production `snmp-synology` scrape polls `10.1.100.10` every 60 seconds with stable `instance="synology"`, `vendor="synology"`, and `availability="always-on"` labels. VictoriaMetrics reports `up=1` and 1,609 active series, below its 10,000-sample and 10,000-series bounds.
+
+## APC USB UPS acceptance
+
+Acceptance completed on 2026-08-02 through the accepted Synology target:
+
+- Synology's vendor MIB exposes the USB-connected APC Back-UPS XS 950U through its existing `synology` module. It returns model, charge, runtime, load, input voltage, and online/on-battery status; the direct APC and generic UPS MIBs correctly return no device PDUs because there is no UPS network management card.
+- The APC dashboard queries those verified Synology UPS metric families and no longer renders unavailable network-card metric families.
+- `APCUPSOnBattery` pages only after two continuous minutes on battery, and `APCUPSLowRuntime` pages after two continuous minutes below ten minutes of runtime. Both are critical, actionable conditions routed through the existing Telegram and Discord policy.
+- The `apc-ups` inventory entry records that collection is mediated by the Synology target; no duplicate poll or stale DHCP-reservation endpoint is enabled.
 
 ## Monitored-device DHCP acceptance
 

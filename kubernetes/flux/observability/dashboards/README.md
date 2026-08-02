@@ -2,7 +2,7 @@
 
 This component provisions eight focused Grafana dashboards through the chart-managed dashboard sidecar. Every dashboard is committed as JSON, uses the stable `VictoriaMetrics` datasource UID, and requires no runtime download or mutable community-dashboard ID.
 
-The DNS, ingestion, Cilium/BGP, syslog, and Proxmox dashboards use metric families verified in the live cluster. The network, APC UPS, and Synology dashboards use names from the committed SNMP Exporter 0.30.1 generated configuration and may show no data until their credential-gated collectors are enabled; provisioning them first does not make the absent collectors appear healthy.
+The DNS, ingestion, Cilium/BGP, syslog, Proxmox, Synology, and APC UPS dashboards use metric families verified in the live cluster. The USB-attached APC is collected through the Synology vendor MIB, not a separate direct UPS poll. The network dashboard may show no data until its remaining credential-gated collectors are enabled; provisioning it first does not make absent collectors appear healthy.
 
 Panel queries intentionally aggregate away high-cardinality labels unless an operator needs the label for action. Hubble panels use only the low-cardinality protocol, reason, service, family, and flag labels allowed by the bootstrap configuration.
 
