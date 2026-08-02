@@ -253,6 +253,7 @@ Discovery completed on 2026-07-23; initial production collection was enabled on 
 - Read-only discovery returned `sysName.0` values `AP-1PP`, `AP-1NP`, and `AP-temp`; all three targets report U7-Pro firmware `8.6.11.18870` and the Ubiquiti enterprise object identifier.
 - OpenTofu now owns narrow worker-to-AP-management UDP/161 and SNMP reply exceptions. A direct exporter probe to `AP-1PP` at `10.1.102.10` returned all configured modules from the worker path: 32 `system`, 1,241 `if_mib`, and 181 `ubiquiti_unifi` PDUs.
 - `unifi-ap-1pp` is the sole enabled UniFi target. `unifi-ap-1np` remains blocked on its auth profile and bootstrap secret; `unifi-ap-temp` remains deliberately disabled until it is independently reprobed and accepted.
+- Flux applied the `snmp-unifi-ap-1pp` VMStaticScrape at revision `15202fe`. VictoriaMetrics reported `up=1` with the expected cluster, site, instance, vendor, and availability labels, and 1,387 series, below the 10,000-series limit.
 
 ## UniFi controller migration
 
