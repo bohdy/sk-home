@@ -48,7 +48,17 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Run the complete acceptance suite for the currently enabled collectors, then update this checkpoint with measured ingestion, resource use, and the deferred-debt status. MikroTik remains accepted on SNMPv3; Synology, its USB-connected APC UPS, and all three UniFi APs are accepted on SNMPv2c.
+
+## Final release acceptance
+
+Acceptance completed on 2026-08-02 after PR #195 deferred Brother printer SNMP acceptance until its administrator password can be reset:
+
+- Flux fetched and every observability, DNS, and certificate Kustomization reported Ready at `main@sha1:be97d610991fd3302d496d01c589b385eabf05cd`. All Kubernetes nodes were Ready, every observability workload was Running or intentionally completed, and all four retained observability claims were Bound.
+- VMagent had 66 active targets with no unhealthy target. The six SNMP-related scrapes covered the exporter, MikroTik, Synology, and all three UniFi APs; the five Blackbox-related scrapes covered the exporter plus Blocky DNS, external HTTPS, gateway ICMP, and Grafana HTTPS. Brother remains absent by design until the deferred device-side work is complete.
+- VictoriaMetrics ingested approximately 6,162 rows per second with no remote-write packet drops. Its 100 GiB claim retained metrics for `1y`; VictoriaLogs returned healthy, retained logs for `30d`, and had ingested more than 41 million JSON-line records.
+- cAdvisor series in VictoriaMetrics measured approximately 4.69 GB of observability working-set memory and 0.534 CPU cores over five minutes. The Kubernetes Metrics API remained unavailable, so `kubectl top` was not used for this evidence.
+- Grafana 13.1.0 reported database `ok`; its certificate was Ready and valid until 2026-10-18. VMAlert execution errors, Alertmanager notification failures, and Vector component-error and discarded-event counters did not increase during the final one-hour window.
+- Alertmanager had only the expected active `Watchdog` alert. Earlier Telegram and Discord synthetic-routing acceptance remains authoritative; no new notification was sent during this read-only final check.
 
 ## Network metrics acceptance
 
@@ -284,11 +294,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 ## Remaining stages
 
-Continue with a fresh branch from current `main` for each coherent stage:
-
-1. Run the complete acceptance suite from `docs/observability-design.md` for the currently enabled collectors, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
-
-Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
+The first observability release is accepted. Follow-up work must use a fresh branch for each coherent deferred item. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
 ## Secret inventory
 
