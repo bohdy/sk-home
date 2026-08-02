@@ -93,10 +93,12 @@ spec:
     # The self-hosted Network application synchronously contacts UniFi service
     # endpoints while handling legacy local-login requests. Restrict that
     # compatibility path to the Ubiquiti domain over HTTPS rather than granting
-    # the controller broad Internet egress; Cilium tracks the dynamic CDN IPs
-    # from the controller's permitted DNS lookups.
+    # the controller broad Internet egress. Use the exact observed service
+    # names rather than a wildcard: this Cilium release does not apply the
+    # wildcard selector to the multi-label trace host used during login.
     - toFQDNs:
-        - matchPattern: "*.ui.com"
+        - matchName: trace.svc.ui.com
+        - matchName: static.ui.com
       toPorts:
         - ports:
             - port: "443"
