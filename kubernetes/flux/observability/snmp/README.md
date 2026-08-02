@@ -45,6 +45,11 @@ kubectl -n observability create secret generic snmp-exporter-auth \
   --from-literal=v3-priv-password="${SNMP_V3_PRIV_PASSWORD}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Secrets injected as environment variables are read only when the pod starts.
+# Restart after any rotation so the init container renders the current v2c value.
+kubectl -n observability rollout restart deployment/snmp-exporter
+kubectl -n observability rollout status deployment/snmp-exporter --timeout=120s
+
 unset SNMP_V2_COMMUNITY SNMP_V3_USERNAME SNMP_V3_AUTH_PASSWORD SNMP_V3_PRIV_PASSWORD
 ```
 
