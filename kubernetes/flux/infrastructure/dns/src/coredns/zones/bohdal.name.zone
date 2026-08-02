@@ -1,7 +1,7 @@
 $ORIGIN bohdal.name.
 $TTL 300
 @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-    2026080201 ; serial
+    2026080202 ; serial
     300        ; refresh
     120        ; retry
     1209600    ; expire
@@ -16,6 +16,8 @@ grafana.internal IN A 10.1.30.55
 ; Public resolvers continue returning the proxied Cloudflare Tunnel record.
 unifi IN A 10.1.30.56
 gw     IN A  10.1.100.1
+; The Synology NAS has a fixed infrastructure address on the management VLAN.
+nas    IN A  10.1.100.10
 ; Adopted UniFi devices persist the short `unifi` inform hostname and receive
 ; `ap.sk.bohdal.name` as their DHCP search domain.
 unifi.ap.sk IN A 10.1.30.1
