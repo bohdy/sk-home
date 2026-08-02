@@ -147,3 +147,27 @@ spec:
           annotations:
             summary: Certificate expires within three days
             description: 'Certificate {{ $labels.namespace }}/{{ $labels.name }} expires within three days.'
+
+    - name: homelab-ups
+      # The USB APC is attached to Synology, which exposes its UPS MIB under
+      # the existing Synology SNMP target rather than as a separate endpoint.
+      rules:
+        - alert: APCUPSOnBattery
+          expr: upsInfoStatus{job="snmp-synology",instance="synology",upsInfoStatus="OB"} == 1
+          for: 2m
+          labels:
+            severity: critical
+            component: ups
+          annotations:
+            summary: APC UPS is running on battery
+            description: The USB-connected APC UPS has remained on battery power for two minutes.
+
+        - alert: APCUPSLowRuntime
+          expr: upsBatteryRuntimeValue{job="snmp-synology",instance="synology"} < 600
+          for: 2m
+          labels:
+            severity: critical
+            component: ups
+          annotations:
+            summary: APC UPS runtime is below ten minutes
+            description: The USB-connected APC UPS has had less than ten minutes of remaining runtime for two minutes.

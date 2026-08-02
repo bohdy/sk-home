@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "APC UPS power, load, battery, runtime, and environmental health from SNMP.",
+  "description": "USB-connected APC UPS charge, runtime, load, and input voltage exposed by the Synology SNMP agent.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
@@ -13,7 +13,7 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
-      "description": "Remaining battery capacity reported by the UPS.",
+      "description": "Remaining battery capacity reported by the USB-connected UPS.",
       "fieldConfig": {
         "defaults": {
           "max": 100,
@@ -61,8 +61,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "upsAdvBatteryCapacity",
-          "legendFormat": "{{instance}}",
+          "expr": "upsBatteryChargeValue{job=\"snmp-synology\",instance=\"synology\"}",
+          "legendFormat": "APC via Synology",
           "range": true,
           "refId": "A"
         }
@@ -107,8 +107,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "upsAdvBatteryRunTimeRemaining_seconds",
-          "legendFormat": "{{instance}}",
+          "expr": "upsBatteryRuntimeValue{job=\"snmp-synology\",instance=\"synology\"}",
+          "legendFormat": "APC via Synology",
           "range": true,
           "refId": "A"
         }
@@ -152,8 +152,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "upsHighPrecOutputLoad",
-          "legendFormat": "{{instance}}",
+          "expr": "upsInfoLoadValue{job=\"snmp-synology\",instance=\"synology\"}",
+          "legendFormat": "APC via Synology",
           "range": true,
           "refId": "A"
         }
@@ -166,7 +166,7 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
-      "description": "Input/output voltage and internal battery temperature.",
+      "description": "Input voltage reported by the USB-connected UPS.",
       "fieldConfig": {
         "defaults": {},
         "overrides": [
@@ -219,27 +219,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "upsHighPrecInputLineVoltage",
-          "legendFormat": "{{instance}} input voltage",
+          "expr": "upsInputVoltageValue{job=\"snmp-synology\",instance=\"synology\"}",
+          "legendFormat": "APC via Synology input voltage",
           "range": true,
           "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "upsHighPrecOutputVoltage",
-          "legendFormat": "{{instance}} output voltage",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "editorMode": "code",
-          "expr": "upsHighPrecBatteryTemperature",
-          "legendFormat": "{{instance}} battery temperature",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Electrical and thermal state",
+      "title": "Input voltage",
       "type": "timeseries"
     }
   ],

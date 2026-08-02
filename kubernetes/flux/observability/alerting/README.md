@@ -1,6 +1,6 @@
 # Observability Alerting
 
-This component adds metric coverage and local VMAlert rules that are not supplied by the pinned VictoriaMetrics Kubernetes stack. It scrapes all Flux controllers and the cert-manager controller, then evaluates sustained synthetic, Vector, VictoriaLogs, Flux reconciliation, and certificate-expiry conditions.
+This component adds metric coverage and local VMAlert rules that are not supplied by the pinned VictoriaMetrics Kubernetes stack. It scrapes all Flux controllers and the cert-manager controller, then evaluates sustained synthetic, Vector, VictoriaLogs, Flux reconciliation, certificate-expiry, and USB APC UPS conditions.
 
 The upstream rules continue to own Kubernetes node and workload readiness, repeated crashes, PVC capacity, resource pressure, generic scrape failures, and VictoriaMetrics control-plane health. Talos intentionally hides scheduler and controller-manager metrics, so the metrics Helm release disables those default groups rather than allowing permanent false alerts.
 
