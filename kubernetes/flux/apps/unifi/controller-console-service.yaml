@@ -1,0 +1,33 @@
+# Publish the controller console only on the dedicated LAN VIP. Cloudflare
+# reaches the separate ClusterIP origin, so this Service never accepts public
+# Internet traffic even though the same hostname is externally protected by
+# Cloudflare Access.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-console-lan
+  namespace: unifi
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.56"
+    # Cilium applies the source-range boundary before proxying to the Pod.
+    service.cilium.io/src-ranges-policy: allow
+  labels:
+    app.kubernetes.io/name: unifi-controller
+    app.kubernetes.io/component: console
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+  selector:
+    app.kubernetes.io/name: unifi-controller
+  ports:
+    # Preserve the standard HTTPS port for LAN browsers while UniFi continues
+    # to listen on its native self-hosted console port in the Pod.
+    - name: https-console
+      port: 443
+      targetPort: https-console
+      protocol: TCP

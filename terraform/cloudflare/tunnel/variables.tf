@@ -73,6 +73,28 @@ variable "grafana_origin_service" {
   }
 }
 
+variable "unifi_hostname" {
+  description = "Canonical UniFi console hostname shared by LAN split DNS, public DNS, and Cloudflare Access."
+  type        = string
+  default     = "unifi.bohdal.name"
+
+  validation {
+    condition     = var.unifi_hostname == lower(trimspace(var.unifi_hostname)) && can(regex("^[a-z0-9.-]+$", var.unifi_hostname))
+    error_message = "unifi_hostname must be a normalized lowercase DNS hostname."
+  }
+}
+
+variable "unifi_origin_service" {
+  description = "In-cluster HTTPS UniFi console origin reached only by Cloudflare Tunnel connectors."
+  type        = string
+  default     = "https://unifi-console.unifi.svc.cluster.local:8443"
+
+  validation {
+    condition     = startswith(var.unifi_origin_service, "https://")
+    error_message = "unifi_origin_service must use HTTPS."
+  }
+}
+
 variable "grafana_access_email" {
   description = "Exact Gmail identity allowed by the Grafana Cloudflare Access policy."
   type        = string
