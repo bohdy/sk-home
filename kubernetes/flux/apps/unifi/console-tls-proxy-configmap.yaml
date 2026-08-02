@@ -15,6 +15,13 @@ data:
     }
 
     http {
+      # WebSockets require an Upgrade connection, while ordinary API requests
+      # must retain their normal connection semantics through the proxy.
+      map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+      }
+
       server {
         listen 8443 ssl;
         server_name unifi.bohdal.name;
@@ -31,9 +38,9 @@ data:
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto https;
           proxy_set_header Upgrade $http_upgrade;
-          # UniFi's event stream upgrades to WebSocket; the fixed header is
-          # accepted for ordinary HTTP requests and avoids an extra map block.
-          proxy_set_header Connection "upgrade";
+          # Preserve UniFi's event stream without forcing HTTP API requests to
+          # negotiate an Upgrade connection.
+          proxy_set_header Connection $connection_upgrade;
           proxy_read_timeout 3600s;
           proxy_send_timeout 3600s;
           # UniFi owns the private origin certificate. It is never exposed to
