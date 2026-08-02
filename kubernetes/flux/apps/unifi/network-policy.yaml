@@ -84,12 +84,14 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
-          # Make the resolver traffic visible to Cilium's DNS proxy so its
-          # FQDN cache can authorize the dynamic CDN addresses for the narrow
-          # HTTPS rule below. This remains a resolver-only egress path.
+          # Make the resolver traffic visible to Cilium's DNS proxy. Permit
+          # only the non-interactive UniFi service names required below, so
+          # the UI's cloud-SSO lookup fails immediately and it uses the local
+          # administrator fallback instead of waiting on a blocked TCP flow.
           rules:
             dns:
-              - matchPattern: "*"
+              - matchName: trace.svc.ui.com
+              - matchName: static.ui.com
     # The self-hosted Network application synchronously contacts UniFi service
     # endpoints while handling legacy local-login requests. Restrict that
     # compatibility path to the Ubiquiti domain over HTTPS rather than granting
@@ -99,9 +101,6 @@ spec:
     - toFQDNs:
         - matchName: trace.svc.ui.com
         - matchName: static.ui.com
-        # The controller invokes this Ubiquiti service while processing its
-        # local-login flow; Cloudflare Access remains the public identity gate.
-        - matchName: sso.ui.com
       toPorts:
         - ports:
             - port: "443"
