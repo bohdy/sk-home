@@ -85,11 +85,13 @@ spec:
             - port: "53"
               protocol: TCP
           # Make the resolver traffic visible to Cilium's DNS proxy. Permit
-          # only the non-interactive UniFi service names required below, so
-          # the UI's cloud-SSO lookup fails immediately and it uses the local
-          # administrator fallback instead of waiting on a blocked TCP flow.
+          # the internal MongoDB service and non-interactive UniFi service
+          # names required below. The SSO lookup therefore fails immediately,
+          # sending the UI to its local administrator fallback rather than a
+          # blocked TCP flow.
           rules:
             dns:
+              - matchName: unifi-mongodb.unifi.svc.cluster.local
               - matchName: trace.svc.ui.com
               - matchName: static.ui.com
     # The self-hosted Network application synchronously contacts UniFi service
