@@ -47,7 +47,7 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Resolve the remaining device-specific SNMP authentication, service enablement, address-stability, and inventory blockers without weakening the accepted MikroTik SNMPv3 path. Synology currently times out on UDP/161 from the exporter; its DSM SNMP service or access policy needs a separately approved device-side change.
+2. Resolve the remaining device-specific SNMP authentication, service enablement, and inventory blockers without weakening the accepted MikroTik SNMPv3 path. Synology is accepted on SNMPv2c; UniFi, APC, and Brother remain disabled until their documented blockers are resolved.
 
 ## Network metrics acceptance
 
@@ -217,6 +217,15 @@ Acceptance completed on 2026-07-22 for the production SNMPv3 path:
 - The production target exposed 2,464 series, below its 10,000-series limit. The exporter pod was Ready with zero restarts and no scrape errors after the target correction.
 - Exporter arguments, rendered manifests, logs, and metrics contained credential variable names or masked values only; the four actual Bitwarden values were absent from the Git diff.
 - The optional v2c compatibility probe times out even though Bitwarden, the Kubernetes Secret, OpenTofu state, and the live RouterOS community agree. Production remains on healthy SNMPv3; diagnose v2c without weakening or interrupting that path.
+
+## Synology SNMP acceptance
+
+Acceptance completed on 2026-08-02 after PRs #176 and #177:
+
+- The exporter sends the SNMPv2c community from an init-container-rendered auth file on a memory-backed volume. The community is absent from Git, ConfigMaps, pod arguments, and the main exporter container environment.
+- The Synology DSM SNMPv2c `system`, `if_mib`, and `synology` modules all returned successful metrics through the exporter from the Kubernetes worker source.
+- Flux `observability-snmp` applied Git revision `00fd064` and reported Ready after the init container completed with no restarts.
+- The production `snmp-synology` scrape polls `10.1.100.10` every 60 seconds with stable `instance="synology"`, `vendor="synology"`, and `availability="always-on"` labels. It enforces 10,000-sample and 10,000-series bounds.
 
 ## Monitored-device DHCP acceptance
 

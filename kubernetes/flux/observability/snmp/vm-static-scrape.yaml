@@ -33,3 +33,39 @@ spec:
           targetLabel: __param_target
         - targetLabel: __address__
           replacement: snmp-exporter.observability.svc.cluster.local.:9116
+
+---
+# Preserve Synology's stable inventory identity while sending its SNMPv2c
+# compatibility scrape through the shared multi-target exporter.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: snmp-synology
+  namespace: observability
+spec:
+  jobName: snmp-synology
+  targetEndpoints:
+    - targets:
+        - 10.1.100.10
+      labels:
+        instance: synology
+        vendor: synology
+        availability: always-on
+      path: /snmp
+      params:
+        auth:
+          - snmp_v2
+        module:
+          - system
+          - if_mib
+          - synology
+      interval: 60s
+      scrapeTimeout: 30s
+      sampleLimit: 10000
+      seriesLimit: 10000
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: snmp-exporter.observability.svc.cluster.local.:9116
