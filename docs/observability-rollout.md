@@ -48,7 +48,7 @@ Acceptance completed on 2026-07-17:
 ## Immediate next actions
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
-2. Bring the intermittent Brother printer online and confirm its read-only SNMPv2c service before enabling its bounded intermittent scrape. MikroTik remains accepted on SNMPv3; Synology, its USB-connected APC UPS, and all three UniFi APs are accepted on SNMPv2c.
+2. Run the complete acceptance suite for the currently enabled collectors, then update this checkpoint with measured ingestion, resource use, and the deferred-debt status. MikroTik remains accepted on SNMPv3; Synology, its USB-connected APC UPS, and all three UniFi APs are accepted on SNMPv2c.
 
 ## Network metrics acceptance
 
@@ -286,8 +286,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 Continue with a fresh branch from current `main` for each coherent stage:
 
-1. Bring the intermittent Brother printer online and configure or confirm its read-only SNMPv2c service against the existing shared profile. Re-probe `system` and `printer_mib` from the exporter before enabling its bounded scrape; retain its intermittent availability class so powered-off periods do not alert.
-2. Run the complete acceptance suite from `docs/observability-design.md`, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
+1. Run the complete acceptance suite from `docs/observability-design.md` for the currently enabled collectors, then update this checkpoint with measured ingestion, resource use, and any deferred debt.
 
 Do not combine later stages merely to reduce pull-request count. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
@@ -328,4 +327,4 @@ Create dedicated Bitwarden items before the stages that require device-specific 
 
 ## Deferred debt
 
-Keep the design document's follow-up list authoritative. In particular, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3. Reassess the Proxmox ACL `removed` block and group `acl` lifecycle ignore when upgrading beyond provider 0.106.0; remove either workaround only after a live no-destroy plan and effective-permission verification.
+Keep the design document's follow-up list authoritative. In particular, Brother printer SNMP acceptance, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. The Brother printer requires an administrator-password reset before configuring or confirming read-only SNMPv2c with the existing shared profile; once it is online, re-probe `system` and `printer_mib` from the exporter before enabling its bounded intermittent scrape. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3. Reassess the Proxmox ACL `removed` block and group `acl` lifecycle ignore when upgrading beyond provider 0.106.0; remove either workaround only after a live no-destroy plan and effective-permission verification.
