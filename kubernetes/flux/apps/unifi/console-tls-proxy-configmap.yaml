@@ -1,0 +1,44 @@
+# The controller still owns its private Cloudflare Tunnel origin. This proxy
+# exists solely to present the cert-manager certificate to LAN browsers.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unifi-console-tls-proxy
+  namespace: unifi
+data:
+  nginx.conf: |
+    worker_processes auto;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      server {
+        listen 8443 ssl;
+        server_name unifi.bohdal.name;
+
+        ssl_certificate /var/run/unifi-console-tls/tls.crt;
+        ssl_certificate_key /var/run/unifi-console-tls/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        location / {
+          proxy_pass https://unifi-console.unifi.svc.cluster.local:8443;
+          proxy_http_version 1.1;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header Upgrade $http_upgrade;
+          # UniFi's event stream upgrades to WebSocket; the fixed header is
+          # accepted for ordinary HTTP requests and avoids an extra map block.
+          proxy_set_header Connection "upgrade";
+          proxy_read_timeout 3600s;
+          proxy_send_timeout 3600s;
+          # UniFi owns the private origin certificate. It is never exposed to
+          # LAN clients because this proxy terminates the public ACME chain.
+          proxy_ssl_verify off;
+        }
+      }
+    }

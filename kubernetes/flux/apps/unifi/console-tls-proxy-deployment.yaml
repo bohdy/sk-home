@@ -1,0 +1,82 @@
+# Terminate the LAN certificate in a minimal unprivileged process so UniFi's
+# persistent self-hosted keystore remains isolated from cert-manager rotation.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-console-tls-proxy
+  namespace: unifi
+  labels:
+    app.kubernetes.io/name: unifi-console-tls-proxy
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-console-tls-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unifi-console-tls-proxy
+        app.kubernetes.io/component: console
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged@sha256:c3795f30f39a1dad3c5a3bd1818efde7d07bba4b5085cb3b3949cc674a825911
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: https-console
+              containerPort: 8443
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: https-console
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: https-console
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          volumeMounts:
+            - name: configuration
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: certificate
+              mountPath: /var/run/unifi-console-tls
+              readOnly: true
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+      volumes:
+        - name: configuration
+          configMap:
+            name: unifi-console-tls-proxy
+        - name: certificate
+          secret:
+            secretName: unifi-console-tls
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
