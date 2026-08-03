@@ -111,46 +111,45 @@ jobs:
                 vrf
               }] | sort_by(.id)')"
 
-          # These values are the reviewed live inventory: retain the one
-          # configured service and delete only the three empty duplicates.
-          expected="$(jq -cn '[
-            {
-              id: "*3D", name: "www-ssl", port: "443", disabled: "false",
-              invalid: "false", address: null, certificate: null,
-              tls_version: null, vrf: null
-            },
-            {
-              id: "*48", name: "www-ssl", port: "443", disabled: "false",
-              invalid: "false", address: null, certificate: null,
-              tls_version: null, vrf: null
-            },
-            {
-              id: "*49", name: "www-ssl", port: "443", disabled: "false",
-              invalid: "false", address: null, certificate: null,
-              tls_version: null, vrf: null
-            },
-            {
-              id: "*6", name: "www-ssl", port: "443", disabled: "false",
-              invalid: "false",
-              address: "147.32.30.70/32,44.237.169.3/32,10.1.0.0/16",
-              certificate: "letsencrypt-www-ssl", tls_version: "any", vrf: "main"
-            }
-          ] | sort_by(.id)')"
-
-          # Refuse to manufacture a destructive plan if any live record no
-          # longer matches the reviewed evidence exactly.
-          if [[ "$services" != "$expected" ]]; then
-            echo "www-ssl services no longer match the reviewed inventory." >&2
+          # Retain the one reviewed configured service. RouterOS assigned new
+          # IDs to the empty duplicates between read-only inventory runs, so
+          # the immutable plan must capture their current IDs rather than use
+          # stale values while still requiring their empty metadata exactly.
+          if ! jq -e '
+              length == 4
+              and ([.[] | select(.id == "*6")] == [{
+                id: "*6", name: "www-ssl", port: "443", disabled: "false",
+                invalid: "false",
+                address: "147.32.30.70/32,44.237.169.3/32,10.1.0.0/16",
+                certificate: "letsencrypt-www-ssl", tls_version: "any", vrf: "main"
+              }])
+              and ([.[] | select(.id != "*6")] as $duplicates
+                | ($duplicates | length == 3)
+                and ([ $duplicates[].id ] | unique | length == 3)
+                and ($duplicates | all(.[];
+                  (.id | type == "string")
+                  and .name == "www-ssl"
+                  and .port == "443"
+                  and .disabled == "false"
+                  and .invalid == "false"
+                  and .address == null
+                  and .certificate == null
+                  and .tls_version == null
+                  and .vrf == null
+                )))
+            ' <<<"$services" >/dev/null; then
+            echo "www-ssl services no longer match the reviewed shape." >&2
             exit 1
           fi
 
           # The artifact is non-secret evidence: it binds the apply job to the
-          # observed set, retained service, and the three immutable delete IDs.
+          # observed set, retained service, and the current explicit delete IDs.
           jq -n \
             --arg routeros_url "$ROUTEROS_URL" \
             --argjson observed "$services" \
             '{routeros_url: $routeros_url, observed: $observed,
-              retain: {id: "*6"}, delete: [{id: "*3D"}, {id: "*48"}, {id: "*49"}]}' \
+              retain: {id: "*6"},
+              delete: ($observed | map(select(.id != "*6")) | map({id}))}' \
             > duplicate-www-ssl-cleanup-plan.json
           jq . duplicate-www-ssl-cleanup-plan.json | tee -a "$GITHUB_STEP_SUMMARY"
 
