@@ -104,27 +104,6 @@ resource "terraform_data" "install_gateway_certificate" {
         echo "RouterOS certificate installation script failed." >&2
         exit 1
       fi
-
-      # RouterOS service IDs are unstable, so discover the one listener with
-      # the inventory-verified internal address immediately before updating it.
-      services="$(curl "$${curl_options[@]}" "$routeros_url/ip/service")"
-      service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
-      certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
-      certificate_name="$(jq -er '[.[] | select(.["common-name"] == "gw.bohdal.name" and .["private-key"] == "true")] | if length > 0 then .[-1].name else error("no gateway certificate with private key") end' <<<"$certificates")"
-      service_payload="$(jq -cn \
-        --arg id "$service_id" \
-        --arg certificate "$certificate_name" \
-        '{".id": $id, certificate: $certificate}')"
-      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
-      if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
-        echo "RouterOS HTTPS service update failed." >&2
-        exit 1
-      fi
-      updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"
-      if [[ "$updated_certificate" != "$certificate_name" ]]; then
-        echo "RouterOS HTTPS service read-back did not select the imported certificate." >&2
-        exit 1
-      fi
     EOT
 
     environment = {
@@ -141,6 +120,71 @@ resource "terraform_data" "install_gateway_certificate" {
       ROUTEROS_LEAF_PEM                = acme_certificate.gateway.certificate_pem
       ROUTEROS_ISSUER_PEM              = acme_certificate.gateway.issuer_pem
       ROUTEROS_PRIVATE_KEY_PEM         = acme_certificate.gateway.private_key_pem
+    }
+  }
+}
+
+# RouterOS can retain duplicate `www-ssl` service rows, and the provider does
+# not own the built-in service safely. Reconcile the addressed listener on
+# every certificate workflow run so service drift is repaired even when ACME
+# has not issued a new leaf. `timestamp()` intentionally makes this a live
+# check rather than a one-time state transition.
+resource "terraform_data" "reconcile_gateway_certificate_service" {
+  input            = local.gateway_certificate_name
+  triggers_replace = [timestamp()]
+  depends_on       = [terraform_data.install_gateway_certificate]
+
+  provisioner "local-exec" {
+    # Keep the request construction fail-closed and prevent accidental word
+    # splitting when the workflow invokes this on the Linux self-hosted runner.
+    interpreter = ["/bin/bash", "-c"]
+
+    command = <<-EOT
+      set -euo pipefail
+      routeros_url="${trimsuffix(var.mikrotik_hosturl, "/")}/rest"
+      curl_options=(--fail --silent --show-error --user "$ROUTEROS_USERNAME:$ROUTEROS_PASSWORD" --header "content-type: application/json")
+      if [ "$ROUTEROS_INSECURE" = "true" ]; then
+        curl_options+=(--insecure)
+      fi
+
+      # RouterOS service IDs are unstable, so discover the one listener with
+      # the inventory-verified internal address immediately before updating it.
+      services="$(curl "$${curl_options[@]}" "$routeros_url/ip/service")"
+      service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
+      certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
+      certificate_name="$(jq -er '
+        [ .[]
+          | select(
+              .["common-name"] == "gw.bohdal.name"
+              and .["private-key"] == "true"
+              and (.expired != true)
+            )
+        ]
+        | sort_by(.["invalid-after"] // "")
+        | if length > 0 then .[-1].name else error("no unexpired gateway certificate with private key") end
+      ' <<<"$certificates")"
+      service_payload="$(jq -cn \
+        --arg id "$service_id" \
+        --arg certificate "$certificate_name" \
+        '{".id": $id, certificate: $certificate}')"
+      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
+      if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
+        echo "RouterOS HTTPS service update failed." >&2
+        exit 1
+      fi
+      updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"
+      if [[ "$updated_certificate" != "$certificate_name" ]]; then
+        echo "RouterOS HTTPS service read-back did not select the unexpired certificate." >&2
+        exit 1
+      fi
+    EOT
+
+    environment = {
+      # Keep credentials in the process environment, never in the command or
+      # OpenTofu output. The certificate payload is not needed for this check.
+      ROUTEROS_USERNAME = var.mikrotik_username
+      ROUTEROS_PASSWORD = var.mikrotik_password
+      ROUTEROS_INSECURE = tostring(var.mikrotik_insecure)
     }
   }
 }
