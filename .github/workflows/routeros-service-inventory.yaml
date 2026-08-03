@@ -1,0 +1,64 @@
+name: RouterOS service inventory
+
+on:
+  workflow_dispatch:
+
+# This workflow reads only the RouterOS service collection. It has no GitHub
+# write permission and does not run an OpenTofu apply or a RouterOS mutation.
+permissions:
+  contents: read
+
+concurrency:
+  # Keep the evidence from one service-inventory run easy to review at a time.
+  group: routeros-service-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory-www-ssl:
+    name: Inventory www-ssl services
+    runs-on: self-hosted
+
+    steps:
+      - name: Get RouterOS automation credentials
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: List duplicate HTTPS service metadata
+        shell: bash
+        env:
+          ROUTEROS_URL: https://gw.bohdal.name
+        run: |
+          # The existing certificate is expired, so TLS verification cannot
+          # succeed until the broken duplicate service is removed. This
+          # read-only recovery probe confines --insecure to the gateway URL.
+          services="$(curl --fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+            "$ROUTEROS_URL/rest/ip/service" \
+            | jq -ce '[.[] | select(.name == "www-ssl") | {
+                id: .[".id"],
+                name,
+                port,
+                disabled,
+                invalid,
+                address,
+                certificate,
+                tls_version: .["tls-version"],
+                vrf
+              }]')"
+
+          # Fail closed unless the evidence confirms the exact ambiguity that
+          # blocks the provider; no service is changed by this workflow.
+          count="$(jq 'length' <<<"$services")"
+          if (( count < 2 )); then
+            echo "Expected at least two www-ssl services, found $count." >&2
+            exit 1
+          fi
+
+          # Service IDs and listener metadata are non-secret review evidence.
+          # Do not emit the authenticated request, credentials, or raw output.
+          jq . <<<"$services" | tee -a "$GITHUB_STEP_SUMMARY"
