@@ -6,6 +6,8 @@ The ACME account key, certificate private key, and RouterOS import payload are s
 
 The pinned RouterOS provider cannot safely adopt the gateway's built-in `www-ssl` service because the REST API returns duplicate service names with unstable IDs. After OpenTofu imports a certificate, the stack runs the documented RouterOS command `ip service set www-ssl` through its authenticated REST execute endpoint. This narrow break-glass command sets only the certificate, port, address restriction, TLS version, and enabled state; it does not delete services or expose private material.
 
+The authoritative `dns.bohdal.name` server publishes DNS-01 TXT records after the ACME provider's default check window. `propagation_wait = 300` waits five minutes before validation so the weekly renewal run uses the same verified authoritative DNS path.
+
 ## Bootstrap and renewal
 
 The current gateway certificate expired before this stack was introduced. The first reviewed production apply must set `bootstrap_gateway_certificate=true` solely to replace that expired certificate. Thereafter leave it `false`: the provider verifies `gw.bohdal.name` normally.

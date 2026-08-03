@@ -20,6 +20,11 @@ resource "acme_certificate" "gateway" {
   key_type           = "P256"
   min_days_remaining = 30
 
+  # The authoritative dns.bohdal.name server publishes Cloudflare-created TXT
+  # records just after the provider's default two-minute check window. Wait a
+  # conservative five minutes before asking Let's Encrypt to validate DNS-01.
+  propagation_wait = 300
+
   dns_challenge {
     provider = "cloudflare"
 
