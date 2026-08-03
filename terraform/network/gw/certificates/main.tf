@@ -95,12 +95,19 @@ resource "terraform_data" "install_gateway_certificate" {
           + "/certificate/import file-name=" + $issuer_file + " name=" + $issuer_name + " trusted=yes; "
           + "/certificate/import file-name=" + $leaf_file + " name=" + $leaf_name + " trusted=yes; "
           + "/certificate/import file-name=" + $key_file + " name=" + $leaf_name + "; "
-          + ":foreach id in=[/ip/service/find where name=\\\"www-ssl\\\" and disabled=no] do={/ip/service/set $id port=443 address=10.0.0.0/8 certificate=" + $leaf_name + " tls-version=only-1.2 disabled=no}; "
+          + ":local validCerts [/certificate/find where common-name=\\\"gw.bohdal.name\\\" and private-key=yes and expired=no]; "
+          + ":if ([:len $validCerts] = 0) do={:error \\\"no valid gateway certificate\\\"}; "
+          + ":local certificateName [/certificate/get [:pick $validCerts 0] name]; "
+          + ":foreach id in=[/ip/service/find where name=\\\"www-ssl\\\" and address!=\\\"\\\"] do={/ip/service/set $id port=443 address=10.0.0.0/8 certificate=$certificateName tls-version=only-1.2 disabled=no}; "
           + ":foreach id in=[/file/find where name=\\\"" + $issuer_file + "\\\"] do={/file/remove $id}; "
           + ":foreach id in=[/file/find where name=\\\"" + $leaf_file + "\\\"] do={/file/remove $id}; "
           + ":foreach id in=[/file/find where name=\\\"" + $key_file + "\\\"] do={/file/remove $id}"
         )}')"
-      curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute" >/dev/null
+      response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
+      if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+        echo "RouterOS certificate installation script failed." >&2
+        exit 1
+      fi
     EOT
 
     environment = {
