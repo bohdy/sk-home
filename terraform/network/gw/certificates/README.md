@@ -8,7 +8,7 @@ The pinned RouterOS provider cannot safely adopt the gateway's built-in `www-ssl
 
 The authoritative `dns.bohdal.name` server publishes DNS-01 TXT records after the ACME provider's default check window. `propagation_wait = 300` waits five minutes before validation so the weekly renewal run uses the same verified authoritative DNS path.
 
-RouterOS imports each PEM certificate as a separate certificate object. The installer imports the ACME intermediate and leaf separately under stable unique names. Each renewal removes only the previous objects with those names before importing the replacement. The weekly reconciliation also repairs service drift when ACME has not issued a new leaf, and it rejects expired certificate objects before selecting the listener certificate.
+RouterOS imports each PEM certificate as a separate certificate object. The installer imports the ACME intermediate and leaf separately under stable unique names. Each renewal removes only the previous objects with those names before importing the replacement. Bootstrap explicitly replaces the installer resource once so legacy dynamically named chain objects cannot remain the preferred binding. The weekly reconciliation also repairs service drift when ACME has not issued a new leaf, prefers the stack-owned leaf name, and rejects expired certificate objects before selecting the listener certificate.
 
 ## Bootstrap and renewal
 

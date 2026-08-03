@@ -71,7 +71,14 @@ jobs:
 
       - name: Create immutable certificate plan
         # Keep the sensitive binary plan solely in this approved runner job.
-        run: tofu -chdir=terraform/${{ env.STACK_PATH }} plan -out=certificate.tofuplan
+        run: |
+          plan_args=(-out=certificate.tofuplan)
+          if [ -n "$TOFU_REPLACE" ]; then
+            # Bootstrap must replace the old imported object so the service
+            # can move away from an ambiguous RouterOS certificate name.
+            plan_args+=("-replace=$TOFU_REPLACE")
+          fi
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan "${plan_args[@]}"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -80,6 +87,7 @@ jobs:
           TF_VAR_mikrotik_insecure: ${{ inputs.bootstrap_gateway_certificate || false }}
           TF_VAR_cloudflare_api_token: ${{ env.CLOUDFLARE_API_TOKEN }}
           TF_VAR_acme_email: ${{ env.ACME_EMAIL }}
+          TOFU_REPLACE: ${{ inputs.bootstrap_gateway_certificate && 'terraform_data.install_gateway_certificate' || '' }}
 
       - name: Apply immutable certificate plan
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve certificate.tofuplan
@@ -121,7 +129,7 @@ jobs:
             }
           ' | tee -a "$GITHUB_STEP_SUMMARY"
           certificate="$(jq -ce --arg name "$certificate_name" '
-              [.[] | select(.name == $name)]
+              [.[] | select(.name == $name and .["common-name"] == "gw.bohdal.name" and .["private-key"] == "true")]
               | if length == 1 then .[0] else error("bound certificate was not found") end
             ' <<<"$certificates")"
           jq -e '(.expired != true) and .["private-key"] == "true"' <<<"$certificate" >/dev/null

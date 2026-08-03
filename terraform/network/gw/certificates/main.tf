@@ -152,16 +152,19 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
       services="$(curl "$${curl_options[@]}" "$routeros_url/ip/service")"
       service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
       certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
-      certificate_name="$(jq -er '
+      certificate_name="$(jq -er --arg preferred_name "$ROUTEROS_CERTIFICATE_NAME" '
         [ .[]
           | select(
               .["common-name"] == "gw.bohdal.name"
               and .["private-key"] == "true"
               and (.expired != true)
             )
-        ]
-        | sort_by(.["invalid-after"] // "")
-        | if length > 0 then .[-1].name else error("no unexpired gateway certificate with private key") end
+        ] as $certificates
+        | [ $certificates[] | select(.name == $preferred_name) ] as $preferred
+        | if ($preferred | length) > 0 then $preferred[-1].name
+          elif ($certificates | length) > 0 then ($certificates | sort_by(.["invalid-after"] // "") | .[-1].name)
+          else error("no unexpired gateway certificate with private key")
+          end
       ' <<<"$certificates")"
       service_payload="$(jq -cn \
         --arg id "$service_id" \
@@ -211,9 +214,10 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
     environment = {
       # Keep credentials in the process environment, never in the command or
       # OpenTofu output. The certificate payload is not needed for this check.
-      ROUTEROS_USERNAME = var.mikrotik_username
-      ROUTEROS_PASSWORD = var.mikrotik_password
-      ROUTEROS_INSECURE = tostring(var.mikrotik_insecure)
+      ROUTEROS_USERNAME         = var.mikrotik_username
+      ROUTEROS_PASSWORD         = var.mikrotik_password
+      ROUTEROS_INSECURE         = tostring(var.mikrotik_insecure)
+      ROUTEROS_CERTIFICATE_NAME = local.gateway_certificate_name
     }
   }
 }
