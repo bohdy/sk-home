@@ -147,8 +147,19 @@ jobs:
                 active_mac_address: .["active-mac-address"],
                 comment
               }]')"
+          bridge_hosts="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/interface/bridge/host" \
+            | jq -ce '[.[] | {
+                mac_address: .["mac-address"],
+                bridge,
+                on_interface: .["on-interface"],
+                local,
+                external,
+                dynamic,
+                invalid
+              }]')"
 
           jq -n --argjson neighbors "$neighbors" --argjson arp "$arp" \
-            --argjson leases "$leases" \
-            '{neighbors: $neighbors, arp: $arp, dhcp_leases: $leases}' \
+            --argjson leases "$leases" --argjson bridge_hosts "$bridge_hosts" \
+            '{neighbors: $neighbors, arp: $arp, dhcp_leases: $leases, bridge_hosts: $bridge_hosts}' \
             | tee -a "$GITHUB_STEP_SUMMARY"
