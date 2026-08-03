@@ -74,7 +74,9 @@ resource "terraform_data" "install_gateway_certificate" {
         local file_contents="$2"
         local payload
         payload="$(jq -cn --arg name "$file_name" --arg contents "$file_contents" '{name: $name, contents: $contents}')"
-        curl "$${curl_options[@]}" --data "$payload" "$routeros_url/file" >/dev/null
+        # RouterOS REST creates file resources with PUT, matching the provider
+        # transport rather than curl's default POST for --data requests.
+        curl "$${curl_options[@]}" --request PUT --data "$payload" "$routeros_url/file" >/dev/null
       }
 
       upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_PEM"
