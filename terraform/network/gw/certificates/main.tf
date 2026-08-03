@@ -34,25 +34,55 @@ resource "acme_certificate" "gateway" {
   }
 }
 
-# Import the full trusted chain and its matching private key directly into the
-# gateway. Rotation replaces this object whenever ACME issues a new leaf.
+# Parse the intermediate certificate so its RouterOS object has the certificate
+# subject as its required common name without duplicating that value in config.
+data "routeros_x509" "gateway_issuer" {
+  data = acme_certificate.gateway.issuer_pem
+}
+
+# Import the intermediate separately from the leaf. RouterOS creates one
+# certificate object per PEM in an import, while the provider locates the
+# imported object by name. Splitting the chain keeps that lookup unambiguous.
+resource "routeros_system_certificate" "gateway_issuer" {
+  # This must be known while OpenTofu creates the immutable plan. Do not derive
+  # it from the newly issued PEM: the provider's import callback would then
+  # query RouterOS with an empty name.
+  name        = "letsencrypt-gateway-issuer"
+  common_name = data.routeros_x509.gateway_issuer.common_name
+  trusted     = true
+
+  import {
+    cert_file_content = acme_certificate.gateway.issuer_pem
+  }
+
+  lifecycle {
+    # A stable RouterOS name cannot be created alongside an object with the
+    # same name. Replace the issuer before recreation rather than relying on
+    # RouterOS to allocate a suffixed, ambiguous name.
+    replace_triggered_by = [acme_certificate.gateway.issuer_pem]
+  }
+}
+
+# Import the ACME leaf and its matching private key directly into the gateway.
+# A static object name is known at plan time and uniquely identifies this
+# single-PEM import to the RouterOS provider.
 resource "routeros_system_certificate" "gateway" {
-  # Derive the RouterOS object name from the immutable certificate content so
-  # renewal can install the replacement before moving www-ssl away from the
-  # still-serving previous certificate.
-  name        = "gw-bohdal-name-${substr(sha256(acme_certificate.gateway.certificate_pem), 0, 12)}"
+  name        = "letsencrypt-gateway"
   common_name = acme_certificate.gateway.common_name
   trusted     = true
 
   import {
-    cert_file_content = "${acme_certificate.gateway.certificate_pem}${acme_certificate.gateway.issuer_pem}"
+    cert_file_content = acme_certificate.gateway.certificate_pem
     key_file_content  = acme_certificate.gateway.private_key_pem
   }
 
   lifecycle {
-    create_before_destroy = true
-    replace_triggered_by  = [acme_certificate.gateway.certificate_pem]
+    # See the issuer lifecycle above. The replacement occurs before the
+    # dependent service command selects the newly imported certificate.
+    replace_triggered_by = [acme_certificate.gateway.certificate_pem]
   }
+
+  depends_on = [routeros_system_certificate.gateway_issuer]
 }
 
 # The provider cannot read the gateway's built-in www-ssl service because
