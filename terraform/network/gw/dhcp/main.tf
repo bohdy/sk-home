@@ -8,8 +8,10 @@ resource "routeros_ip_pool" "scope" {
   provider = routeros.gw
   for_each = local.dhcp_scopes
 
-  name    = each.value.pool_name
-  ranges  = ["${each.value.range_start}-${each.value.range_end}"]
+  name = each.value.pool_name
+  # A scope can split a pool around fixed addresses such as the Talos API VIP;
+  # existing scopes continue using their single start/end interval.
+  ranges  = coalesce(try(each.value.ranges, null), ["${each.value.range_start}-${each.value.range_end}"])
   comment = try(each.value.comment, null)
 }
 
@@ -58,7 +60,9 @@ resource "routeros_ip_dhcp_server_lease" "reservation" {
   provider = routeros.gw
   for_each = var.dhcp_reservations
 
-  server       = each.value.server
+  # Referencing the managed server creates an implicit dependency, so a new
+  # scope always exists before RouterOS receives its reservation requests.
+  server       = routeros_ip_dhcp_server.scope[each.value.server].name
   address      = each.value.address
   mac_address  = each.value.mac_address
   client_id    = try(each.value.client_id, null)

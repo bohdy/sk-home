@@ -32,6 +32,7 @@ variable "dhcp_scopes" {
     pool_name   = string
     range_start = string
     range_end   = string
+    ranges      = optional(list(string))
     subnet      = string
     gateway     = string
     dns_servers = list(string)

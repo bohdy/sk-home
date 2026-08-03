@@ -10,6 +10,8 @@ dhcp_scopes = {
     pool_name   = "pool-vlan20"
     range_start = "10.1.20.10"
     range_end   = "10.1.20.250"
+    # The Talos API virtual IP is not a DHCP client and must never be leased.
+    ranges      = ["10.1.20.10-10.1.20.39", "10.1.20.41-10.1.20.250"]
     subnet      = "10.1.20.0/24"
     gateway     = "10.1.20.1"
     dns_servers = ["10.1.30.53"]
