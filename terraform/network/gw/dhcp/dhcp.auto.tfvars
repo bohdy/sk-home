@@ -3,6 +3,22 @@
 mikrotik_gw_hosturl = "https://10.1.100.1"
 
 dhcp_scopes = {
+  server20 = {
+    # Use the approved VLAN20 allocation interval, which includes the runner's
+    # stable reservation at 10.1.20.200.
+    interface   = "vlan20"
+    pool_name   = "pool-vlan20"
+    range_start = "10.1.20.10"
+    range_end   = "10.1.20.250"
+    # The Talos API virtual IP is not a DHCP client and must never be leased.
+    ranges      = ["10.1.20.10-10.1.20.39", "10.1.20.41-10.1.20.250"]
+    subnet      = "10.1.20.0/24"
+    gateway     = "10.1.20.1"
+    dns_servers = ["10.1.30.53"]
+    domain      = "sk.bohdal.name"
+    lease_time  = "30m"
+    comment     = "VLAN20 - Kubernetes and GitHub Actions runner"
+  }
   server10 = {
     interface   = "vlan10"
     pool_name   = "pool-vlan10"
@@ -62,6 +78,38 @@ dhcp_reservations = {
     address     = "10.1.20.200"
     mac_address = "BC:24:11:CD:D0:10"
     comment     = "GitHub Actions runner vm-gha-01"
+  }
+  talos_cp_1 = {
+    # Mirror the Talos inventory so future DHCP migration retains the first
+    # control plane's existing management address.
+    server      = "server20"
+    address     = "10.1.20.41"
+    mac_address = "BC:24:11:20:40:41"
+    comment     = "Talos control plane sk-talos-cp-1"
+  }
+  talos_cp_2 = {
+    # Mirror the Talos inventory so future DHCP migration retains the second
+    # control plane's existing management address.
+    server      = "server20"
+    address     = "10.1.20.42"
+    mac_address = "BC:24:11:20:40:42"
+    comment     = "Talos control plane sk-talos-cp-2"
+  }
+  talos_cp_3 = {
+    # Mirror the Talos inventory so future DHCP migration retains the third
+    # control plane's existing management address.
+    server      = "server20"
+    address     = "10.1.20.43"
+    mac_address = "BC:24:11:20:40:43"
+    comment     = "Talos control plane sk-talos-cp-3"
+  }
+  talos_worker_1 = {
+    # Mirror the Talos inventory so future DHCP migration retains the worker's
+    # existing management address.
+    server      = "server20"
+    address     = "10.1.20.44"
+    mac_address = "BC:24:11:20:40:44"
+    comment     = "Talos worker sk-talos-worker-1"
   }
   ap_1np = {
     server      = "server102"
