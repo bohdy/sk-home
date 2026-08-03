@@ -32,6 +32,11 @@ jobs:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
       STACK_PATH: network/gw/certificates
+      # The explicit bootstrap recovery uses the gateway's private HTTP REST
+      # endpoint because an expired or broken HTTPS listener cannot accept the
+      # provider connection. Scheduled and normal manual runs always use the
+      # DNS name over HTTPS.
+      TF_VAR_mikrotik_hosturl: ${{ inputs.bootstrap_gateway_certificate && 'http://10.1.100.1/' || 'https://gw.bohdal.name/' }}
 
     steps:
       - name: Checkout repository

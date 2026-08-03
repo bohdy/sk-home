@@ -167,12 +167,41 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
         --arg id "$service_id" \
         --arg certificate "$certificate_name" \
         '{".id": $id, certificate: $certificate}')"
-      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
-      if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
+      # RouterOS may reset the HTTPS listener immediately after accepting this
+      # action. Retry the idempotent update so a transient reset is not
+      # mistaken for a failed configuration change.
+      service_response=""
+      for attempt in {1..10}; do
+        if service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"; then
+          break
+        fi
+        if [ "$attempt" -eq 10 ]; then
+          echo "RouterOS HTTPS service update request failed after retries." >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      # Successful RouterOS action calls can return an array. Only inspect the
+      # object-shaped error response here; read-back below verifies the actual
+      # service state for both response shapes.
+      if jq -e 'type == "object" and ((.error // 0) != 0)' <<<"$service_response" >/dev/null; then
         echo "RouterOS HTTPS service update failed." >&2
         exit 1
       fi
-      updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"
+
+      # The listener restarts while applying the certificate. Poll the
+      # read-back endpoint until RouterOS accepts TLS requests again.
+      updated_certificate=""
+      for attempt in {1..10}; do
+        if updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"; then
+          break
+        fi
+        if [ "$attempt" -eq 10 ]; then
+          echo "RouterOS HTTPS service read-back failed after retries." >&2
+          exit 1
+        fi
+        sleep 1
+      done
       if [[ "$updated_certificate" != "$certificate_name" ]]; then
         echo "RouterOS HTTPS service read-back did not select the unexpired certificate." >&2
         exit 1
