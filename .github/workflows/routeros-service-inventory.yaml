@@ -113,31 +113,26 @@ jobs:
 
           # Retain the one reviewed configured service. RouterOS assigned new
           # IDs to the empty duplicates between read-only inventory runs, so
-          # the immutable plan must capture their current IDs rather than use
-          # stale values while still requiring their empty metadata exactly.
-          if ! jq -e '
-              length == 4
-              and ([.[] | select(.id == "*6")] == [{
-                id: "*6", name: "www-ssl", port: "443", disabled: "false",
-                invalid: "false",
-                address: "147.32.30.70/32,44.237.169.3/32,10.1.0.0/16",
-                certificate: "letsencrypt-www-ssl", tls_version: "any", vrf: "main"
-              }])
-              and ([.[] | select(.id != "*6")] as $duplicates
-                | ($duplicates | length == 3)
-                and ([ $duplicates[].id ] | unique | length == 3)
-                and ($duplicates | all(.[];
-                  (.id | type == "string")
-                  and .name == "www-ssl"
-                  and .port == "443"
-                  and .disabled == "false"
-                  and .invalid == "false"
-                  and .address == null
-                  and .certificate == null
-                  and .tls_version == null
-                  and .vrf == null
-                )))
-            ' <<<"$services" >/dev/null; then
+          # the immutable plan captures current IDs after independently
+          # checking the canonical record and every duplicate safety property.
+          canonical="$(jq -ce '[.[] | select(.id == "*6")]' <<<"$services")"
+          duplicates="$(jq -ce '[.[] | select(.id != "*6")]' <<<"$services")"
+          expected_canonical='[{"id":"*6","name":"www-ssl","port":"443","disabled":"false","invalid":"false","address":"147.32.30.70/32,44.237.169.3/32,10.1.0.0/16","certificate":"letsencrypt-www-ssl","tls_version":"any","vrf":"main"}]'
+
+          if [[ "$canonical" != "$expected_canonical" ]] \
+            || [[ "$(jq 'length' <<<"$duplicates")" != "3" ]] \
+            || ! jq -e '([.[].id] | unique | length) == 3' <<<"$duplicates" >/dev/null \
+            || ! jq -e 'all(.[];
+              (.id | type == "string")
+              and .name == "www-ssl"
+              and .port == "443"
+              and .disabled == "false"
+              and .invalid == "false"
+              and .address == null
+              and .certificate == null
+              and .tls_version == null
+              and .vrf == null
+            )' <<<"$duplicates" >/dev/null; then
             echo "www-ssl services no longer match the reviewed shape." >&2
             exit 1
           fi
