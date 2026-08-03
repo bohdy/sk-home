@@ -6,6 +6,8 @@ This stack owns the MikroTik gateway DHCP pools, servers, networks, UniFi option
 
 Every routed DHCP scope advertises Blocky at `10.1.30.53` as its sole resolver. Blocky is the cluster's LAN-facing DNS VIP and serves the internal `bohdal.name` split-DNS zone before forwarding public recursion through CoreDNS to DNS4EU.
 
+The VLAN 20 reservation `gha_runner_vm_01` retains `vm-gha-01` at `10.1.20.200` after it moves from static netplan addressing to DHCP. Its lease must come from `server20`, which supplies the internal DNS VIP and therefore resolves `gw.bohdal.name` to the RouterOS management address instead of the public Cloudflare proxy.
+
 The first migration plan must show only DNS-server changes for the four DHCP network records. It must not create or replace a DHCP pool, server, lease, or DHCP option.
 
 ## State Migration

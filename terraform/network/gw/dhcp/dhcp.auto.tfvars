@@ -55,6 +55,14 @@ dhcp_scopes = {
 # Keep static reservations in the DHCP stack so address ownership is reviewed
 # alongside the scopes and client DNS settings that depend on it.
 dhcp_reservations = {
+  gha_runner_vm_01 = {
+    # Keep the self-hosted runner on its current VLAN 20 address after netplan
+    # switches from static addressing to the gateway's DHCP configuration.
+    server      = "server20"
+    address     = "10.1.20.200"
+    mac_address = "BC:24:11:CD:D0:10"
+    comment     = "GitHub Actions runner vm-gha-01"
+  }
   ap_1np = {
     server      = "server102"
     address     = "10.1.102.11"
