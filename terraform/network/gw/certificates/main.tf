@@ -50,20 +50,45 @@ resource "routeros_system_certificate" "gateway" {
   }
 }
 
-# WebFig and the HTTPS REST endpoint share www-ssl. Limiting it to the home
-# address space prevents a valid certificate from becoming Internet exposure.
-import {
-  # www-ssl is a built-in RouterOS service, so adopt it before changing its
-  # certificate or listener policy instead of attempting to create a duplicate.
-  to = routeros_ip_service.www_ssl
-  id = "www-ssl"
-}
+# The provider cannot read the gateway's built-in www-ssl service because
+# RouterOS returns duplicate names with unstable IDs. Use RouterOS's documented
+# `ip service set www-ssl` command after importing the certificate instead of
+# attempting provider adoption. This is a narrow, documented break-glass path
+# that preserves the intended declarative certificate lifecycle.
+resource "terraform_data" "configure_www_ssl" {
+  input = routeros_system_certificate.gateway.name
 
-resource "routeros_ip_service" "www_ssl" {
-  numbers     = "www-ssl"
-  port        = 443
-  address     = "10.0.0.0/8"
-  certificate = routeros_system_certificate.gateway.name
-  tls_version = "only-1.2"
-  disabled    = false
+  triggers_replace = [acme_certificate.gateway.certificate_pem]
+
+  provisioner "local-exec" {
+    # The certificate workflow runs Linux self-hosted runners. Bash keeps the
+    # request construction fail-closed and prevents accidental word splitting.
+    interpreter = ["/bin/bash", "-c"]
+
+    command = <<-EOT
+      set -euo pipefail
+      payload="$(jq -cn --arg certificate "$ROUTEROS_CERTIFICATE_NAME" '{
+        script: (
+          "/ip/service/set www-ssl port=443 address=10.0.0.0/8 "
+          + "certificate=" + $certificate
+          + " tls-version=only-1.2 disabled=no"
+        )
+      }')"
+      curl --fail --silent --show-error ${var.mikrotik_insecure ? "--insecure" : ""} \
+        --user "$ROUTEROS_USERNAME:$ROUTEROS_PASSWORD" \
+        --header "content-type: application/json" \
+        --data "$payload" \
+        "${trimsuffix(var.mikrotik_hosturl, "/")}/rest/execute"
+    EOT
+
+    environment = {
+      # Keep credentials in the process environment, never in the command,
+      # plan artifact, OpenTofu output, or GitHub Actions log text.
+      ROUTEROS_USERNAME         = var.mikrotik_username
+      ROUTEROS_PASSWORD         = var.mikrotik_password
+      ROUTEROS_CERTIFICATE_NAME = routeros_system_certificate.gateway.name
+    }
+  }
+
+  depends_on = [routeros_system_certificate.gateway]
 }
