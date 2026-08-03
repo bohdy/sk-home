@@ -2,20 +2,29 @@ name: RouterOS service inventory
 
 on:
   workflow_dispatch:
+    inputs:
+      apply_duplicate_www_ssl_cleanup:
+        # A RouterOS mutation stays explicitly opt-in and is isolated from the
+        # default inventory path, which remains read-only.
+        description: Delete only the reviewed empty www-ssl duplicate IDs
+        required: true
+        default: false
+        type: boolean
 
-# This workflow reads only the RouterOS service collection. It has no GitHub
-# write permission and does not run an OpenTofu apply or a RouterOS mutation.
+# The workflow cannot write repository content; the optional RouterOS recovery
+# is gated by a separate input and the production environment below.
 permissions:
   contents: read
 
 concurrency:
-  # Keep the evidence from one service-inventory run easy to review at a time.
-  group: routeros-service-inventory
+  # Prevent overlapping evidence gathering or cleanup against the same service.
+  group: routeros-service-recovery
   cancel-in-progress: false
 
 jobs:
   inventory-www-ssl:
     name: Inventory www-ssl services
+    if: github.event_name == 'workflow_dispatch' && !inputs.apply_duplicate_www_ssl_cleanup
     runs-on: self-hosted
 
     steps:
@@ -62,3 +71,155 @@ jobs:
           # Service IDs and listener metadata are non-secret review evidence.
           # Do not emit the authenticated request, credentials, or raw output.
           jq . <<<"$services" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  plan-duplicate-www-ssl-cleanup:
+    name: Plan duplicate www-ssl cleanup
+    # The known provider limitation prevents an OpenTofu plan for this service,
+    # so this job creates the immutable, explicit REST deletion plan instead.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_duplicate_www_ssl_cleanup
+    runs-on: self-hosted
+
+    steps:
+      - name: Get RouterOS automation credentials
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: Create explicit deletion plan
+        shell: bash
+        env:
+          ROUTEROS_URL: https://gw.bohdal.name
+        run: |
+          # Read all candidate metadata before planning any deletion. The
+          # gateway's expired certificate confines --insecure to this URL.
+          services="$(curl --fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+            "$ROUTEROS_URL/rest/ip/service" \
+            | jq -ce '[.[] | select(.name == "www-ssl") | {
+                id: .[".id"],
+                name,
+                port,
+                disabled,
+                invalid,
+                address,
+                certificate,
+                tls_version: .["tls-version"],
+                vrf
+              }] | sort_by(.id)')"
+
+          # These values are the reviewed live inventory: retain the one
+          # configured service and delete only the three empty duplicates.
+          expected="$(jq -cn '[
+            {
+              id: "*3D", name: "www-ssl", port: "443", disabled: "false",
+              invalid: "false", address: null, certificate: null,
+              tls_version: null, vrf: null
+            },
+            {
+              id: "*48", name: "www-ssl", port: "443", disabled: "false",
+              invalid: "false", address: null, certificate: null,
+              tls_version: null, vrf: null
+            },
+            {
+              id: "*49", name: "www-ssl", port: "443", disabled: "false",
+              invalid: "false", address: null, certificate: null,
+              tls_version: null, vrf: null
+            },
+            {
+              id: "*6", name: "www-ssl", port: "443", disabled: "false",
+              invalid: "false",
+              address: "147.32.30.70/32,44.237.169.3/32,10.1.0.0/16",
+              certificate: "letsencrypt-www-ssl", tls_version: "any", vrf: "main"
+            }
+          ] | sort_by(.id)')"
+
+          # Refuse to manufacture a destructive plan if any live record no
+          # longer matches the reviewed evidence exactly.
+          if [[ "$services" != "$expected" ]]; then
+            echo "www-ssl services no longer match the reviewed inventory." >&2
+            exit 1
+          fi
+
+          # The artifact is non-secret evidence: it binds the apply job to the
+          # observed set, retained service, and the three immutable delete IDs.
+          jq -n \
+            --arg routeros_url "$ROUTEROS_URL" \
+            --argjson observed "$services" \
+            '{routeros_url: $routeros_url, observed: $observed,
+              retain: {id: "*6"}, delete: [{id: "*3D"}, {id: "*48"}, {id: "*49"}]}' \
+            > duplicate-www-ssl-cleanup-plan.json
+          jq . duplicate-www-ssl-cleanup-plan.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload duplicate www-ssl cleanup plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: duplicate-www-ssl-cleanup-plan
+          path: duplicate-www-ssl-cleanup-plan.json
+          if-no-files-found: error
+          retention-days: 7
+
+  apply-duplicate-www-ssl-cleanup:
+    name: Apply duplicate www-ssl cleanup
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_duplicate_www_ssl_cleanup
+    runs-on: self-hosted
+    needs: plan-duplicate-www-ssl-cleanup
+    environment: production
+
+    steps:
+      - name: Download immutable cleanup plan
+        uses: actions/download-artifact@v8
+        with:
+          name: duplicate-www-ssl-cleanup-plan
+
+      - name: Get RouterOS automation credentials
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: Delete only the reviewed duplicate IDs
+        shell: bash
+        run: |
+          # Re-read the collection and require an exact artifact match so a
+          # concurrent RouterOS change cannot alter this deletion's targets.
+          routeros_url="$(jq -er '.routeros_url' duplicate-www-ssl-cleanup-plan.json)"
+          observed="$(curl --fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+            "$routeros_url/rest/ip/service" \
+            | jq -ce '[.[] | select(.name == "www-ssl") | {
+                id: .[".id"],
+                name,
+                port,
+                disabled,
+                invalid,
+                address,
+                certificate,
+                tls_version: .["tls-version"],
+                vrf
+              }] | sort_by(.id)')"
+          jq -e --argjson current "$observed" '.observed == $current' \
+            duplicate-www-ssl-cleanup-plan.json >/dev/null
+
+          # Delete exactly the immutable item IDs in the reviewed artifact;
+          # never derive targets from a name match during the mutation step.
+          while IFS= read -r service_id; do
+            curl --fail --silent --show-error --insecure \
+              --request DELETE \
+              --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+              "$routeros_url/rest/ip/service/$service_id"
+          done < <(jq -er '.delete[].id' duplicate-www-ssl-cleanup-plan.json)
+
+          # The retained, configured service must be the sole www-ssl record
+          # before certificate automation is allowed to run again.
+          curl --fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+            "$routeros_url/rest/ip/service" \
+            | jq -e '[.[] | select(.name == "www-ssl") | .[".id"]] == ["*6"]' \
+            >/dev/null
