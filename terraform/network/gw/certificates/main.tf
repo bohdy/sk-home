@@ -95,10 +95,6 @@ resource "terraform_data" "install_gateway_certificate" {
           + "/certificate/import file-name=" + $issuer_file + " name=" + $issuer_name + " trusted=yes; "
           + "/certificate/import file-name=" + $leaf_file + " name=" + $leaf_name + " trusted=yes; "
           + "/certificate/import file-name=" + $key_file + " name=" + $leaf_name + "; "
-          + ":local validCerts [/certificate/find common-name=\\\"gw.bohdal.name\\\" private-key=yes]; "
-          + ":if ([:len $validCerts] = 0) do={:error \\\"no valid gateway certificate\\\"}; "
-          + ":local certificateName [/certificate/get [:pick $validCerts ([:len $validCerts] - 1)] name]; "
-          + "/ip/service/set [/ip/service/find name=\\\"www-ssl\\\" address~\\\"10.1.0.0/16\\\"] port=443 address=10.0.0.0/8 certificate=$certificateName tls-version=only-1.2 disabled=no; "
           + ":foreach id in=[/file/find where name=\\\"" + $issuer_file + "\\\"] do={/file/remove $id}; "
           + ":foreach id in=[/file/find where name=\\\"" + $leaf_file + "\\\"] do={/file/remove $id}; "
           + ":foreach id in=[/file/find where name=\\\"" + $key_file + "\\\"] do={/file/remove $id}"
@@ -106,6 +102,22 @@ resource "terraform_data" "install_gateway_certificate" {
       response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
       if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
         echo "RouterOS certificate installation script failed." >&2
+        exit 1
+      fi
+
+      # RouterOS service IDs are unstable, so discover the one listener with
+      # the inventory-verified internal address immediately before updating it.
+      services="$(curl "$${curl_options[@]}" "$routeros_url/ip/service")"
+      service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
+      certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
+      certificate_name="$(jq -er '[.[] | select(.["common-name"] == "gw.bohdal.name" and .["private-key"] == "true")] | if length > 0 then .[-1].name else error("no gateway certificate with private key") end' <<<"$certificates")"
+      service_payload="$(jq -cn \
+        --arg id "$service_id" \
+        --arg certificate "$certificate_name" \
+        '{numbers: $id, port: "443", address: "10.0.0.0/8", certificate: $certificate, "tls-version": "only-1.2", disabled: "false"}')"
+      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
+      if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
+        echo "RouterOS HTTPS service update failed." >&2
         exit 1
       fi
     EOT
