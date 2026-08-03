@@ -1,5 +1,5 @@
 variable "mikrotik_hosturl" {
-  description = "HTTPS endpoint for the MikroTik device receiving the certificate."
+  description = "RouterOS REST endpoint for the MikroTik device receiving the certificate; normal runs use HTTPS."
   type        = string
   default     = "https://gw.bohdal.name/"
 }

@@ -69,41 +69,122 @@ resource "terraform_data" "install_gateway_certificate" {
         curl_options+=(--insecure)
       fi
 
-      upload_file() {
+      write_file() {
         local file_name="$1"
         local file_contents="$2"
         local payload
-        payload="$(jq -cn --arg name "$file_name" --arg contents "$file_contents" '{name: $name, contents: $contents}')"
-        # RouterOS REST creates file resources with PUT, matching the provider
-        # transport rather than curl's default POST for --data requests.
-        curl "$${curl_options[@]}" --request PUT --data "$payload" "$routeros_url/file" >/dev/null
+        local response
+        # RouterOS accepts file creation through REST, but this device rejects
+        # contents in the REST PUT body. Use the documented execute endpoint to
+        # create an empty file and set its contents through the file menu.
+        payload="$(jq -cn \
+          --arg name "$file_name" \
+          --arg contents "$file_contents" \
+          'def routeros_escape:
+             gsub("\\\\"; "\\\\\\\\")
+             | gsub("\\\""; "\\\\\\\"")
+             | gsub("\\r"; "")
+             | gsub("\n"; "\\n");
+           {script: (
+             ":foreach id in=[/file/find where name=" + $name + "] do={/file/remove $id}; "
+             + "/file/add name=" + $name + " type=file; "
+             + "/file/set [/file/find where name=" + $name + "] contents=\"" + ($contents | routeros_escape) + "\""
+           )}')"
+        response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS temporary certificate file write failed." >&2
+          exit 1
+        fi
       }
 
-      upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_PEM"
-      upload_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
-      upload_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
-
-      payload="$(jq -cn \
-        --arg leaf_name "$ROUTEROS_CERTIFICATE_NAME" \
-        --arg issuer_name "$ROUTEROS_ISSUER_CERTIFICATE_NAME" \
-        --arg leaf_file "$ROUTEROS_LEAF_FILE_NAME" \
-        --arg issuer_file "$ROUTEROS_ISSUER_FILE_NAME" \
-        --arg key_file "$ROUTEROS_KEY_FILE_NAME" \
-        '{script: (
-          ":foreach id in=[/certificate/find where name=\\\"" + $leaf_name + "\\\"] do={/certificate/remove $id}; "
-          + ":foreach id in=[/certificate/find where name=\\\"" + $issuer_name + "\\\"] do={/certificate/remove $id}; "
-          + "/certificate/import file-name=" + $issuer_file + " name=" + $issuer_name + " trusted=yes; "
-          + "/certificate/import file-name=" + $leaf_file + " name=" + $leaf_name + " trusted=yes; "
-          + "/certificate/import file-name=" + $key_file + " name=" + $leaf_name + "; "
-          + ":foreach id in=[/file/find where name=\\\"" + $issuer_file + "\\\"] do={/file/remove $id}; "
-          + ":foreach id in=[/file/find where name=\\\"" + $leaf_file + "\\\"] do={/file/remove $id}; "
-          + ":foreach id in=[/file/find where name=\\\"" + $key_file + "\\\"] do={/file/remove $id}"
-        )}')"
-      response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
-      if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
-        echo "RouterOS certificate installation script failed." >&2
+      # RouterOS rejects the multi-certificate ACME issuer bundle when it is
+      # sent through the REST file-create endpoint. The first certificate is
+      # the leaf's immediate issuer and is the only intermediate required in
+      # the server chain; clients validate the remaining chain to their roots.
+      issuer_pem="$ROUTEROS_ISSUER_PEM"
+      if [[ "$issuer_pem" != *"-----BEGIN CERTIFICATE-----"* || "$issuer_pem" != *"-----END CERTIFICATE-----"* ]]; then
+        echo "ACME issuer PEM did not contain a certificate." >&2
         exit 1
       fi
+      issuer_pem="$${issuer_pem%%-----END CERTIFICATE-----*}-----END CERTIFICATE-----"
+      write_file "$ROUTEROS_ISSUER_FILE_NAME" "$issuer_pem"
+      write_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
+      write_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
+
+      run_routeros_script() {
+        local script="$1"
+        local payload
+        local response
+        payload="$(jq -cn --arg script "$script" '{script: $script}')"
+        response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS certificate installation script failed." >&2
+          exit 1
+        fi
+      }
+
+      remove_certificate() {
+        local certificate_name="$1"
+        local script
+        script="$(jq -nr --arg name "$certificate_name" '":foreach id in=[/certificate/find where name=" + $name + "] do={/certificate/remove $id}"')"
+        run_routeros_script "$script"
+      }
+
+      remove_file() {
+        local file_name="$1"
+        local script
+        script="$(jq -nr --arg name "$file_name" '":foreach id in=[/file/find where name=" + $name + "] do={/file/remove $id}"')"
+        run_routeros_script "$script"
+      }
+
+      import_certificate() {
+        local file_name="$1"
+        local certificate_name="$2"
+        local trusted="$3"
+        local payload
+        local response
+        payload="$(jq -cn \
+          --arg file_name "$file_name" \
+          --arg certificate_name "$certificate_name" \
+          --arg trusted "$trusted" \
+          '{name: $certificate_name, "file-name": $file_name} + (if $trusted == "yes" then {trusted: "yes"} else {} end)')"
+        response="$(curl "$${curl_options[@]}" --request POST --data "$payload" "$routeros_url/certificate/import")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS certificate import failed." >&2
+          exit 1
+        fi
+      }
+
+      remove_certificate "$ROUTEROS_CERTIFICATE_NAME"
+      remove_certificate "$ROUTEROS_ISSUER_CERTIFICATE_NAME"
+      import_certificate "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_CERTIFICATE_NAME" yes
+      import_certificate "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" yes
+      import_certificate "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" no
+
+      # RouterOS assigns the same generated name to a leaf and each imported
+      # chain object. Rename the exact private-key leaf by fingerprint so the
+      # HTTPS service never has to resolve an ambiguous certificate name.
+      leaf_fingerprint="$(printf '%s' "$ROUTEROS_LEAF_PEM" | openssl x509 -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+      certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
+      leaf_id="$(jq -er --arg fingerprint "$leaf_fingerprint" '
+        [ .[]
+          | select(
+              .fingerprint == $fingerprint
+              and .["common-name"] == "gw.bohdal.name"
+              and .["private-key"] == "true"
+            )
+        ]
+        | if length == 1 then .[0][".id"] else error("expected one imported gateway leaf") end
+      ' <<<"$certificates")"
+      rename_payload="$(jq -cn --arg name "$ROUTEROS_CERTIFICATE_NAME" '{name: $name}')"
+      rename_response="$(curl "$${curl_options[@]}" --request PATCH --data "$rename_payload" "$routeros_url/certificate/$leaf_id")"
+      if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$rename_response" >/dev/null; then
+        echo "RouterOS gateway leaf rename failed." >&2
+        exit 1
+      fi
+      remove_file "$ROUTEROS_ISSUER_FILE_NAME"
+      remove_file "$ROUTEROS_LEAF_FILE_NAME"
+      remove_file "$ROUTEROS_KEY_FILE_NAME"
     EOT
 
     environment = {
@@ -152,27 +233,61 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
       services="$(curl "$${curl_options[@]}" "$routeros_url/ip/service")"
       service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
       certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
-      certificate_name="$(jq -er '
+      certificate_name="$(jq -er --arg preferred_name "$ROUTEROS_CERTIFICATE_NAME" '
+        def is_true: . == true or . == "true";
         [ .[]
           | select(
               .["common-name"] == "gw.bohdal.name"
               and .["private-key"] == "true"
-              and (.expired != true)
+              and ((.expired // false) | is_true | not)
+              and ((.invalid // false) | is_true | not)
             )
-        ]
-        | sort_by(.["invalid-after"] // "")
-        | if length > 0 then .[-1].name else error("no unexpired gateway certificate with private key") end
+        ] as $certificates
+        | [ $certificates[] | select(.name == $preferred_name) ] as $preferred
+        | if ($preferred | length) > 0 then $preferred[-1].name
+          elif ($certificates | length) > 0 then ($certificates | sort_by(.["invalid-after"] // "") | .[-1].name)
+          else error("no unexpired gateway certificate with private key")
+          end
       ' <<<"$certificates")"
       service_payload="$(jq -cn \
         --arg id "$service_id" \
         --arg certificate "$certificate_name" \
         '{".id": $id, certificate: $certificate}')"
-      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
-      if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
+      # RouterOS may reset the HTTPS listener immediately after accepting this
+      # action. Retry the idempotent update so a transient reset is not
+      # mistaken for a failed configuration change.
+      service_response=""
+      for attempt in {1..10}; do
+        if service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"; then
+          break
+        fi
+        if [ "$attempt" -eq 10 ]; then
+          echo "RouterOS HTTPS service update request failed after retries." >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      # Successful RouterOS action calls can return an array. Only inspect the
+      # object-shaped error response here; read-back below verifies the actual
+      # service state for both response shapes.
+      if jq -e 'type == "object" and ((.error // 0) != 0)' <<<"$service_response" >/dev/null; then
         echo "RouterOS HTTPS service update failed." >&2
         exit 1
       fi
-      updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"
+
+      # The listener restarts while applying the certificate. Poll the
+      # read-back endpoint until RouterOS accepts TLS requests again.
+      updated_certificate=""
+      for attempt in {1..10}; do
+        if updated_certificate="$(curl "$${curl_options[@]}" "$routeros_url/ip/service" | jq -er --arg id "$service_id" '.[] | select(.[".id"] == $id) | .certificate')"; then
+          break
+        fi
+        if [ "$attempt" -eq 10 ]; then
+          echo "RouterOS HTTPS service read-back failed after retries." >&2
+          exit 1
+        fi
+        sleep 1
+      done
       if [[ "$updated_certificate" != "$certificate_name" ]]; then
         echo "RouterOS HTTPS service read-back did not select the unexpired certificate." >&2
         exit 1
@@ -182,9 +297,10 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
     environment = {
       # Keep credentials in the process environment, never in the command or
       # OpenTofu output. The certificate payload is not needed for this check.
-      ROUTEROS_USERNAME = var.mikrotik_username
-      ROUTEROS_PASSWORD = var.mikrotik_password
-      ROUTEROS_INSECURE = tostring(var.mikrotik_insecure)
+      ROUTEROS_USERNAME         = var.mikrotik_username
+      ROUTEROS_PASSWORD         = var.mikrotik_password
+      ROUTEROS_INSECURE         = tostring(var.mikrotik_insecure)
+      ROUTEROS_CERTIFICATE_NAME = local.gateway_certificate_name
     }
   }
 }
