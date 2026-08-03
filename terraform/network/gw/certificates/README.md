@@ -4,6 +4,8 @@ This stack owns the trusted certificate served by the MikroTik gateway at `gw.bo
 
 The ACME account key, certificate private key, and RouterOS import payload are sensitive OpenTofu values stored only in the encrypted Cloudflare R2 state. They must never be added to Bitwarden, GitHub artifacts, Kubernetes Secrets, command lines, logs, or outputs.
 
+The pinned RouterOS provider cannot safely adopt the gateway's built-in `www-ssl` service because the REST API returns duplicate service names with unstable IDs. After OpenTofu imports a certificate, the stack runs the documented RouterOS command `ip service set www-ssl` through its authenticated REST execute endpoint. This narrow break-glass command sets only the certificate, port, address restriction, TLS version, and enabled state; it does not delete services or expose private material.
+
 ## Bootstrap and renewal
 
 The current gateway certificate expired before this stack was introduced. The first reviewed production apply must set `bootstrap_gateway_certificate=true` solely to replace that expired certificate. Thereafter leave it `false`: the provider verifies `gw.bohdal.name` normally.

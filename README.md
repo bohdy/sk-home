@@ -143,7 +143,7 @@ gh workflow run mikrotik-certificates.yaml --ref main \
 
 Follow the verification commands in `terraform/network/gw/certificates/README.md` immediately after the initial apply. The workflow then checks weekly and renews automatically within the 30-day ACME threshold; the `production` environment remains the final approval boundary.
 
-If the certificate plan reports that more than one `www-ssl` service exists, do not delete a service from a terminal. First dispatch `routeros-service-inventory.yaml` from `main` with its default input. Its read-only output lists only the duplicate services' immutable IDs and listener metadata. After review, the same workflow can set `apply_duplicate_www_ssl_cleanup=true`; it creates and uploads an immutable, non-secret deletion plan from the current three empty duplicate IDs, then deletes only those artifact IDs through the `production` environment. The apply job rechecks that the live collection exactly matches the plan before it mutates RouterOS.
+If the certificate plan reports that more than one `www-ssl` service exists, dispatch `routeros-service-inventory.yaml` from `main` to collect read-only diagnostic metadata. Do not delete services by their IDs: this gateway returns unstable duplicate IDs. The certificate stack instead invokes RouterOS's documented `ip service set www-ssl` command after it imports each certificate, so the built-in service is configured without provider adoption by an ambiguous name.
 
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
