@@ -106,12 +106,16 @@ jobs:
           # Confirm the addressed listener and the selected certificate as a
           # postcondition, without emitting PEM, private keys, or credentials.
           service="$(curl "${curl_options[@]}" "$ROUTEROS_URL/rest/ip/service" \
-            | jq -ce '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] \
-              | if length == 1 then .[0] else error("expected one addressed www-ssl service") end')"
+            | jq -ce '
+              [.[] | select(.name == "www-ssl" and ((.address // "") != ""))]
+              | if length == 1 then .[0] else error("expected one addressed www-ssl service") end
+            ')"
           certificate_name="$(jq -er '.certificate' <<<"$service")"
           certificate="$(curl "${curl_options[@]}" "$ROUTEROS_URL/rest/certificate" \
-            | jq -ce --arg name "$certificate_name" '[.[] | select(.name == $name)] \
-              | if length == 1 then .[0] else error("bound certificate was not found") end')"
+            | jq -ce --arg name "$certificate_name" '
+              [.[] | select(.name == $name)]
+              | if length == 1 then .[0] else error("bound certificate was not found") end
+            ')"
           jq -e '(.expired != true) and .["private-key"] == "true"' <<<"$certificate" >/dev/null
           jq -n \
             --argjson service "$service" \
