@@ -115,7 +115,7 @@ resource "terraform_data" "install_gateway_certificate" {
         --arg id "$service_id" \
         --arg certificate "$certificate_name" \
         '{numbers: $id, port: "443", address: "10.0.0.0/8", certificate: $certificate, "tls-version": "only-1.2", disabled: "false"}')"
-      service_response="$(curl "$${curl_options[@]}" --request POST --data "$service_payload" "$routeros_url/ip/service/set")"
+      service_response="$(curl "$${curl_options[@]}" --request PATCH --data "$service_payload" "$routeros_url/ip/service/$service_id")"
       if jq -e '(.error // 0) != 0' <<<"$service_response" >/dev/null; then
         echo "RouterOS HTTPS service update failed." >&2
         exit 1
