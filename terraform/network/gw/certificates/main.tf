@@ -79,7 +79,17 @@ resource "terraform_data" "install_gateway_certificate" {
         curl "$${curl_options[@]}" --request PUT --data "$payload" "$routeros_url/file" >/dev/null
       }
 
-      upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_PEM"
+      # RouterOS rejects the multi-certificate ACME issuer bundle when it is
+      # sent through the REST file-create endpoint. The first certificate is
+      # the leaf's immediate issuer and is the only intermediate required in
+      # the server chain; clients validate the remaining chain to their roots.
+      issuer_pem="$ROUTEROS_ISSUER_PEM"
+      if [[ "$issuer_pem" != *"-----BEGIN CERTIFICATE-----"* || "$issuer_pem" != *"-----END CERTIFICATE-----"* ]]; then
+        echo "ACME issuer PEM did not contain a certificate." >&2
+        exit 1
+      fi
+      issuer_pem="$${issuer_pem%%-----END CERTIFICATE-----*}-----END CERTIFICATE-----"
+      upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$issuer_pem"
       upload_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
       upload_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
 
