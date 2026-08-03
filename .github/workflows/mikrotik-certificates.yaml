@@ -112,14 +112,19 @@ jobs:
               | if length == 1 then .[0] else error("expected one addressed www-ssl service") end
             ')"
           certificate_name="$(jq -er '.certificate' <<<"$service")"
-          certificate="$(curl "${curl_options[@]}" "$ROUTEROS_URL/rest/certificate" \
-            | jq -ce --arg name "$certificate_name" '
+          certificates="$(curl "${curl_options[@]}" "$ROUTEROS_URL/rest/certificate")"
+          # Keep the mismatch evidence reviewable without exposing PEM data.
+          jq -n --argjson service "$service" --argjson certificates "$certificates" '
+            {
+              service: ($service | {id: .[".id"], name, address, certificate, disabled, invalid}),
+              certificates: ($certificates | map({name, common_name: .["common-name"], private_key: .["private-key"], invalid_after: .["invalid-after"], expired, fingerprint}))
+            }
+          ' | tee -a "$GITHUB_STEP_SUMMARY"
+          certificate="$(jq -ce --arg name "$certificate_name" '
               [.[] | select(.name == $name)]
               | if length == 1 then .[0] else error("bound certificate was not found") end
-            ')"
+            ' <<<"$certificates")"
           jq -e '(.expired != true) and .["private-key"] == "true"' <<<"$certificate" >/dev/null
-          jq -n \
-            --argjson service "$service" \
-            --argjson certificate "$certificate" \
-            '{service: ($service | {id: .[".id"], name, address, certificate, disabled, invalid}), certificate: ($certificate | {name, common_name: .["common-name"], private_key: .["private-key"], invalid_after: .["invalid-after"], expired, fingerprint})}' \
+          jq -n --argjson certificate "$certificate" \
+            '{bound_certificate: ($certificate | {name, common_name: .["common-name"], private_key: .["private-key"], invalid_after: .["invalid-after"], expired, fingerprint})}' \
             | tee -a "$GITHUB_STEP_SUMMARY"
