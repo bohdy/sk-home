@@ -160,6 +160,28 @@ resource "terraform_data" "install_gateway_certificate" {
       import_certificate "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_CERTIFICATE_NAME" yes
       import_certificate "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" yes
       import_certificate "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" no
+
+      # RouterOS assigns the same generated name to a leaf and each imported
+      # chain object. Rename the exact private-key leaf by fingerprint so the
+      # HTTPS service never has to resolve an ambiguous certificate name.
+      leaf_fingerprint="$(printf '%s' "$ROUTEROS_LEAF_PEM" | openssl x509 -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+      certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
+      leaf_id="$(jq -er --arg fingerprint "$leaf_fingerprint" '
+        [ .[]
+          | select(
+              .fingerprint == $fingerprint
+              and .["common-name"] == "gw.bohdal.name"
+              and .["private-key"] == "true"
+            )
+        ]
+        | if length == 1 then .[0][".id"] else error("expected one imported gateway leaf") end
+      ' <<<"$certificates")"
+      rename_payload="$(jq -cn --arg name "$ROUTEROS_CERTIFICATE_NAME" '{name: $name}')"
+      rename_response="$(curl "$${curl_options[@]}" --request PATCH --data "$rename_payload" "$routeros_url/certificate/$leaf_id")"
+      if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$rename_response" >/dev/null; then
+        echo "RouterOS gateway leaf rename failed." >&2
+        exit 1
+      fi
       remove_file "$ROUTEROS_ISSUER_FILE_NAME"
       remove_file "$ROUTEROS_LEAF_FILE_NAME"
       remove_file "$ROUTEROS_KEY_FILE_NAME"
