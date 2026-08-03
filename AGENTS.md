@@ -59,6 +59,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## Working Rules
 
 - Inspect the repository before making changes.
+- Verify live infrastructure prerequisites before creating or applying a dependent change; do not infer them from names, archived configuration, unverified references, or a successful OpenTofu plan.
 - Keep edits focused on the current task.
 - Prefer Terraform/OpenTofu for infrastructure and managed-device configuration whenever a suitable provider or existing stack can own the desired state.
 - Direct API, CLI, or UI mutation is a break-glass exception, not an ordinary implementation path. Document the reason before use, minimize its scope, and adopt the resulting state into Terraform/OpenTofu immediately when provider support permits.
