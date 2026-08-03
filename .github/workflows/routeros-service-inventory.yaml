@@ -163,3 +163,52 @@ jobs:
             --argjson leases "$leases" --argjson bridge_hosts "$bridge_hosts" \
             '{neighbors: $neighbors, arp: $arp, dhcp_leases: $leases, bridge_hosts: $bridge_hosts}' \
             | tee -a "$GITHUB_STEP_SUMMARY"
+
+  inventory-switch-neighbors:
+    name: Inventory confirmed switch neighbors
+    runs-on: self-hosted
+
+    steps:
+      - name: Get RouterOS automation credentials
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: List confirmed switch identity and neighbors
+        shell: bash
+        env:
+          # This address is direct evidence from the gateway LLDP/ARP
+          # inventory; it is not inferred from a naming convention.
+          ROUTEROS_URL: https://10.1.100.2
+        run: |
+          set -euo pipefail
+          curl_options=(--fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD")
+          identity="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/system/identity" \
+            | jq -ce '{name}')"
+          resource="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/system/resource" \
+            | jq -ce '{version, board_name: .["board-name"], platform}')"
+          addresses="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/ip/address" \
+            | jq -ce '[.[] | {address, interface, network, disabled}]')"
+          neighbors="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/ip/neighbor" \
+            | jq -ce '[.[] | {
+                interface,
+                identity,
+                address,
+                mac_address: .["mac-address"],
+                version,
+                board,
+                platform
+              }]')"
+          jq -n --argjson identity "$identity" --argjson resource "$resource" \
+            --argjson addresses "$addresses" --argjson neighbors "$neighbors" \
+            '{identity: $identity, resource: $resource, addresses: $addresses, neighbors: $neighbors}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
