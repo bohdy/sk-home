@@ -111,27 +111,58 @@ resource "terraform_data" "install_gateway_certificate" {
       write_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
       write_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
 
-      payload="$(jq -cn \
-        --arg leaf_name "$ROUTEROS_CERTIFICATE_NAME" \
-        --arg issuer_name "$ROUTEROS_ISSUER_CERTIFICATE_NAME" \
-        --arg leaf_file "$ROUTEROS_LEAF_FILE_NAME" \
-        --arg issuer_file "$ROUTEROS_ISSUER_FILE_NAME" \
-        --arg key_file "$ROUTEROS_KEY_FILE_NAME" \
-        '{script: (
-          ":foreach id in=[/certificate/find where name=\\\"" + $leaf_name + "\\\"] do={/certificate/remove $id}; "
-          + ":foreach id in=[/certificate/find where name=\\\"" + $issuer_name + "\\\"] do={/certificate/remove $id}; "
-          + "/certificate/import file-name=" + $issuer_file + " name=" + $issuer_name + " trusted=yes; "
-          + "/certificate/import file-name=" + $leaf_file + " name=" + $leaf_name + " trusted=yes; "
-          + "/certificate/import file-name=" + $key_file + " name=" + $leaf_name + "; "
-          + ":foreach id in=[/file/find where name=\\\"" + $issuer_file + "\\\"] do={/file/remove $id}; "
-          + ":foreach id in=[/file/find where name=\\\"" + $leaf_file + "\\\"] do={/file/remove $id}; "
-          + ":foreach id in=[/file/find where name=\\\"" + $key_file + "\\\"] do={/file/remove $id}"
-        )}')"
-      response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
-      if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
-        echo "RouterOS certificate installation script failed." >&2
-        exit 1
-      fi
+      run_routeros_script() {
+        local script="$1"
+        local payload
+        local response
+        payload="$(jq -cn --arg script "$script" '{script: $script}')"
+        response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS certificate installation script failed." >&2
+          exit 1
+        fi
+      }
+
+      remove_certificate() {
+        local certificate_name="$1"
+        local script
+        script="$(jq -nr --arg name "$certificate_name" '":foreach id in=[/certificate/find where name=" + $name + "] do={/certificate/remove $id}"')"
+        run_routeros_script "$script"
+      }
+
+      remove_file() {
+        local file_name="$1"
+        local script
+        script="$(jq -nr --arg name "$file_name" '":foreach id in=[/file/find where name=" + $name + "] do={/file/remove $id}"')"
+        run_routeros_script "$script"
+      }
+
+      import_certificate() {
+        local file_name="$1"
+        local certificate_name="$2"
+        local trusted="$3"
+        local payload
+        local response
+        payload="$(jq -cn \
+          --arg file_name "$file_name" \
+          --arg certificate_name "$certificate_name" \
+          --arg trusted "$trusted" \
+          '{name: $certificate_name, "file-name": $file_name} + (if $trusted == "yes" then {trusted: "yes"} else {} end)')"
+        response="$(curl "$${curl_options[@]}" --request POST --data "$payload" "$routeros_url/certificate/import")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS certificate import failed." >&2
+          exit 1
+        fi
+      }
+
+      remove_certificate "$ROUTEROS_CERTIFICATE_NAME"
+      remove_certificate "$ROUTEROS_ISSUER_CERTIFICATE_NAME"
+      import_certificate "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_CERTIFICATE_NAME" yes
+      import_certificate "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" yes
+      import_certificate "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_CERTIFICATE_NAME" no
+      remove_file "$ROUTEROS_ISSUER_FILE_NAME"
+      remove_file "$ROUTEROS_LEAF_FILE_NAME"
+      remove_file "$ROUTEROS_KEY_FILE_NAME"
     EOT
 
     environment = {
@@ -181,11 +212,13 @@ resource "terraform_data" "reconcile_gateway_certificate_service" {
       service_id="$(jq -er '[.[] | select(.name == "www-ssl" and ((.address // "") != ""))] | if length == 1 then .[0][".id"] else error("expected one addressed www-ssl service") end' <<<"$services")"
       certificates="$(curl "$${curl_options[@]}" "$routeros_url/certificate")"
       certificate_name="$(jq -er --arg preferred_name "$ROUTEROS_CERTIFICATE_NAME" '
+        def is_true: . == true or . == "true";
         [ .[]
           | select(
               .["common-name"] == "gw.bohdal.name"
               and .["private-key"] == "true"
-              and (.expired != true)
+              and ((.expired // false) | is_true | not)
+              and ((.invalid // false) | is_true | not)
             )
         ] as $certificates
         | [ $certificates[] | select(.name == $preferred_name) ] as $preferred
