@@ -3,8 +3,9 @@ name: RouterOS service inventory
 on:
   workflow_dispatch:
 
-# This workflow reads only RouterOS service metadata to diagnose provider
-# ambiguity. Certificate automation uses the stable built-in service command.
+# This workflow reads only RouterOS service and certificate metadata to diagnose
+# provider ambiguity. Certificate automation uses the stable built-in service
+# command.
 permissions:
   contents: read
 
@@ -62,3 +63,26 @@ jobs:
           # Service IDs and listener metadata are non-secret review evidence.
           # Do not emit the authenticated request, credentials, or raw output.
           jq . <<<"$services" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: List certificate metadata
+        shell: bash
+        env:
+          ROUTEROS_URL: https://gw.bohdal.name
+        run: |
+          # Certificate names, fingerprints, and validity metadata are enough
+          # to identify the object serving HTTPS without exposing PEM data.
+          certificates="$(curl --fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD" \
+            "$ROUTEROS_URL/rest/certificate" \
+            | jq -ce '[.[] | {
+                id: .[".id"],
+                name,
+                common_name: .["common-name"],
+                private_key: .["private-key"],
+                trusted,
+                invalid_after: .["invalid-after"],
+                expired,
+                fingerprint
+              }]')"
+
+          jq . <<<"$certificates" | tee -a "$GITHUB_STEP_SUMMARY"
