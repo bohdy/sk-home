@@ -69,14 +69,32 @@ resource "terraform_data" "install_gateway_certificate" {
         curl_options+=(--insecure)
       fi
 
-      upload_file() {
+      write_file() {
         local file_name="$1"
         local file_contents="$2"
         local payload
-        payload="$(jq -cn --arg name "$file_name" --arg contents "$file_contents" '{name: $name, contents: $contents}')"
-        # RouterOS REST creates file resources with PUT, matching the provider
-        # transport rather than curl's default POST for --data requests.
-        curl "$${curl_options[@]}" --request PUT --data "$payload" "$routeros_url/file" >/dev/null
+        local response
+        # RouterOS accepts file creation through REST, but this device rejects
+        # contents in the REST PUT body. Use the documented execute endpoint to
+        # create an empty file and set its contents through the file menu.
+        payload="$(jq -cn \
+          --arg name "$file_name" \
+          --arg contents "$file_contents" \
+          'def routeros_escape:
+             gsub("\\\\"; "\\\\\\\\")
+             | gsub("\\\""; "\\\\\\\"")
+             | gsub("\\r"; "")
+             | gsub("\n"; "\\n");
+           {script: (
+             ":foreach id in=[/file/find where name=" + $name + "] do={/file/remove $id}; "
+             + "/file/add name=" + $name + " type=file; "
+             + "/file/set [/file/find where name=" + $name + "] contents=\"" + ($contents | routeros_escape) + "\""
+           )}')"
+        response="$(curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute")"
+        if jq -e '(.error // 0) != 0 or ((.ret // "") | test("error|failure"; "i"))' <<<"$response" >/dev/null; then
+          echo "RouterOS temporary certificate file write failed." >&2
+          exit 1
+        fi
       }
 
       # RouterOS rejects the multi-certificate ACME issuer bundle when it is
@@ -89,9 +107,9 @@ resource "terraform_data" "install_gateway_certificate" {
         exit 1
       fi
       issuer_pem="$${issuer_pem%%-----END CERTIFICATE-----*}-----END CERTIFICATE-----"
-      upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$issuer_pem"
-      upload_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
-      upload_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
+      write_file "$ROUTEROS_ISSUER_FILE_NAME" "$issuer_pem"
+      write_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
+      write_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
 
       payload="$(jq -cn \
         --arg leaf_name "$ROUTEROS_CERTIFICATE_NAME" \
