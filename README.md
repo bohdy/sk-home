@@ -134,7 +134,7 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gatewa
 
 The four manual apply inputs are mutually exclusive; setting more than one skips every mutation path. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
 
-The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired gateway certificate requires the narrowly scoped bootstrap option, after which every run verifies the RouterOS TLS connection:
+The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired gateway certificate requires the narrowly scoped bootstrap option. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection:
 
 ```sh
 gh workflow run mikrotik-certificates.yaml --ref main \
@@ -143,7 +143,7 @@ gh workflow run mikrotik-certificates.yaml --ref main \
 
 Follow the verification commands in `terraform/network/gw/certificates/README.md` immediately after the initial apply. The workflow then checks weekly and renews automatically within the 30-day ACME threshold; the `production` environment remains the final approval boundary.
 
-If the certificate plan reports that more than one `www-ssl` service exists, dispatch `routeros-service-inventory.yaml` from `main` to collect read-only diagnostic metadata. Do not delete services by their IDs: this gateway returns unstable duplicate IDs. The certificate stack instead invokes RouterOS's documented `ip service set www-ssl` command after it imports each certificate, so the built-in service is configured without provider adoption by an ambiguous name.
+If the certificate plan reports that more than one `www-ssl` service exists, dispatch `routeros-service-inventory.yaml` from `main` to collect read-only diagnostic metadata. Do not delete services by their IDs: this gateway returns unstable duplicate IDs. The certificate stack instead discovers the one addressed listener and invokes RouterOS's documented `ip service set` action during every certificate workflow, so the built-in service is reconciled without provider adoption by an ambiguous name.
 
 Choose the stack directory once, then reuse it for OpenTofu commands. `TF_STACK` must point at the directory below `terraform/`, without the leading `terraform/` prefix:
 
