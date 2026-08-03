@@ -37,6 +37,8 @@ Initial internal records:
 - `unifi.bohdal.name` -> `10.1.30.56`
 - `gw.bohdal.name` -> `10.1.100.1`
 - `nas.bohdal.name` -> `10.1.100.10`
+- `pve.bohdal.name` -> `10.1.100.201`
+- `pve.sk.bohdal.name` -> `10.1.100.201` (compatibility alias)
 - `unifi.ap.sk.bohdal.name` -> `10.1.30.1`
 - `printer.sk.bohdal.name` -> `10.1.10.13`
 
@@ -54,6 +56,8 @@ dig @10.1.30.53 grafana.internal.bohdal.name A
 dig @10.1.30.53 unifi.bohdal.name A
 dig @10.1.30.53 gw.bohdal.name A
 dig @10.1.30.53 nas.bohdal.name A
+dig @10.1.30.53 pve.bohdal.name A
+dig @10.1.30.53 pve.sk.bohdal.name A
 dig @10.1.30.53 unifi.ap.sk.bohdal.name A
 dig @10.1.30.53 printer.sk.bohdal.name A
 dig @10.1.30.53 -x 10.1.30.53
@@ -61,6 +65,7 @@ dig @10.1.30.53 -x 10.1.30.55
 dig @10.1.30.53 -x 10.1.30.56
 dig @10.1.30.53 -x 10.1.100.1
 dig @10.1.30.53 -x 10.1.100.10
+dig @10.1.30.53 -x 10.1.100.201
 dig @10.1.30.53 www.bohdal.name A
 dig @10.1.30.53 example.com A
 dig +tcp @10.1.30.53 dns.bohdal.name A

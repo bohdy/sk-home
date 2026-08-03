@@ -1,5 +1,5 @@
 # The exporter is multi-target: preserve the logical Proxmox identity while
-# sending the certificate-valid API host to the shared exporter Service.
+# sending the browser-trusted API host to the shared exporter Service.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMStaticScrape
 metadata:
@@ -9,7 +9,7 @@ spec:
   jobName: proxmox
   targetEndpoints:
     - targets:
-        - pve.sk.bohdal.name
+        - pve.bohdal.name
       labels:
         instance: pve
         availability: always-on

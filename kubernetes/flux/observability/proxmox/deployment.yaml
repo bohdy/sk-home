@@ -21,12 +21,12 @@ spec:
         app.kubernetes.io/component: infrastructure-metrics
     spec:
       automountServiceAccountToken: false
-      # Pin the static API address under its certificate-valid hostname. This
-      # removes DNS egress while retaining hostname and CA verification.
+      # Pin the static API address under its browser-trusted canonical hostname.
+      # This removes DNS egress while retaining hostname and system-CA verification.
       hostAliases:
         - ip: 10.1.100.201
           hostnames:
-            - pve.sk.bohdal.name
+            - pve.bohdal.name
       # Prefer the general-purpose worker while allowing rescheduling during
       # maintenance because the worker is intentionally not dedicated.
       affinity:
@@ -69,8 +69,6 @@ spec:
                   key: api-token
             - name: PVE_VERIFY_SSL
               value: "true"
-            - name: REQUESTS_CA_BUNDLE
-              value: /etc/proxmox/ca.crt
           ports:
             - name: http
               containerPort: 9221
@@ -106,9 +104,6 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
-            - name: ca
-              mountPath: /etc/proxmox
-              readOnly: true
             # Gunicorn creates a worker heartbeat file at startup. Provide the
             # minimum writable path without relaxing the read-only root filesystem.
             - name: tmp
@@ -116,9 +111,6 @@ spec:
       securityContext:
         fsGroup: 101
       volumes:
-        - name: ca
-          configMap:
-            name: proxmox-exporter-ca
         - name: tmp
           emptyDir:
             medium: Memory
