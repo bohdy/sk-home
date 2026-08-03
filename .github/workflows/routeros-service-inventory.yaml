@@ -86,3 +86,69 @@ jobs:
               }]')"
 
           jq . <<<"$certificates" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  inventory-network-neighbors:
+    name: Inventory RouterOS network neighbors
+    runs-on: self-hosted
+
+    steps:
+      - name: Get RouterOS automation credentials
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: List RouterOS neighbor, ARP, and DHCP metadata
+        shell: bash
+        env:
+          ROUTEROS_URL: https://gw.bohdal.name
+        run: |
+          set -euo pipefail
+          curl_options=(--fail --silent --show-error --insecure \
+            --user "$MIKROTIK_USERNAME:$MIKROTIK_PASSWORD")
+
+          # RouterOS exposes these menus as read-only REST collections. Keep
+          # only identity and address metadata so credentials and device
+          # configuration do not enter the workflow log or summary.
+          neighbors="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/ip/neighbor" \
+            | jq -ce '[.[] | {
+                interface,
+                identity,
+                address,
+                mac_address: .["mac-address"],
+                version,
+                board,
+                platform,
+                system_id: .["system-id"]
+              }]')"
+          arp="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/ip/arp" \
+            | jq -ce '[.[] | {
+                address,
+                mac_address: .["mac-address"],
+                interface,
+                complete,
+                status,
+                comment
+              }]')"
+          leases="$(curl "${curl_options[@]}" \
+            "$ROUTEROS_URL/rest/ip/dhcp-server/lease" \
+            | jq -ce '[.[] | {
+                address,
+                mac_address: .["mac-address"],
+                host_name: .["host-name"],
+                server,
+                status,
+                active_address: .["active-address"],
+                active_mac_address: .["active-mac-address"],
+                comment
+              }]')"
+
+          jq -n --argjson neighbors "$neighbors" --argjson arp "$arp" \
+            --argjson leases "$leases" \
+            '{neighbors: $neighbors, arp: $arp, dhcp_leases: $leases}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
