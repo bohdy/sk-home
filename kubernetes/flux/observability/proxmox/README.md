@@ -1,6 +1,6 @@
 # Proxmox Exporter
 
-This component deploys Prometheus PVE Exporter 3.8.2 as one stateless, ClusterIP-only replica. It collects cluster and node data every 30 seconds from `pve.sk.bohdal.name`, which split DNS resolves to `10.1.100.201`, and exposes separate process metrics for exporter self-monitoring.
+This component deploys Prometheus PVE Exporter 3.8.2 as one stateless, ClusterIP-only replica. It collects cluster and node data every 30 seconds from `pve.bohdal.name`, which split DNS resolves to `10.1.100.201`, and exposes separate process metrics for exporter self-monitoring.
 
 The pod maps the static API address to its certificate-valid hostname in `/etc/hosts` because the built-in Kubernetes resolver intentionally serves cluster discovery instead of the LAN split-DNS view. Its Cilium policy therefore needs no DNS permission and permits only HTTPS to `10.1.100.201:8006`; the exporter does not require Kubernetes service-name resolution. Keep this mapping and the split-DNS record aligned if the Proxmox address changes.
 
@@ -19,7 +19,7 @@ kubectl -n observability create secret generic proxmox-exporter-auth \
 unset PROXMOX_EXPORTER_API_TOKEN
 ```
 
-The committed public Proxmox cluster CA has SHA-256 fingerprint `9B:01:0B:A0:FD:A6:91:18:00:72:18:D0:0F:94:AB:CE:2F:95:08:6E:A5:FF:20:10:57:23:C7:28:C0:59:EC:98` and expires on 2035-08-14. `REQUESTS_CA_BUNDLE` keeps certificate verification enabled against the certificate-valid internal name. Rotate the committed CA and verify its fingerprint before the Proxmox cluster CA expires or changes.
+Proxmox serves one browser-trusted ACME certificate for canonical hostname `pve.bohdal.name` and compatibility alias `pve.sk.bohdal.name`. `PVE_VERIFY_SSL=true` keeps TLS verification enabled through the image's system trust store; do not reintroduce a private-CA override unless the management endpoint intentionally stops using a publicly trusted certificate.
 
 ## Validation
 

@@ -27,7 +27,7 @@ spec:
         app.kubernetes.io/component: dns-authority
       annotations:
         sk-home/corefile-checksum: "633f76607fd46a17ae942c55ccdaf6cc81159ce494547b10383d14ff388f51d6"
-        sk-home/zones-checksum: "ef1cccf36fc88dff3a792ba1844806599f0c7f2f90c9707ff4b348b01eac0dd6"
+        sk-home/zones-checksum: "7d4a807180e38cd9292d8437b59d1fa33e16606567cc944621a8d822845d7bf9"
     spec:
       serviceAccountName: coredns
       automountServiceAccountToken: false
