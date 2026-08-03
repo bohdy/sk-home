@@ -134,16 +134,10 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gatewa
 
 The four manual apply inputs are mutually exclusive; setting more than one skips every mutation path. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
 
-The MikroTik certificate stack is an explicitly dispatched, production-gated renewal path. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired gateway certificate requires the narrowly scoped bootstrap option, after which every run verifies the RouterOS TLS connection:
+The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired gateway certificate requires the narrowly scoped bootstrap option, after which every run verifies the RouterOS TLS connection:
 
 ```sh
-gh workflow run terraform.yaml --ref main \
-  -f apply_gateway=false \
-  -f apply_gateway_snmp=false \
-  -f plan_gateway_snmp=false \
-  -f apply_gateway_dhcp=false \
-  -f apply_cloudflare=false \
-  -f apply_gateway_certificate=true \
+gh workflow run mikrotik-certificates.yaml --ref main \
   -f bootstrap_gateway_certificate=true
 ```
 

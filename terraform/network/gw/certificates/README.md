@@ -13,13 +13,7 @@ Use the existing Bitwarden values for the RouterOS automation identity and Cloud
 The workflow checks the certificate every Monday at 03:17 UTC. `acme_certificate.gateway` renews automatically once fewer than 30 days remain, and the RouterOS certificate is then replaced in the same immutable plan. The binary plan is intentionally never uploaded because it can contain sensitive certificate material. The existing `production` environment remains the approval boundary; configure its approval policy to match the desired level of unattended renewal.
 
 ```sh
-gh workflow run terraform.yaml --ref main \
-  -f apply_gateway=false \
-  -f apply_gateway_snmp=false \
-  -f plan_gateway_snmp=false \
-  -f apply_gateway_dhcp=false \
-  -f apply_cloudflare=false \
-  -f apply_gateway_certificate=true \
+gh workflow run mikrotik-certificates.yaml --ref main \
   -f bootstrap_gateway_certificate=false
 ```
 
