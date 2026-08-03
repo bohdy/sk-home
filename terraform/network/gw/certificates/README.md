@@ -4,11 +4,11 @@ This stack owns the trusted certificate served by the MikroTik gateway at `gw.bo
 
 The ACME account key, certificate private key, and RouterOS import payload are sensitive OpenTofu values stored only in the encrypted Cloudflare R2 state. They must never be added to Bitwarden, GitHub artifacts, Kubernetes Secrets, command lines, logs, or outputs.
 
-The pinned RouterOS provider cannot safely adopt the gateway's built-in `www-ssl` service because the REST API returns duplicate service names with unstable IDs. After OpenTofu imports a certificate, the stack runs the documented RouterOS command `ip service set www-ssl` through its authenticated REST execute endpoint. This narrow break-glass command sets only the certificate, port, address restriction, TLS version, and enabled state; it does not delete services or expose private material.
+The pinned RouterOS provider cannot safely adopt the gateway's built-in `www-ssl` service because the REST API returns duplicate service names with unstable IDs. It also cannot reliably find a certificate immediately after REST import because RouterOS does not return the requested name. The stack therefore uses documented RouterOS REST file and execute endpoints as a narrow break-glass installer: it uploads the ACME issuer, leaf, and key as temporary files; replaces only its two named certificate objects; selects the new leaf for `www-ssl`; and removes the temporary files. It changes no other certificate or service and never logs private material.
 
 The authoritative `dns.bohdal.name` server publishes DNS-01 TXT records after the ACME provider's default check window. `propagation_wait = 300` waits five minutes before validation so the weekly renewal run uses the same verified authoritative DNS path.
 
-RouterOS imports each PEM certificate as a separate certificate object. The stack therefore imports the ACME intermediate and leaf separately, with stable unique names. Those names must remain plan-time constants: deriving them from a newly issued PEM causes the RouterOS provider to query an empty name during its import callback. RouterOS will not create a second object under an existing stable name, so renewal replaces each certificate before reimporting it and then selects the new leaf for `www-ssl` in the same apply.
+RouterOS imports each PEM certificate as a separate certificate object. The installer imports the ACME intermediate and leaf separately under stable unique names. Each renewal removes only the previous objects with those names before importing the replacement, then selects the leaf for `www-ssl` in the same apply.
 
 ## Bootstrap and renewal
 
