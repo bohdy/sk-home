@@ -34,66 +34,27 @@ resource "acme_certificate" "gateway" {
   }
 }
 
-# Parse the intermediate certificate so its RouterOS object has the certificate
-# subject as its required common name without duplicating that value in config.
-data "routeros_x509" "gateway_issuer" {
-  data = acme_certificate.gateway.issuer_pem
+# Keep the certificate and temporary-file names stable so the replacement
+# script touches only the objects this stack owns.
+locals {
+  gateway_certificate_name        = "letsencrypt-gateway"
+  gateway_issuer_certificate_name = "letsencrypt-gateway-issuer"
+  gateway_leaf_file_name          = "tf-gateway-leaf.pem"
+  gateway_issuer_file_name        = "tf-gateway-issuer.pem"
+  gateway_key_file_name           = "tf-gateway-key.pem"
 }
 
-# Import the intermediate separately from the leaf. RouterOS creates one
-# certificate object per PEM in an import, while the provider locates the
-# imported object by name. Splitting the chain keeps that lookup unambiguous.
-resource "routeros_system_certificate" "gateway_issuer" {
-  # This must be known while OpenTofu creates the immutable plan. Do not derive
-  # it from the newly issued PEM: the provider's import callback would then
-  # query RouterOS with an empty name.
-  name        = "letsencrypt-gateway-issuer"
-  common_name = data.routeros_x509.gateway_issuer.common_name
-  trusted     = true
+# The RouterOS provider cannot reliably find a certificate after REST import:
+# RouterOS does not return the requested name. Use the documented REST file and
+# execute endpoints for this single unsupported provider operation. OpenTofu
+# still owns renewal cadence and reruns this installer only when the leaf
+# certificate changes.
+resource "terraform_data" "install_gateway_certificate" {
+  input = local.gateway_certificate_name
 
-  import {
-    cert_file_content = acme_certificate.gateway.issuer_pem
-  }
-
-  lifecycle {
-    # A stable RouterOS name cannot be created alongside an object with the
-    # same name. Replace the issuer before recreation rather than relying on
-    # RouterOS to allocate a suffixed, ambiguous name.
-    replace_triggered_by = [acme_certificate.gateway.issuer_pem]
-  }
-}
-
-# Import the ACME leaf and its matching private key directly into the gateway.
-# A static object name is known at plan time and uniquely identifies this
-# single-PEM import to the RouterOS provider.
-resource "routeros_system_certificate" "gateway" {
-  name        = "letsencrypt-gateway"
-  common_name = acme_certificate.gateway.common_name
-  trusted     = true
-
-  import {
-    cert_file_content = acme_certificate.gateway.certificate_pem
-    key_file_content  = acme_certificate.gateway.private_key_pem
-  }
-
-  lifecycle {
-    # See the issuer lifecycle above. The replacement occurs before the
-    # dependent service command selects the newly imported certificate.
-    replace_triggered_by = [acme_certificate.gateway.certificate_pem]
-  }
-
-  depends_on = [routeros_system_certificate.gateway_issuer]
-}
-
-# The provider cannot read the gateway's built-in www-ssl service because
-# RouterOS returns duplicate names with unstable IDs. Use RouterOS's documented
-# `ip service set www-ssl` command after importing the certificate instead of
-# attempting provider adoption. This is a narrow, documented break-glass path
-# that preserves the intended declarative certificate lifecycle.
-resource "terraform_data" "configure_www_ssl" {
-  input = routeros_system_certificate.gateway.name
-
-  triggers_replace = [acme_certificate.gateway.certificate_pem]
+  # Store only a digest in the plan and state trigger; the PEM and private key
+  # remain provisioner environment values and never appear in plan output.
+  triggers_replace = [sha256(acme_certificate.gateway.certificate_pem)]
 
   provisioner "local-exec" {
     # The certificate workflow runs Linux self-hosted runners. Bash keeps the
@@ -102,28 +63,58 @@ resource "terraform_data" "configure_www_ssl" {
 
     command = <<-EOT
       set -euo pipefail
-      payload="$(jq -cn --arg certificate "$ROUTEROS_CERTIFICATE_NAME" '{
-        script: (
-          "/ip/service/set www-ssl port=443 address=10.0.0.0/8 "
-          + "certificate=" + $certificate
-          + " tls-version=only-1.2 disabled=no"
-        )
-      }')"
-      curl --fail --silent --show-error ${var.mikrotik_insecure ? "--insecure" : ""} \
-        --user "$ROUTEROS_USERNAME:$ROUTEROS_PASSWORD" \
-        --header "content-type: application/json" \
-        --data "$payload" \
-        "${trimsuffix(var.mikrotik_hosturl, "/")}/rest/execute"
+      routeros_url="${trimsuffix(var.mikrotik_hosturl, "/")}/rest"
+      curl_options=(--fail --silent --show-error --user "$ROUTEROS_USERNAME:$ROUTEROS_PASSWORD" --header "content-type: application/json")
+      if [ "$ROUTEROS_INSECURE" = "true" ]; then
+        curl_options+=(--insecure)
+      fi
+
+      upload_file() {
+        local file_name="$1"
+        local file_contents="$2"
+        local payload
+        payload="$(jq -cn --arg name "$file_name" --arg contents "$file_contents" '{name: $name, contents: $contents}')"
+        curl "$${curl_options[@]}" --data "$payload" "$routeros_url/file" >/dev/null
+      }
+
+      upload_file "$ROUTEROS_ISSUER_FILE_NAME" "$ROUTEROS_ISSUER_PEM"
+      upload_file "$ROUTEROS_LEAF_FILE_NAME" "$ROUTEROS_LEAF_PEM"
+      upload_file "$ROUTEROS_KEY_FILE_NAME" "$ROUTEROS_PRIVATE_KEY_PEM"
+
+      payload="$(jq -cn \
+        --arg leaf_name "$ROUTEROS_CERTIFICATE_NAME" \
+        --arg issuer_name "$ROUTEROS_ISSUER_CERTIFICATE_NAME" \
+        --arg leaf_file "$ROUTEROS_LEAF_FILE_NAME" \
+        --arg issuer_file "$ROUTEROS_ISSUER_FILE_NAME" \
+        --arg key_file "$ROUTEROS_KEY_FILE_NAME" \
+        '{script: (
+          ":foreach id in=[/certificate/find where name=\\\"" + $leaf_name + "\\\"] do={/certificate/remove $id}; "
+          + ":foreach id in=[/certificate/find where name=\\\"" + $issuer_name + "\\\"] do={/certificate/remove $id}; "
+          + "/certificate/import file-name=" + $issuer_file + " name=" + $issuer_name + " trusted=yes; "
+          + "/certificate/import file-name=" + $leaf_file + " name=" + $leaf_name + " trusted=yes; "
+          + "/certificate/import file-name=" + $key_file + " name=" + $leaf_name + "; "
+          + "/ip/service/set www-ssl port=443 address=10.0.0.0/8 certificate=" + $leaf_name + " tls-version=only-1.2 disabled=no; "
+          + ":foreach id in=[/file/find where name=\\\"" + $issuer_file + "\\\"] do={/file/remove $id}; "
+          + ":foreach id in=[/file/find where name=\\\"" + $leaf_file + "\\\"] do={/file/remove $id}; "
+          + ":foreach id in=[/file/find where name=\\\"" + $key_file + "\\\"] do={/file/remove $id}"
+        )}')"
+      curl "$${curl_options[@]}" --data "$payload" "$routeros_url/execute" >/dev/null
     EOT
 
     environment = {
       # Keep credentials in the process environment, never in the command,
       # plan artifact, OpenTofu output, or GitHub Actions log text.
-      ROUTEROS_USERNAME         = var.mikrotik_username
-      ROUTEROS_PASSWORD         = var.mikrotik_password
-      ROUTEROS_CERTIFICATE_NAME = routeros_system_certificate.gateway.name
+      ROUTEROS_USERNAME                = var.mikrotik_username
+      ROUTEROS_PASSWORD                = var.mikrotik_password
+      ROUTEROS_INSECURE                = tostring(var.mikrotik_insecure)
+      ROUTEROS_CERTIFICATE_NAME        = local.gateway_certificate_name
+      ROUTEROS_ISSUER_CERTIFICATE_NAME = local.gateway_issuer_certificate_name
+      ROUTEROS_LEAF_FILE_NAME          = local.gateway_leaf_file_name
+      ROUTEROS_ISSUER_FILE_NAME        = local.gateway_issuer_file_name
+      ROUTEROS_KEY_FILE_NAME           = local.gateway_key_file_name
+      ROUTEROS_LEAF_PEM                = acme_certificate.gateway.certificate_pem
+      ROUTEROS_ISSUER_PEM              = acme_certificate.gateway.issuer_pem
+      ROUTEROS_PRIVATE_KEY_PEM         = acme_certificate.gateway.private_key_pem
     }
   }
-
-  depends_on = [routeros_system_certificate.gateway]
 }
