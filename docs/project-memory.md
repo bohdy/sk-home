@@ -2,6 +2,10 @@
 
 This file records operational facts and future-facing notes that should survive individual implementation threads. Keep entries concise, dated, and tied to concrete follow-up decisions.
 
+## 2026-08-03 Infrastructure verification rule
+
+Do not infer live infrastructure state from naming conventions, archived configuration, a successful OpenTofu plan, or an unverified configuration reference. Before creating or applying a change that depends on existing infrastructure, obtain and record direct evidence for every prerequisite (for example, a RouterOS DHCP server, its address pool, VLAN interface, network options, and available lease address). A successful plan can validate syntax and state interactions without proving that an assumed live dependency exists or is correctly configured.
+
 ## 2026-06-09 DNS bring-up
 
 Flux bootstrap for the Talos cluster succeeded with Flux v2.8.8 under `kubernetes/flux/clusters/sk-talos`.
