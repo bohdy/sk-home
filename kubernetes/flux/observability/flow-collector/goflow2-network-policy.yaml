@@ -1,0 +1,31 @@
+# The collector accepts IPFIX datagrams only from the private homelab range
+# and serves metrics only to VMAgent. The stdout handoff gives it no outbound
+# dependency at all, so egress is denied entirely rather than guessed at.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goflow2
+  namespace: observability
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: goflow2
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+      ports:
+        - port: 2055
+          protocol: UDP
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 8080
+          protocol: TCP
+  # Empty egress rules with the Egress policy type deny all outbound traffic.
+  egress: []

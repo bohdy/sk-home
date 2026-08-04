@@ -1,0 +1,18 @@
+# Scrape goflow2's collector metrics so ingestion health can be alerted on
+# independently of the Vector ClickHouse path.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: goflow2
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goflow2
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 2000
+      seriesLimit: 2000

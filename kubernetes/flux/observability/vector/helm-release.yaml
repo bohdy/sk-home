@@ -159,10 +159,21 @@ spec:
           read_from: beginning
           max_line_bytes: 1048576
       transforms:
+        # The goflow2 collector is deliberately NOT excluded from container-log
+        # collection: its NDJSON flow records travel on stdout and must be read
+        # here. The route picks out that single stream; everything else,
+        # including goflow2's own stderr diagnostics, continues unchanged to
+        # the normal VictoriaLogs path.
+        route_flows:
+          type: route
+          inputs:
+            - kubernetes_logs
+          route:
+            flows: '.kubernetes.container_name == "flow" && .stream == "stdout"'
         exclude_annotated:
           type: filter
           inputs:
-            - kubernetes_logs
+            - route_flows._unmatched
           condition: .kubernetes.pod_annotations."vector.dev/exclude" != "true"
         normalize_kubernetes:
           type: remap
@@ -179,6 +190,43 @@ spec:
             .container = .kubernetes.container_name
             .node = .kubernetes.pod_node_name
             .workload = .kubernetes.pod_owner
+        # goflow2 emits one JSON object per line on stdout. Parse it into
+        # top-level fields matching the committed flows.flow schema and strip
+        # the container-log metadata the schema does not own so the JSONEachRow
+        # payload stays lean. Unparsed lines are kept with parse_status and
+        # parse_error instead of being dropped; skip_unknown_fields on the
+        # sink lets those rows land with null flow columns for post-hoc triage.
+        parse_flow:
+          type: remap
+          inputs:
+            - route_flows.flows
+          source: |
+            received_at = now()
+            raw_message = to_string(.message) ?? encode_json(.message)
+            parsed, parse_error = parse_json(raw_message)
+
+            if parse_error == null && is_object(parsed) {
+              . = merge(., object!(parsed))
+              .parse_status = "parsed"
+            } else {
+              .parse_status = "unparsed"
+              .parse_error = if parse_error == null {
+                "Flow record is not a JSON object"
+              } else {
+                to_string(parse_error)
+              }
+            }
+
+            .cluster = "sk-talos"
+            .site = "sk"
+            .source_type = "ipfix"
+            .received_at = received_at
+            .timestamp = received_at
+
+            del(.message)
+            del(.kubernetes)
+            del(.file)
+            del(.stream)
         # Bound each sender independently at ten times the initial planning
         # rate. Do not emit sender keys on discard metrics because arbitrary
         # source addresses would create attacker-controlled cardinality.
@@ -353,6 +401,75 @@ spec:
       # Unit tests exercise the normalization contract without opening sockets
       # or depending on the live VictoriaLogs backend.
       tests:
+        - name: route goflow2 flow stdout to the ClickHouse path
+          inputs:
+            - insert_at: route_flows
+              type: log
+              log_fields:
+                kubernetes:
+                  container_name: flow
+                stream: stdout
+          outputs:
+            - extract_from: route_flows.flows
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.kubernetes.container_name, "flow")
+                    assert_eq!(.stream, "stdout")
+        - name: route every other container stream to the unmatched path
+          inputs:
+            - insert_at: route_flows
+              type: log
+              log_fields:
+                kubernetes:
+                  container_name: vector
+                stream: stderr
+          outputs:
+            - extract_from: route_flows._unmatched
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.kubernetes.container_name, "vector")
+        - name: parse goflow2 flow JSON
+          inputs:
+            - insert_at: parse_flow
+              type: log
+              log_fields:
+                kubernetes:
+                  container_name: flow
+                message: '{"type":"IPFIX","time_received_ns":1787500000000000000,"sampler_address":"10.1.20.1","bytes":1420,"packets":1,"src_addr":"10.21.162.142","dst_addr":"93.184.216.34","etype":"IPv4","proto":"TCP","src_port":443,"dst_port":54432,"in_if":8,"out_if":9,"flow_direction":0,"tcp_flags":24}'
+                stream: stdout
+          outputs:
+            - extract_from: parse_flow
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "parsed")
+                    assert_eq!(.source_type, "ipfix")
+                    assert_eq!(.cluster, "sk-talos")
+                    assert_eq!(.site, "sk")
+                    assert_eq!(.src_addr, "10.21.162.142")
+                    assert_eq!(.dst_addr, "93.184.216.34")
+                    assert_eq!(.proto, "TCP")
+                    assert_eq!(.etype, "IPv4")
+                    assert_eq!(.src_port, 443)
+                    assert_eq!(.sampler_address, "10.1.20.1")
+                    assert!(is_timestamp(.timestamp))
+                    assert!(!exists(.kubernetes))
+                    assert!(!exists(.message))
+        - name: retain malformed flow JSON
+          inputs:
+            - insert_at: parse_flow
+              type: log
+              log_fields:
+                message: "not-json"
+          outputs:
+            - extract_from: parse_flow
+              conditions:
+                - type: vrl
+                  source: |
+                    assert_eq!(.parse_status, "unparsed")
+                    assert!(exists(.parse_error))
         - name: normalize Talos service log
           inputs:
             - insert_at: parse_talos
@@ -469,6 +586,33 @@ spec:
           buffer:
             type: disk
             max_size: 1073741824
+            when_full: block
+          request:
+            retry_initial_backoff_secs: 1
+            timeout_secs: 30
+          healthcheck:
+            enabled: true
+        # Flow records land in the repository-owned flows.flow table. The
+        # ClickHouse server drops fields it does not know (skip_unknown_fields),
+        # so a schema in review never breaks inserts. Disk buffering matches
+        # the VictoriaLogs sink so a ClickHouse outage degrades to retries
+        # instead of dropping records.
+        clickhouse_flows:
+          type: clickhouse
+          inputs:
+            - parse_flow
+          endpoint: http://clickhouse.observability.svc.cluster.local:8123
+          database: flows
+          table: flow
+          format: json_each_row
+          skip_unknown_fields: true
+          compression: gzip
+          batch:
+            max_bytes: 1048576
+            timeout_secs: 5
+          buffer:
+            type: disk
+            max_size: 268435456
             when_full: block
           request:
             retry_initial_backoff_secs: 1

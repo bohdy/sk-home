@@ -1,0 +1,18 @@
+# ClusterIP-only HTTP endpoint. The NetworkPolicy admits only Vector, Grafana,
+# and the DDL Job; the native protocol stays off until a consumer needs it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: flow-collection
+spec:
+  selector:
+    app.kubernetes.io/name: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+      protocol: TCP

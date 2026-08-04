@@ -1,0 +1,26 @@
+# Cilium advertises the reserved IPFIX VIP over BGP. Cluster traffic policy is
+# deliberate: exporter identity travels inside the IPFIX sampler_address field,
+# so preserving the network-layer source IP is not required the way it is for
+# syslog, and Cluster mode keeps UDP forwarding robust across node restarts.
+apiVersion: v1
+kind: Service
+metadata:
+  name: goflow2
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: goflow2
+    app.kubernetes.io/component: flow-collection
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.57"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+  selector:
+    app.kubernetes.io/name: goflow2
+  ports:
+    - name: netflow-udp
+      port: 2055
+      targetPort: netflow-udp
+      protocol: UDP

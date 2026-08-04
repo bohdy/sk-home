@@ -1,0 +1,18 @@
+# The collector's own /metrics and /__health endpoints stay on a ClusterIP
+# service; only the IPFIX datagram port is exposed on the LoadBalancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: goflow2-metrics
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: goflow2
+    app.kubernetes.io/component: flow-collection
+spec:
+  selector:
+    app.kubernetes.io/name: goflow2
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
