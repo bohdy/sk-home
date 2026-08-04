@@ -629,6 +629,10 @@ jobs:
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
             2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
@@ -648,6 +652,10 @@ jobs:
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
           TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
       - name: Upload gateway IPFIX plan
         uses: actions/upload-artifact@v7
@@ -696,6 +704,10 @@ jobs:
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
             2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
@@ -711,6 +723,10 @@ jobs:
           TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
           TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
           TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
   cloudflare-apply:
     name: Apply reviewed Cloudflare plan
