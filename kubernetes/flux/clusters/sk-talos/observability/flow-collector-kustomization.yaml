@@ -1,0 +1,22 @@
+# Flow collection depends on the storage class that backs the retained
+# ClickHouse claim and on Cilium for the LoadBalancer VIP and NetworkPolicies;
+# the base stage guarantees the namespace policy already exists.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-flow-collector
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 10m
+  retryInterval: 2m
+  path: ./kubernetes/flux/observability/flow-collector
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-base
+    - name: cilium
+    - name: storage-synology-csi
