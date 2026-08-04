@@ -4,6 +4,11 @@
 # complete WAN view rather than a sampled subset. The provider resource always
 # enables the traffic-flow system on create, so no separate enabled toggle is
 # managed here.
+import {
+  to = routeros_ip_traffic_flow.wan
+  id = "*0"
+}
+
 resource "routeros_ip_traffic_flow" "wan" {
   provider = routeros.gw
 
@@ -14,6 +19,11 @@ resource "routeros_ip_traffic_flow" "wan" {
 # the exact casing the provider validates ("IPFIX"); template refresh settings
 # match the flow-collection design so goflow2 always has a fresh IPFIX
 # template for its field mapping.
+import {
+  to = routeros_ip_traffic_flow_target.goflow2
+  id = "*0"
+}
+
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 
