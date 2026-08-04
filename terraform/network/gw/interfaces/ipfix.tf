@@ -9,17 +9,22 @@ resource "routeros_ip_traffic_flow" "wan" {
   interfaces = "ether8"
 }
 
-# The collector service VIP is the only export target. The version value uses
-# the exact casing the provider validates ("IPFIX"); template refresh settings
-# match the flow-collection design so goflow2 always has a fresh IPFIX
-# template for its field mapping.
+# The collector service VIP is the only export target. The provider's
+# ValidateFunc only accepts uppercase "IPFIX" while the RouterOS REST API
+# expects lowercase "ipfix", so the version field is managed manually on the
+# gateway while Tofu owns everything else. After the initial apply, set
+# version=ipfix on the gateway: /ip traffic-flow target set [find] version=ipfix
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 
   dst_address         = "10.1.30.57"
   port                = 2055
-  version             = "IPFIX"
+  version             = "9"
   v9_template_refresh = 20
   v9_template_timeout = "5m"
   disabled            = false
+
+  lifecycle {
+    ignore_changes = [version]
+  }
 }
