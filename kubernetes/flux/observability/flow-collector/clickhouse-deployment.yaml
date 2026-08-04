@@ -1,0 +1,90 @@
+# Single-replica ClickHouse on the retained PVC. The distroless image already
+# declares the clickhouse user (UID/GID 101), the /var/lib/clickhouse data
+# volume, and a /var/log/clickhouse-server volume, so the pod only needs to
+# point the data volume at the PVC and provide a writable log directory. No
+# custom server config: the image default listens on all interfaces for HTTP
+# 8123 and the NetworkPolicy restricts callers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: flow-collection
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/component: flow-collection
+    spec:
+      automountServiceAccountToken: false
+      # Prefer a general-purpose worker without making it a hard dependency.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: clickhouse
+          # 26.7.2.59 is the latest 26.7 patch; the distroless variant runs as
+          # UID 101 and needs no init scripts. amd64 manifest digest verified
+          # against the multi-arch OCI index.
+          image: clickhouse/clickhouse-server:26.7.2.59-distroless@sha256:38bfbc900cb54ab66bb8c6e8207325f4b27d6b04b3736c113f22dba16e6fb379
+          ports:
+            - name: http
+              containerPort: 8123
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsUser: 101
+            runAsGroup: 101
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: log
+              mountPath: /var/log/clickhouse-server
+      securityContext:
+        # Make the iSCSI-backed filesystem group-writable for the clickhouse
+        # user without relying on any image-internal ownership.
+        fsGroup: 101
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: clickhouse-data
+        - name: log
+          emptyDir: {}

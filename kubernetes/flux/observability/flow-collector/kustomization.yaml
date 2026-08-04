@@ -1,0 +1,25 @@
+# Generate the DDL script with a content hash so every reviewed schema change
+# triggers a fresh Job object; the Job itself stays idempotent because the SQL
+# uses IF NOT EXISTS. The DDL ConfigMap is the only generated resource here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - clickhouse-persistent-volume-claim.yaml
+  - clickhouse-deployment.yaml
+  - clickhouse-service.yaml
+  - clickhouse-ddl-job.yaml
+  - goflow2-deployment.yaml
+  - goflow2-lb-service.yaml
+  - goflow2-metrics-service.yaml
+  - goflow2-vm-service-scrape.yaml
+  - goflow2-network-policy.yaml
+  - clickhouse-network-policy.yaml
+configMapGenerator:
+  - name: clickhouse-ddl
+    namespace: observability
+    files:
+      - clickhouse-init.sql
+generatorOptions:
+  labels:
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: flow-collection
