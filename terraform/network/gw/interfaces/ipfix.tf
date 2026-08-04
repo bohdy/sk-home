@@ -1,14 +1,8 @@
 # Enable IPFIX accounting on the WAN interface and export records to the
 # in-cluster goflow2 collector. Timeouts stay at RouterOS defaults because no
 # measured need has appeared yet; packet sampling stays off so records are a
-# complete WAN view rather than a sampled subset. The provider resource always
-# enables the traffic-flow system on create, so no separate enabled toggle is
-# managed here.
-import {
-  to = routeros_ip_traffic_flow.wan
-  id = "*0"
-}
-
+# complete WAN view rather than a sampled subset. The traffic-flow system is a
+# RouterOS singleton, so the apply updates the existing resource idempotently.
 resource "routeros_ip_traffic_flow" "wan" {
   provider = routeros.gw
 
@@ -19,11 +13,6 @@ resource "routeros_ip_traffic_flow" "wan" {
 # the exact casing the provider validates ("IPFIX"); template refresh settings
 # match the flow-collection design so goflow2 always has a fresh IPFIX
 # template for its field mapping.
-import {
-  to = routeros_ip_traffic_flow_target.goflow2
-  id = "*0"
-}
-
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 
