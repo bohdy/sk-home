@@ -4,6 +4,11 @@
 # complete WAN view rather than a sampled subset. The provider resource always
 # enables the traffic-flow system on create, so no separate enabled toggle is
 # managed here.
+import {
+  to = routeros_ip_traffic_flow.wan
+  id = "*0"
+}
+
 resource "routeros_ip_traffic_flow" "wan" {
   provider = routeros.gw
 
