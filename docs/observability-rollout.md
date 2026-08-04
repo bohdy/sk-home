@@ -292,6 +292,34 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 - Live families included node, guest, storage, uptime, resource use, and backup coverage. Acceptance measured one node, 15 guests, four storage objects, and 15 guests not covered by a configured backup job; exporter request errors did not increase after the ACL correction.
 - Every Proxmox dashboard expression matched a live metric family, including `pve_up`, memory, disk, and `pve_not_backed_up_total`. No API token value appeared in manifests, pod arguments, files, logs, metrics, or the Git diff.
 
+## Flow collection stage
+
+The IPFIX flow collection stage follows `docs/flow-collection-design.md`. It ships in four stacked milestone PRs that merge in order:
+
+1. Collector pipeline: goflow2 and ClickHouse manifests, Vector handoff, and the `observability-flow-collector` Flux component.
+2. Grafana: pinned ClickHouse plugin and datasource, `sk-flow` dashboard, ingestion-health panels, and the flow alert group.
+3. Gateway export: RouterOS traffic-flow resources and the mutually exclusive `apply_gateway_ipfix` workflow path.
+4. Documentation promotion of the design contract.
+
+Merge sequence and bring-up:
+
+- Merge PRs 1-3 in order. The collector pipeline deploys `clickhouse`, `goflow2`, and the `clickhouse-ddl` Job in the `observability` namespace; the Job applies the committed `flows.flow` schema and 30-day TTL before writers start. goflow2 is reachable on the reserved `10.1.30.57` VIP, UDP/2055.
+- `FlowCollectorRecordsStopped` fires warning-level from collector bring-up until the gateway exports flows; it is the intended rollout signal, not noise.
+- On `main`, dispatch the OpenTofu workflow with only `apply_gateway_ipfix` enabled. The targeted plan is reviewed and applied against the production environment; the workflow applies only the uploaded immutable artifact.
+- Verify WAN records arrive with expected fields (sampler address from the gateway, `etype`/`proto` names, `src_addr`/`dst_addr` populated), the `sk-flow` dashboard returns data, and ingestion-health panels show collector packets and ClickHouse sink deliveries.
+- Confirm the UniFi console remains on `.56` and the collector VIP is unique in live Cilium LB IPAM and the committed DNS inventory.
+
+Acceptance criteria per the design contract:
+
+- Records from the WAN path present with expected fields.
+- `TTL timestamp + INTERVAL 30 DAY` present on `flows.flow` and survives a ClickHouse restart.
+- VIP unique; UniFi console remains on `.56`.
+- `apply_gateway_ipfix` mutual exclusion and immutable apply path work.
+- `observability-capacity` quota remains healthy with the added 100 GiB claim and memory requests.
+- No dropped records, repeated restarts, or unexpected exposure during soak.
+
+Rollback: suspend or revert the `observability-flow-collector` Flux Kustomization while retaining the ClickHouse PVC. Never delete the retained PV or the Synology LUN as part of routine rollback; the gateway target removal is a separate reviewed OpenTofu apply.
+
 ## Remaining stages
 
 The first observability release is accepted. Follow-up work must use a fresh branch for each coherent deferred item. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
