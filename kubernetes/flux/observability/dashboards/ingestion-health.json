@@ -151,6 +151,13 @@
           "legendFormat": "{{host}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "100 * vector_buffer_size_bytes{buffer_id=\"clickhouse_flows\"} / vector_buffer_max_size_bytes{buffer_id=\"clickhouse_flows\"}",
+          "legendFormat": "clickhouse {{host}}",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Vector buffer utilization",
@@ -213,6 +220,108 @@
       ],
       "title": "Failed scrape targets",
       "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "description": "goflow2 collector packets received and dropped, as observed by VMAgent.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "packets/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(flow_traffic_packets_total[5m]))",
+          "legendFormat": "packets",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(flow_dropped_packets_total[5m]))",
+          "legendFormat": "dropped",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "IPFIX collector",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "description": "Flow records delivered by the Vector ClickHouse sink and its error rate.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "records/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(vector_component_sent_events_total{component_id=\"clickhouse_flows\"}[5m]))",
+          "legendFormat": "sent",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(vector_component_errors_total{component_id=\"clickhouse_flows\"}[5m]))",
+          "legendFormat": "errors",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Vector ClickHouse sink",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -222,7 +331,8 @@
     "ingestion",
     "victoriametrics",
     "victorialogs",
-    "vector"
+    "vector",
+    "ipfix"
   ],
   "templating": {
     "list": []

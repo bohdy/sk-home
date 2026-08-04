@@ -14,6 +14,7 @@ configMapGenerator:
       - ingestion-health.json
       - cilium-bgp.json
       - syslog.json
+      - sk-flow.json
 generatorOptions:
   labels:
     grafana_dashboard: "1"
