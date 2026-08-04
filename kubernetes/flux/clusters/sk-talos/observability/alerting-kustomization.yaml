@@ -21,4 +21,5 @@ spec:
     - name: observability-logs
     - name: observability-vector
     - name: observability-blackbox
+    - name: observability-flow-collector
     - name: observability-snmp

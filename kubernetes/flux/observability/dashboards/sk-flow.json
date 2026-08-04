@@ -1,0 +1,335 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "WAN flow analytics backed by ClickHouse flow records collected from the MikroTik gateway.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Bytes per second across all flow records; buckets are fixed at one minute so the per-second rate is exact.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "WAN traffic",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Flow records received per second from the gateway.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, count() / 60 AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Flows",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Traffic split by transport protocol.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, proto AS protocol, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, protocol ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Traffic by protocol",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Source addresses ordered by volume; on a WAN-only collector this shows remote peers and local hosts.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "packets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flows"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT src_addr AS source, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY src_addr ORDER BY bytes DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top source addresses",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Destination ports ordered by volume; useful for spotting services the homelab reaches externally.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flows"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 5,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT dst_port AS port, count() AS flows, sum(bytes) AS bytes FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY dst_port ORDER BY bytes DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top destination ports",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "ClickHouse"
+      },
+      "description": "Traffic classified by which side of the WAN interface the source address belongs to.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "LAN vs WAN sources",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": [
+    "homelab",
+    "flows",
+    "ipfix",
+    "clickhouse"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Flow Analytics",
+  "uid": "sk-flow",
+  "version": 1
+}

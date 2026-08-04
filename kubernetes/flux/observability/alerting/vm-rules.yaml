@@ -83,6 +83,43 @@ spec:
             summary: Vector log buffer is nearly full
             description: 'The VictoriaLogs buffer on {{ $labels.host }} has remained above 90% for five minutes.'
 
+    - name: homelab-flow
+      # Flow collection is a single-replica pipeline, so every stage has a
+      # direct signal: deployment availability for goflow2, its own processed
+      # counter for records stopping, and the Vector sink error counter for
+      # write failures. The records-stopped alert intentionally requires the
+      # counter series to exist, so it does not double-report a down collector.
+      rules:
+        - alert: FlowCollectorDown
+          expr: kube_deployment_status_replicas_available{namespace="observability",deployment="goflow2"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: flow
+          annotations:
+            summary: Flow collector is unavailable
+            description: goflow2 has not had an available replica for five minutes.
+
+        - alert: FlowCollectorRecordsStopped
+          expr: sum by (cluster, site) (increase(flow_process_nf_total[10m])) == 0
+          for: 10m
+          labels:
+            severity: warning
+            component: flow
+          annotations:
+            summary: No flow records received
+            description: The goflow2 collector has processed no flow records for ten minutes.
+
+        - alert: FlowCollectorWriteFailure
+          expr: sum by (cluster, site) (increase(vector_component_errors_total{component_id="clickhouse_flows"}[5m])) > 0
+          for: 2m
+          labels:
+            severity: warning
+            component: flow
+          annotations:
+            summary: Flow records are not reaching ClickHouse
+            description: The Vector ClickHouse sink has been reporting errors for at least two minutes.
+
     - name: homelab-victorialogs
       rules:
         - alert: VictoriaLogsRowsDropped
