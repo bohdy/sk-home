@@ -43,8 +43,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, sum(bytes) / 60 AS traffic FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -86,8 +86,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, count() / 60 AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, count() / 60 AS flows FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -129,8 +129,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, proto AS protocol, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, protocol ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, proto AS protocol, sum(bytes) / 60 AS traffic FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY time, protocol ORDER BY time",
           "refId": "A"
         }
       ],
@@ -201,8 +201,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT src_addr AS source, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY src_addr ORDER BY bytes DESC LIMIT 20",
+          "format": 0,
+          "rawSql": "SELECT src_addr AS source, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY src_addr ORDER BY bytes DESC LIMIT 20",
           "refId": "A"
         }
       ],
@@ -261,8 +261,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT dst_port AS port, count() AS flows, sum(bytes) AS bytes FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY dst_port ORDER BY bytes DESC LIMIT 20",
+          "format": 0,
+          "rawSql": "SELECT dst_port AS port, count() AS flows, sum(bytes) AS bytes FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY dst_port ORDER BY bytes DESC LIMIT 20",
           "refId": "A"
         }
       ],
@@ -304,8 +304,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE timestamp >= toDateTime($__from / 1000) AND timestamp <= toDateTime($__to / 1000) GROUP BY time, direction ORDER BY time",
           "refId": "A"
         }
       ],
