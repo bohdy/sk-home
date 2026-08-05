@@ -11,7 +11,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Bytes per second across all flow records; buckets are fixed at one minute so the per-second rate is exact.",
       "fieldConfig": {
@@ -54,7 +54,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Flow records received per second from the gateway.",
       "fieldConfig": {
@@ -97,7 +97,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Traffic split by transport protocol.",
       "fieldConfig": {
@@ -140,7 +140,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Source addresses ordered by volume; on a WAN-only collector this shows remote peers and local hosts.",
       "fieldConfig": {
@@ -212,7 +212,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Destination ports ordered by volume; useful for spotting services the homelab reaches externally.",
       "fieldConfig": {
@@ -272,7 +272,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "description": "Traffic classified by which side of the WAN interface the source address belongs to.",
       "fieldConfig": {
@@ -322,7 +322,20 @@
     "clickhouse"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "ClickHouse",
+        "name": "DS_CLICKHOUSE",
+        "options": [],
+        "query": "grafana-clickhouse-datasource",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
