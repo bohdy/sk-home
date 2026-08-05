@@ -22,6 +22,7 @@ This plan is implemented locally on branch `codex/continue-flow-grafana-cleanup`
 - `observability-flow-collector` is NotReady because the existing `Job.batch "clickhouse-ddl"` has an immutable pod template.
 - The existing Job completed successfully on `2026-08-04T18:51:03Z`.
 - `clickhouse-init.sql` is idempotent through `IF NOT EXISTS`.
+- ClickHouse 26.7 rejects the previous combined database-and-table HTTP POST with `Multi-statements are not allowed`; the live Job reached ClickHouse but failed with HTTP 400.
 - The generated ConfigMap is named `clickhouse-ddl-<content-hash>`.
 - A Kustomize replacement cannot see the generated hash before the name-hash transformer runs, so the failed replacement was replaced with a custom `nameReference` for `Job.metadata.name`.
 - Local rendering now contains `Job clickhouse-ddl-4c9c52hdhg`, `ConfigMap clickhouse-ddl-4c9c52hdhg`, and a matching volume reference.
@@ -44,6 +45,7 @@ The Grafana datasource sidecar currently sends reload requests to HTTP while Gra
 
 - Keep the one-shot `Job` and make its name derive from the generated ConfigMap hash rather than changing the pod template of the static `clickhouse-ddl` Job.
 - Use `kustomizeconfig.yaml` to treat the Job's base name as a reference to the generated `clickhouse-ddl` ConfigMap; this is required because the generator hash is applied after ordinary replacements.
+- Keep the database and table DDL in separate one-statement files and post them sequentially because ClickHouse's HTTP interface rejects multi-statement requests.
 - Render the overlay and require the same `clickhouse-ddl-<content-hash>` name for the Job, ConfigMap, and volume reference.
 - Let Flux prune the old static Job and create the new Job through the declared Kustomization; do not delete it manually unless reconciliation proves unable to complete the transition.
 - Confirm the new Job completes and `observability-flow-collector` becomes Ready.
@@ -73,6 +75,7 @@ The Grafana datasource sidecar currently sends reload requests to HTTP while Gra
 - `kubernetes/flux/observability/flow-collector/clickhouse-ddl-job.yaml`
 - `kubernetes/flux/observability/flow-collector/kustomization.yaml`
 - `kubernetes/flux/observability/flow-collector/kustomizeconfig.yaml`
+- `kubernetes/flux/observability/flow-collector/clickhouse-database.sql`
 - `kubernetes/flux/observability/flow-collector/clickhouse-init.sql`
 - `kubernetes/flux/clusters/sk-talos/observability/flow-collector-kustomization.yaml`
 - `kubernetes/flux/observability/metrics/helm-release.yaml`

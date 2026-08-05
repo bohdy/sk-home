@@ -18,6 +18,7 @@ configMapGenerator:
   - name: clickhouse-ddl
     namespace: observability
     files:
+      - clickhouse-database.sql
       - clickhouse-init.sql
 generatorOptions:
   labels:
