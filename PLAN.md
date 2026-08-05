@@ -2,11 +2,11 @@
 
 ## Status
 
-This plan is implemented locally on branch `codex/continue-flow-grafana-cleanup`; live reconciliation remains pending publication through the normal pull-request path.
+This plan is complete on `main` after PRs #252, #253, #254, and #255; live reconciliation and acceptance checks passed.
 
-- `main` was synchronized with `origin/main` at `27339ff` before this branch was created.
-- PR #251 is merged; its dashboard and metrics changes are already reconciled.
-- No live deletion or mutation has been performed for this cleanup task.
+- `main` was synchronized with `origin/main` at `27339ff` before the cleanup branches were created.
+- PRs #251 through #255 are merged; Flux applied the final revision `main@sha1:848321995d9b199ba30a25f65afd5f5489e8cae1`.
+- No imperative live deletion or mutation was performed; Flux applied the declared Job and datasource provisioning changes.
 - The task-created changes now cover the hashed DDL Job, datasource migration, final datasource UID, dashboard references, and related documentation.
 - Leave unrelated untracked files `.devcontainer/devcontainer-lock.json`, `.opencode/`, `ops/`, and `scripts/gha-runner-cleanup.sh` untouched.
 
@@ -25,11 +25,11 @@ This plan is implemented locally on branch `codex/continue-flow-grafana-cleanup`
 - ClickHouse 26.7 rejects the previous combined database-and-table HTTP POST with `Multi-statements are not allowed`; the live Job reached ClickHouse but failed with HTTP 400.
 - The generated ConfigMap is named `clickhouse-ddl-<content-hash>`.
 - A Kustomize replacement cannot see the generated hash before the name-hash transformer runs, so the failed replacement was replaced with a custom `nameReference` for `Job.metadata.name`.
-- Local rendering now contains `Job clickhouse-ddl-4c9c52hdhg`, `ConfigMap clickhouse-ddl-4c9c52hdhg`, and a matching volume reference.
+- Live reconciliation created and completed `Job clickhouse-ddl-d22ch294g8` with matching ConfigMap and volume names, then pruned the old static Job.
 
 ### Grafana datasources
 
-The live Grafana API currently reports three ClickHouse datasources:
+The baseline live Grafana API reported three ClickHouse datasources:
 
 - ID `5`: `ClickHouse`, read-only, stale provisioned datasource.
 - ID `7`: `Flow ClickHouse`, UID `FlowClickHouse`, currently not read-only, originally created manually.
@@ -37,7 +37,7 @@ The live Grafana API currently reports three ClickHouse datasources:
 
 The Helm values now declare `Flow ClickHouse IaC` with UID `FlowClickHouseIaC` and `editable: false`; the dashboard references the new UID.
 
-The Grafana datasource sidecar now uses the documented `REQ_SKIP_TLS_VERIFY` environment variable for its local HTTPS request, but `localhost` also violates Grafana's `enforce_domain` setting and redirects to Cloudflare Access. The certificate-valid canonical hostname must therefore resolve to the Grafana process loopback.
+The Grafana datasource sidecar uses the documented `REQ_SKIP_TLS_VERIFY` environment variable and maps certificate-valid `grafana.bohdal.name` to the Grafana process loopback, avoiding both certificate hostname errors and Cloudflare Access redirects.
 
 ## Implementation
 
@@ -58,7 +58,7 @@ The Grafana datasource sidecar now uses the documented `REQ_SKIP_TLS_VERIFY` env
 - Keep `editable: false` and update every `sk-flow` dashboard panel to the new UID.
 - Add the cleanup ConfigMap to the metrics Kustomization.
 - Map `grafana.bohdal.name` to `127.0.0.1` in the Grafana Pod and use that canonical hostname on port 3000 for the sidecar reload URL; set `REQ_SKIP_TLS_VERIFY` for the local certificate while retaining `skipTlsVerify` for Kubernetes API access.
-- Decide after successful reconciliation whether the explicit deletion ConfigMap should remain as a harmless guard or be removed as one-time migration scaffolding. Do not remove it before verifying the final datasource survives a Grafana restart.
+- Retain the explicit deletion ConfigMap as a harmless guard; the final datasource survived the Grafana pod restart performed during Helm reconciliation.
 
 ## Validation
 
@@ -66,9 +66,9 @@ The Grafana datasource sidecar now uses the documented `REQ_SKIP_TLS_VERIFY` env
 2. Completed locally: `kubectl kustomize kubernetes/flux/observability/metrics` includes the cleanup ConfigMap with no secret data.
 3. Completed locally: `kubectl kustomize kubernetes/flux/observability/dashboards` and JSON checks show only `FlowClickHouseIaC` on `sk-flow` panels.
 4. Completed locally: targeted pre-commit YAML/JSON checks and `git diff --check` pass.
-5. Pending publication and Flux reconciliation: verify the DDL Job completes, the Flow Collector Kustomization is Ready, and no immutable Job error remains. The current live cluster still reports the old `clickhouse-ddl` immutable-template failure.
-6. Pending publication and authenticated Grafana access: query `/api/datasources` and require exactly one datasource with type `grafana-clickhouse-datasource`, the final UID, `readOnly: true`, and the expected ClickHouse host. The unauthenticated endpoint currently returns HTTP 401.
-7. Pending publication: query the `sk-flow` dashboard and representative panels through Grafana; require successful ClickHouse responses and no stale datasource references.
+5. Completed live: Flux applied revision `main@sha1:848321995d9b199ba30a25f65afd5f5489e8cae1`, the DDL Job completed successfully, the Flow Collector Kustomization is Ready, and the old immutable Job is pruned.
+6. Completed live: authenticated `/api/datasources` returns exactly one `grafana-clickhouse-datasource` with name `Flow ClickHouse IaC`, UID `FlowClickHouseIaC`, `readOnly: true`, host `clickhouse.observability.svc.cluster.local`, port `8123`, and protocol `http`.
+7. Completed live: the `sk-flow` dashboard has six panels using only `FlowClickHouseIaC`; a representative Grafana query succeeded and returned `359764` flow rows, and Grafana health reports database `ok`.
 
 ## Relevant Files
 
