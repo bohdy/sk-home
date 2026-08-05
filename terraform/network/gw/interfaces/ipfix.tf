@@ -9,16 +9,18 @@ resource "routeros_ip_traffic_flow" "wan" {
   interfaces = "ether8"
 }
 
-# The collector service VIP is the only export target. The provider's
-# ValidateFunc only accepts uppercase "IPFIX" while the RouterOS REST API
-# expects lowercase "ipfix", so the version field is managed manually on the
-# gateway while Tofu owns everything else. After the initial apply, set
-# version=ipfix on the gateway: /ip traffic-flow target set [find] version=ipfix
+# The collector target uses the worker node's physical address and the fixed
+# NodePort (31236) instead of the Cilium VIP. Cilium VXLAN forwarding from CP
+# nodes to workers is unreliable in the current Talos veth Cilium mode, and
+# the NodePort on the pod's own node routes directly without crossing the
+# overlay. The version value must pass the provider's case-sensitive
+# validation ("IPFIX") while RouterOS expects lowercase "ipfix"; the
+# lifecycle ignore keeps the manually-set ipfix version from being reverted.
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 
-  dst_address         = "10.1.30.57"
-  port                = 2055
+  dst_address         = var.kubernetes_bgp.nodes.worker1.address
+  port                = 31236
   version             = "9"
   v9_template_refresh = 20
   v9_template_timeout = "5m"

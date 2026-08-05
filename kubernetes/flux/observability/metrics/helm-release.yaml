@@ -73,6 +73,9 @@ spec:
           isDefault: false
           jsonData:
             defaultDatabase: flows
+            server: clickhouse.observability.svc.cluster.local
+            port: 8123
+            protocol: http
     victoria-metrics-operator:
       enabled: true
       crds:
