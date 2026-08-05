@@ -255,6 +255,10 @@ spec:
       # must reload through that listener rather than the chart's HTTP default.
       sidecar:
         datasources:
+          # skipTlsVerify covers Kubernetes API requests; the sidecar uses
+          # REQ_SKIP_TLS_VERIFY for the HTTPS Grafana reload request itself.
+          env:
+            REQ_SKIP_TLS_VERIFY: "true"
           reloadURL: https://localhost:3000/api/admin/provisioning/datasources/reload
           skipTlsVerify: true
       # Pin the signed backend plugins; do not depend on a floating marketplace
