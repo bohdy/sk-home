@@ -1,7 +1,7 @@
 # Applies the repository-owned schema before any writer inserts rows. The
-# container waits for the server's /ping, then POSTs the DDL via the HTTP
-# interface. The clickhouse-client binary in the distroless image does not
-# support --query-file, so busybox wget delivers the SQL directly.
+# container waits for the server's /ping, then POSTs each single-statement DDL
+# file through ClickHouse's HTTP interface because that endpoint rejects
+# multi-statement requests. Busybox wget delivers the SQL directly.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -32,7 +32,9 @@ spec:
                 echo "waiting for clickhouse" >&2
                 sleep 3
               done
-              echo "ClickHouse ready, applying DDL" >&2
+              echo "ClickHouse ready, applying database DDL" >&2
+              wget -qO- --post-file=/ddl/clickhouse-database.sql "http://clickhouse.observability.svc.cluster.local:8123/" >&2
+              echo "Applying table DDL" >&2
               wget -qO- --post-file=/ddl/clickhouse-init.sql "http://clickhouse.observability.svc.cluster.local:8123/" >&2
               echo "DDL applied" >&2
           resources:

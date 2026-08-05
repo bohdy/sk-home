@@ -1,8 +1,6 @@
--- Repository-owned ClickHouse schema for goflow2 flow records. Committed DDL
--- applies before any writer starts; the table and its 30-day TTL are defined
--- here rather than being created ad hoc by an exporter or sink.
-CREATE DATABASE IF NOT EXISTS flows;
-
+-- Repository-owned ClickHouse table schema for goflow2 flow records. The
+-- database statement lives in clickhouse-database.sql because the HTTP
+-- endpoint rejects multiple statements in one POST request.
 -- The column set mirrors the goflow2 v2.2.6 JSON field names that MikroTik
 -- IPFIX populates in practice. The Vector sink runs with skip_unknown_fields,
 -- so extra goflow2 fields are ignored server-side instead of breaking inserts.
