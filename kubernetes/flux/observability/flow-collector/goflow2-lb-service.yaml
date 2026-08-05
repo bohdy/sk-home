@@ -1,7 +1,10 @@
-# Cilium advertises the reserved IPFIX VIP over BGP. Cluster traffic policy is
-# deliberate: exporter identity travels inside the IPFIX sampler_address field,
-# so preserving the network-layer source IP is not required the way it is for
-# syslog, and Cluster mode keeps UDP forwarding robust across node restarts.
+# Cilium advertises the reserved IPFIX VIP over BGP, but external VXLAN
+# forwarding from the CP nodes to the worker is unreliable in Talos' veth
+# Cilium mode (root cause still under investigation). The MikroTik target
+# uses the pinned NodePort on worker-1's physical address instead, bypassing
+# the Cilium LB entirely. Keep the VIP and LoadBalancer for future use when
+# the VXLAN path is resolved; the fixed NodePort is the active data-plane
+# path today.
 apiVersion: v1
 kind: Service
 metadata:
@@ -15,12 +18,11 @@ metadata:
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Cluster
-  loadBalancerSourceRanges:
-    - 10.0.0.0/8
   selector:
     app.kubernetes.io/name: goflow2
   ports:
     - name: netflow-udp
       port: 2055
       targetPort: netflow-udp
+      nodePort: 31236
       protocol: UDP
