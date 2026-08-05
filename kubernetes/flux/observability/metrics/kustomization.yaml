@@ -5,3 +5,15 @@ kind: Kustomization
 resources:
   - oci-repository.yaml
   - helm-release.yaml
+configMapGenerator:
+  # The datasource sidecar watches this label and treats the generated file as
+  # a Grafana provisioning configuration rather than as Kubernetes YAML.
+  - name: grafana-datasource-cleanup
+    namespace: observability
+    files:
+      - grafana-datasource-cleanup.yaml
+generatorOptions:
+  labels:
+    grafana_datasource: "1"
+    app.kubernetes.io/component: datasources
+    app.kubernetes.io/part-of: observability

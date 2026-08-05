@@ -64,10 +64,10 @@ spec:
         # Flow analytics read the repository-owned flows.flow table through the
         # pinned ClickHouse plugin; the datasource trusts the network layer,
         # matching how every other observability backend is wired.
-        - name: Flow ClickHouse
+        - name: Flow ClickHouse IaC
           type: grafana-clickhouse-datasource
           access: proxy
-          uid: FlowClickHouse
+          uid: FlowClickHouseIaC
           url: ""
           database: ""
           user: ""
@@ -251,6 +251,12 @@ spec:
 
     grafana:
       enabled: true
+      # The Grafana server terminates HTTPS locally, so the datasource sidecar
+      # must reload through that listener rather than the chart's HTTP default.
+      sidecar:
+        datasources:
+          reloadURL: https://localhost:3000/api/admin/provisioning/datasources/reload
+          skipTlsVerify: true
       # Pin the signed backend plugins; do not depend on a floating marketplace
       # version at pod startup.
       plugins:

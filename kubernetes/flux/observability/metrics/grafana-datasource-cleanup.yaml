@@ -1,0 +1,11 @@
+# Grafana's datasource sidecar loads this migration file and removes records
+# that predate the repository-owned datasource. The final datasource has a new
+# name and UID so deletion and creation cannot collide in one reload.
+apiVersion: 1
+deleteDatasources:
+  - name: ClickHouse
+    orgId: 1
+  - name: grafana-clickhouse-datasource
+    orgId: 1
+  - name: Flow ClickHouse
+    orgId: 1
