@@ -251,15 +251,19 @@ spec:
 
     grafana:
       enabled: true
-      # The Grafana server terminates HTTPS locally, so the datasource sidecar
-      # must reload through that listener rather than the chart's HTTP default.
+      # The sidecar uses Grafana's certificate-valid canonical hostname while
+      # this alias keeps the reload request on the local Grafana process.
+      hostAliases:
+        - ip: 127.0.0.1
+          hostnames:
+            - grafana.bohdal.name
       sidecar:
         datasources:
           # skipTlsVerify covers Kubernetes API requests; the sidecar uses
           # REQ_SKIP_TLS_VERIFY for the HTTPS Grafana reload request itself.
           env:
             REQ_SKIP_TLS_VERIFY: "true"
-          reloadURL: https://localhost:3000/api/admin/provisioning/datasources/reload
+          reloadURL: https://grafana.bohdal.name:3000/api/admin/provisioning/datasources/reload
           skipTlsVerify: true
       # Pin the signed backend plugins; do not depend on a floating marketplace
       # version at pod startup.
