@@ -259,12 +259,11 @@ spec:
             - grafana.bohdal.name
       sidecar:
         datasources:
-          # skipTlsVerify covers Kubernetes API requests; the sidecar uses
-          # REQ_SKIP_TLS_VERIFY for the HTTPS Grafana reload request itself.
+          # Both sidecars share the Grafana Pod network namespace, so give the
+          # datasource sidecar a distinct health listener.
           env:
-            REQ_SKIP_TLS_VERIFY: "true"
+            HEALTH_PORT: "8081"
           reloadURL: https://grafana.bohdal.name:3000/api/admin/provisioning/datasources/reload
-          skipTlsVerify: true
       # Pin the signed backend plugins; do not depend on a floating marketplace
       # version at pod startup.
       plugins:

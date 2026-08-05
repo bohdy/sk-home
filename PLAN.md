@@ -37,7 +37,7 @@ The baseline live Grafana API reported three ClickHouse datasources:
 
 The Helm values now declare `Flow ClickHouse IaC` with UID `FlowClickHouseIaC` and `editable: false`; the dashboard references the new UID.
 
-The Grafana datasource sidecar uses the documented `REQ_SKIP_TLS_VERIFY` environment variable and maps certificate-valid `grafana.bohdal.name` to the Grafana process loopback, avoiding both certificate hostname errors and Cloudflare Access redirects.
+The Grafana datasource sidecar maps certificate-valid `grafana.bohdal.name` to the Grafana process loopback, avoiding both certificate hostname errors and Cloudflare Access redirects. Its certificate validates normally, and its health listener is distinct from the dashboard sidecar's listener.
 
 ## Implementation
 
@@ -57,7 +57,7 @@ The Grafana datasource sidecar uses the documented `REQ_SKIP_TLS_VERIFY` environ
 - Rename the final IaC datasource to `Flow ClickHouse IaC` and `FlowClickHouseIaC`, so deletion and creation cannot collide with the existing manual record during one provisioning pass.
 - Keep `editable: false` and update every `sk-flow` dashboard panel to the new UID.
 - Add the cleanup ConfigMap to the metrics Kustomization.
-- Map `grafana.bohdal.name` to `127.0.0.1` in the Grafana Pod and use that canonical hostname on port 3000 for the sidecar reload URL; set `REQ_SKIP_TLS_VERIFY` for the local certificate while retaining `skipTlsVerify` for Kubernetes API access.
+- Map `grafana.bohdal.name` to `127.0.0.1` in the Grafana Pod, use that canonical hostname on port 3000 for the sidecar reload URL, and give the datasource sidecar a distinct health port.
 - Retain the explicit deletion ConfigMap as a harmless guard; the final datasource survived the Grafana pod restart performed during Helm reconciliation.
 
 ## Validation
