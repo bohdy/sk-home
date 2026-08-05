@@ -1,0 +1,9 @@
+# Treat the Job name as a reference to the generated DDL ConfigMap. This keeps
+# the one-shot workload immutable while preserving Kustomize's normal hashed
+# ConfigMap reference update for the Job volume.
+nameReference:
+  - kind: ConfigMap
+    version: v1
+    fieldSpecs:
+      - path: metadata/name
+        kind: Job

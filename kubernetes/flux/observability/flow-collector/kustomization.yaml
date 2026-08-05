@@ -1,6 +1,6 @@
-# Generate the DDL script with a content hash so every reviewed schema change
-# triggers a fresh Job object; the Job itself stays idempotent because the SQL
-# uses IF NOT EXISTS. The DDL ConfigMap is the only generated resource here.
+# Generate the DDL script with a content hash and copy that generated name onto
+# the Job. Every reviewed schema change therefore creates a new immutable Job;
+# the SQL remains idempotent through IF NOT EXISTS.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -23,3 +23,5 @@ generatorOptions:
   labels:
     app.kubernetes.io/name: clickhouse
     app.kubernetes.io/component: flow-collection
+configurations:
+  - kustomizeconfig.yaml
