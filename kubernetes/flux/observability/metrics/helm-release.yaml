@@ -64,18 +64,28 @@ spec:
         # Flow analytics read the repository-owned flows.flow table through the
         # pinned ClickHouse plugin; the datasource trusts the network layer,
         # matching how every other observability backend is wired.
-        - name: ClickHouse
+        - name: Flow ClickHouse
           type: grafana-clickhouse-datasource
           access: proxy
-          uid: ClickHouse
+          uid: FlowClickHouse
+          url: ""
+          database: ""
+          user: ""
           editable: false
           isDefault: false
           jsonData:
-            defaultDatabase: flows
-            hostname: clickhouse.observability.svc.cluster.local
+            host: clickhouse.observability.svc.cluster.local
+            logs:
+              contextColumns: []
+              defaultTable: otel_logs
+              selectContextColumns: true
             port: 8123
             protocol: http
             username: default
+            traces:
+              defaultTable: otel_traces
+            pdcInjected: false
+            version: "4.20.0"
     victoria-metrics-operator:
       enabled: true
       crds:

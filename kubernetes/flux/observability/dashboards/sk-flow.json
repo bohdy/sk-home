@@ -11,7 +11,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Bytes per second across all flow records; buckets are fixed at one minute so the per-second rate is exact.",
       "fieldConfig": {
@@ -43,8 +43,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -54,7 +54,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Flow records received per second from the gateway.",
       "fieldConfig": {
@@ -86,8 +86,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, count() / 60 AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, count() / 60 AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time ORDER BY time",
           "refId": "A"
         }
       ],
@@ -97,7 +97,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Traffic split by transport protocol.",
       "fieldConfig": {
@@ -129,8 +129,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, proto AS protocol, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, protocol ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, proto AS protocol, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, protocol ORDER BY time",
           "refId": "A"
         }
       ],
@@ -140,7 +140,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Source addresses ordered by volume; on a WAN-only collector this shows remote peers and local hosts.",
       "fieldConfig": {
@@ -201,7 +201,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "table",
+          "format": 0,
           "rawSql": "SELECT src_addr AS source, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY src_addr ORDER BY bytes DESC LIMIT 20",
           "refId": "A"
         }
@@ -212,7 +212,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Destination ports ordered by volume; useful for spotting services the homelab reaches externally.",
       "fieldConfig": {
@@ -261,7 +261,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "table",
+          "format": 0,
           "rawSql": "SELECT dst_port AS port, count() AS flows, sum(bytes) AS bytes FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY dst_port ORDER BY bytes DESC LIMIT 20",
           "refId": "A"
         }
@@ -272,7 +272,7 @@
     {
       "datasource": {
         "type": "grafana-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "uid": "FlowClickHouse"
       },
       "description": "Traffic classified by which side of the WAN interface the source address belongs to.",
       "fieldConfig": {
@@ -304,8 +304,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT $__timeSeries(timestamp, 1m) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
           "refId": "A"
         }
       ],
@@ -321,22 +321,6 @@
     "ipfix",
     "clickhouse"
   ],
-  "templating": {
-    "list": [
-      {
-        "current": {},
-        "hide": 0,
-        "includeAll": false,
-        "label": "ClickHouse",
-        "name": "DS_CLICKHOUSE",
-        "options": [],
-        "query": "grafana-clickhouse-datasource",
-        "refresh": 1,
-        "regex": "",
-        "type": "datasource"
-      }
-    ]
-  },
   "time": {
     "from": "now-6h",
     "to": "now"
