@@ -37,7 +37,7 @@ The live Grafana API currently reports three ClickHouse datasources:
 
 The Helm values now declare `Flow ClickHouse IaC` with UID `FlowClickHouseIaC` and `editable: false`; the dashboard references the new UID.
 
-The Grafana datasource sidecar currently sends reload requests to HTTP while Grafana serves HTTPS, producing connection reset errors. The chart supports setting `sidecar.datasources.reloadURL` and `sidecar.datasources.skipTlsVerify`.
+The Grafana datasource sidecar now targets the local HTTPS endpoint, but its `skipTlsVerify` setting only covers Kubernetes API requests; the reload client requires the documented `REQ_SKIP_TLS_VERIFY` environment variable. Without it, the sidecar rejects the local certificate hostname before calling Grafana.
 
 ## Implementation
 
@@ -57,7 +57,7 @@ The Grafana datasource sidecar currently sends reload requests to HTTP while Gra
 - Rename the final IaC datasource to `Flow ClickHouse IaC` and `FlowClickHouseIaC`, so deletion and creation cannot collide with the existing manual record during one provisioning pass.
 - Keep `editable: false` and update every `sk-flow` dashboard panel to the new UID.
 - Add the cleanup ConfigMap to the metrics Kustomization.
-- Set the datasource sidecar reload URL to the local HTTPS Grafana endpoint and enable TLS verification bypass for the local certificate, so ConfigMap changes can reload without connection resets.
+- Set the datasource sidecar reload URL to the local HTTPS Grafana endpoint and set `REQ_SKIP_TLS_VERIFY` for the reload client, while retaining `skipTlsVerify` for Kubernetes API access.
 - Decide after successful reconciliation whether the explicit deletion ConfigMap should remain as a harmless guard or be removed as one-time migration scaffolding. Do not remove it before verifying the final datasource survives a Grafana restart.
 
 ## Validation
