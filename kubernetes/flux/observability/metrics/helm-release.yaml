@@ -68,14 +68,14 @@ spec:
           type: grafana-clickhouse-datasource
           access: proxy
           uid: ClickHouse
-          url: http://clickhouse.observability.svc.cluster.local:8123
           editable: false
           isDefault: false
           jsonData:
             defaultDatabase: flows
-            server: clickhouse.observability.svc.cluster.local
+            hostname: clickhouse.observability.svc.cluster.local
             port: 8123
             protocol: http
+            username: default
     victoria-metrics-operator:
       enabled: true
       crds:
