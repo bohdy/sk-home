@@ -61,21 +61,6 @@ spec:
           isDefault: false
           jsonData:
             maxLines: 200
-        # Flow analytics read the repository-owned flows.flow table through the
-        # pinned ClickHouse plugin; the datasource trusts the network layer,
-        # matching how every other observability backend is wired.
-        - name: ClickHouse
-          type: grafana-clickhouse-datasource
-          access: proxy
-          uid: ClickHouse
-          url: http://clickhouse.observability.svc.cluster.local:8123
-          editable: false
-          isDefault: false
-          jsonData:
-            defaultDatabase: flows
-            server: clickhouse.observability.svc.cluster.local
-            port: 8123
-            protocol: http
     victoria-metrics-operator:
       enabled: true
       crds:
