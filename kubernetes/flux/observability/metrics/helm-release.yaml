@@ -258,6 +258,8 @@ spec:
           hostnames:
             - grafana.bohdal.name
       sidecar:
+        dashboards:
+          reloadURL: https://grafana.bohdal.name:3000/api/admin/provisioning/dashboards/reload
         datasources:
           # Both sidecars share the Grafana Pod network namespace, so give the
           # datasource sidecar a distinct health listener.

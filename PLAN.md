@@ -37,7 +37,7 @@ The baseline live Grafana API reported three ClickHouse datasources:
 
 The Helm values now declare `Flow ClickHouse IaC` with UID `FlowClickHouseIaC` and `editable: false`; the dashboard references the new UID.
 
-The Grafana datasource sidecar maps certificate-valid `grafana.bohdal.name` to the Grafana process loopback, avoiding both certificate hostname errors and Cloudflare Access redirects. Its certificate validates normally, and its health listener is distinct from the dashboard sidecar's listener.
+The Grafana dashboard and datasource sidecars map certificate-valid `grafana.bohdal.name` to the Grafana process loopback and use HTTPS reload URLs, avoiding certificate hostname errors, HTTP-to-HTTPS failures, and Cloudflare Access redirects. The datasource sidecar's health listener is distinct from the dashboard sidecar's listener.
 
 ## Implementation
 
@@ -58,6 +58,7 @@ The Grafana datasource sidecar maps certificate-valid `grafana.bohdal.name` to t
 - Keep `editable: false` and update every `sk-flow` dashboard panel to the new UID.
 - Add the cleanup ConfigMap to the metrics Kustomization.
 - Map `grafana.bohdal.name` to `127.0.0.1` in the Grafana Pod, use that canonical hostname on port 3000 for the sidecar reload URL, and give the datasource sidecar a distinct health port.
+- Use the same canonical HTTPS reload path for the dashboard sidecar so dashboard updates do not send HTTP to Grafana's HTTPS listener.
 - Retain the explicit deletion ConfigMap as a harmless guard; the final datasource survived the Grafana pod restart performed during Helm reconciliation.
 
 ## Validation
