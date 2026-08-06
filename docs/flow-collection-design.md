@@ -8,11 +8,11 @@ The design's follow-up debt list is authoritative for later flow-collection work
 
 Collect IPFIX flow records from the MikroTik gateway, store them in a ClickHouse database inside the cluster, and expose flow analytics through provisioned Grafana dashboards. The pipeline should fit into the existing Home Infrastructure Observability pattern: plain Kubernetes manifests, Flux reconciliation, Cilium LoadBalancer exposure, and Synology iSCSI persistent storage.
 
-Start with WAN traffic only. Design for inter-VLAN expansion without architectural changes.
+Collect WAN traffic and routed traffic between the managed VLAN interfaces. Same-VLAN switched traffic remains outside the gateway collector scope because it does not traverse the routed interfaces.
 
 ## Non-goals
 
-The first release excludes inter-VLAN flow collection, sFlow, NetFlow v5/v9, distributed ClickHouse (no Keeper, no sharding, no replication), automated ClickHouse backups, and downstream flow consumers beyond Grafana.
+The first release excludes same-VLAN switched traffic, sFlow, non-IPFIX NetFlow formats, distributed ClickHouse (no Keeper, no sharding, no replication), automated ClickHouse backups, and downstream flow consumers beyond Grafana.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Depends on `observability-base`, `cilium`, and `storage-synology-csi`. Dashboard
 ## Data pipeline
 
 ```text
-MikroTik gateway (ether8)
+MikroTik gateway (ether8 and routed VLAN interfaces)
   -> IPFIX UDP/2055
   -> goflow2 LB <free VIP in 10.1.30.0/24>
   -> goflow2 NDJSON stdout (kubernetes_logs source)
@@ -97,13 +97,14 @@ The TTL is declared at table creation. Do not rely on post-insert `ALTER TABLE` 
 
 Exact column set may be adjusted at implementation to match the live goflow2 JSON mapping used for MikroTik IPFIX, but the ownership rule does not change: committed DDL first, writers second.
 
+The same DDL creates `flows.flow_analytics`, a repository-owned view that adds `src_internal` and `dst_internal` flags for the five routed LAN CIDRs. Grafana uses those flags for the internal-IP dropdown, All mode, and the corrected LAN-versus-WAN classification; the WAN transit subnet is intentionally not classified as internal.
+
 ## MikroTik configuration
 
 Manage IPFIX through OpenTofu in `terraform/network/gw/interfaces/` using:
 
-- `routeros_ip_traffic_flow` — accounting on `ether8` (WAN); leave timeouts at RouterOS defaults unless measured need appears
-- `routeros_ip_traffic_flow_ipfix` — IPFIX settings
-- `routeros_ip_traffic_flow_target` — collector VIP:2055, version `ipfix`, `v9_template_refresh = 20`, `v9_template_timeout = "5m"`
+- `routeros_ip_traffic_flow` — accounting on `ether8` plus every routed VLAN interface from `vlans.auto.tfvars`; leave timeouts at RouterOS defaults unless measured need appears
+- `routeros_ip_traffic_flow_target` — active collector NodePort on worker-1, version `9` in the provider configuration because the pinned provider validates that spelling while the live RouterOS target is maintained as IPFIX, `v9_template_refresh = 20`, and `v9_template_timeout = "5m"`
 
 Add workflow input `apply_gateway_ipfix` with an immutable targeted plan, production environment apply, and full mutual exclusion against `apply_gateway`, `apply_gateway_snmp`, `plan_gateway_snmp`, `apply_gateway_dhcp`, and `apply_cloudflare`.
 
@@ -168,7 +169,7 @@ The stdout handoff is node-local like every other container log, so it needs no 
 
 - Pin `grafana-clickhouse-datasource` **v4.20.0** on the metrics HelmRelease plugin list
 - Provision a datasource to ClickHouse ClusterIP, database `flows`, no auth
-- New `sk-flow` dashboard backed by ClickHouse SQL
+- New `sk-flow` dashboard backed by ClickHouse SQL, with an observed internal-IP selector, a validated manual override, selected-host flow aggregates, and direction-aware peers
 - Extend `sk-ingestion` with goflow2 and Vector ClickHouse-sink health via VictoriaQL/VictoriaMetrics
 
 ## Flow geography
@@ -227,20 +228,20 @@ Known reserved VIPs at plan time:
 8. Add NetworkPolicy.
 9. Add alerts with real metric names.
 10. Create the Bitwarden-backed MaxMind Secret and run the GeoIP bootstrap Job.
-11. Verify country fallback, city precision, and accuracy-radius behavior in both Geomap panels.
+11. Verify country fallback, city precision, and accuracy-radius behavior in both direction-aware selected-host Geomap panels.
 12. Promote this plan into `docs/flow-collection-design.md`, update `docs/observability-design.md`, and add a resumable stage to `docs/observability-rollout.md`.
 
 Proceed between stages after automated validation and workload smoke tests pass. Stop progression on dropped data, repeated restarts, capacity pressure, secret leakage, unexpected public exposure, or excessive alert noise.
 
 ## Validation and rollback
 
-- Records from the WAN path are present with expected fields
+- Records from WAN and routed inter-VLAN paths are present with expected fields and no interface-selection duplication
 - TTL is present on `flows.flow` and survives ClickHouse restart
 - VIP is unique; UniFi console remains on `.56`
 - `apply_gateway_ipfix` mutual exclusion and immutable apply path work
 - Observability quota remains healthy after the new PVC and memory requests
 - `flows.ip_geo` loads after a complete GeoLite2 import and retains the previous dictionary data when a refresh fails
-- Source and destination Geomap panels return country and city rows without exposing private addresses or credentials
+- Selected-host Geomap panels return only external country and city rows without exposing private addresses or credentials
 
 Rollback by suspending or reverting the Flux `observability-flow-collector` Kustomization while retaining the ClickHouse PVC. Never delete the retained PV or Synology LUN as part of routine rollback.
 
@@ -248,7 +249,7 @@ Rollback by suspending or reverting the Flux `observability-flow-collector` Kust
 
 - Protocol: IPFIX
 - Source device: MikroTik gateway only for v1
-- Interface: `ether8` WAN first; inter-VLAN later via bridge or additional interfaces
+- Interfaces: `ether8` plus managed routed VLAN interfaces; same-VLAN switching is not collected
 - Storage engine: ClickHouse, 100 GiB, 30 days
 - Transport: goflow2 JSON → Vector → ClickHouse sink; no Kafka in v1
 - goflow2 version target: v2.2.6
@@ -264,7 +265,7 @@ Rollback by suspending or reverting the Flux `observability-flow-collector` Kust
 
 ## Follow-up debt
 
-- Inter-VLAN flow collection
+- Same-VLAN switched flow collection through switch or access-point telemetry
 - Materialized views or rollups
 - ClickHouse backup strategy
 - sFlow if non-MikroTik exporters appear

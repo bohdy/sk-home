@@ -1,10 +1,12 @@
 # Focused Dashboards
 
-This component provisions nine focused Grafana dashboards through the chart-managed dashboard sidecar. Every dashboard is committed as JSON, uses a stable datasource UID, and requires no runtime download or mutable community-dashboard ID. The `sk-flow` dashboard uses the provisioned `FlowClickHouseIaC` datasource to query `flows.flow`, includes separate source-to-destination Sankey panels ranked by total bytes and flow count, and includes source and destination Geomaps with adaptive country/city precision; the remaining dashboards use `VictoriaMetrics`.
+This component provisions nine focused Grafana dashboards through the chart-managed dashboard sidecar. Every dashboard is committed as JSON, uses a stable datasource UID, and requires no runtime download or mutable community-dashboard ID. The `sk-flow` dashboard uses the provisioned `FlowClickHouseIaC` datasource to query the repository-owned `flows.flow_analytics` view, supports an observed internal-IP dropdown plus an optional manual override, and reports selected-host flows, bytes, packets, peers, protocols, ports, paths, recent records, and direction-aware external geography; the remaining dashboards use `VictoriaMetrics`.
 
 The network, DNS, ingestion, Cilium/BGP, syslog, Proxmox, Synology, and APC UPS dashboards use metric families verified in the live cluster. The USB-attached APC is collected through the Synology vendor MIB, not a separate direct UPS poll. The network dashboard may show no data until its remaining credential-gated collectors are enabled; provisioning it first does not make absent collectors appear healthy.
 
 Panel queries intentionally aggregate away high-cardinality labels unless an operator needs the label for action. Hubble panels use only the low-cardinality protocol, reason, service, family, and flag labels allowed by the bootstrap configuration.
+
+The flow dashboard's internal policy covers routed VLAN networks `10.1.10.0/24`, `10.1.20.0/24`, `10.1.100.0/24`, `10.1.101.0/24`, and `10.1.102.0/24`; it deliberately excludes the WAN transit subnet. `All` scopes selected-host panels to any internal endpoint, while a non-empty manual IP override takes precedence over the dropdown and invalid or non-LAN values return no flow rows. Same-VLAN switched traffic is not visible through the gateway flow collector.
 
 ## Validation
 

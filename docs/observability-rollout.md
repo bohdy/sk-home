@@ -324,6 +324,14 @@ Acceptance criteria per the design contract:
 
 Rollback: suspend or revert the `observability-flow-collector` Flux Kustomization while retaining the ClickHouse PVC. Never delete the retained PV or the Synology LUN as part of routine rollback; the gateway target removal is a separate reviewed OpenTofu apply.
 
+## Selected-host and routed VLAN extension
+
+This follow-up extends the accepted WAN flow stage to routed traffic between VLANs and adds selected-host analytics to `sk-flow`. The gateway flow interface list is derived from `vlans.auto.tfvars` and includes `ether8` plus each routed VLAN interface; the bridge is excluded so same-VLAN switching remains outside scope. The ClickHouse DDL Job creates `flows.flow_analytics`, which centralizes the five-LAN-CIDR policy used by Grafana.
+
+Before production apply, verify the live RouterOS traffic-flow interface behavior and compare record counts and byte totals before and after the interface-list change. Confirm that a known routed VLAN exchange and WAN exchange each produce one expected flow path, with no duplicate records. Then verify the Grafana dropdown, manual override, All mode, inbound/outbound panels, selected-host Sankey, recent-flow table, and direction-aware external Geomaps.
+
+Acceptance requires no unexpected storage pressure, no dropped Vector-to-ClickHouse deliveries, no private addresses in GeoMap results, and no credential or raw-flow leakage in workload logs. Same-VLAN device-to-device traffic requires a separate switch or access-point flow telemetry design.
+
 ## Remaining stages
 
 The first observability release is accepted. Follow-up work must use a fresh branch for each coherent deferred item. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
