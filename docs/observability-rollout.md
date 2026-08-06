@@ -294,12 +294,13 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 ## Flow collection stage
 
-The IPFIX flow collection stage follows `docs/flow-collection-design.md`. It ships in four stacked milestone PRs that merge in order:
+The IPFIX flow collection stage follows `docs/flow-collection-design.md`. It ships in five stacked milestone PRs that merge in order:
 
 1. Collector pipeline: goflow2 and ClickHouse manifests, Vector handoff, and the `observability-flow-collector` Flux component.
 2. Grafana: pinned ClickHouse plugin and datasource, `sk-flow` dashboard, ingestion-health panels, and the flow alert group.
 3. Gateway export: RouterOS traffic-flow resources and the mutually exclusive `apply_gateway_ipfix` workflow path.
-4. Documentation promotion of the design contract.
+4. Adaptive GeoIP: local GeoLite2 City refresh, ClickHouse IP_TRIE lookup, and source/destination Geomap layers.
+5. Documentation promotion of the design contract.
 
 Merge sequence and bring-up:
 
@@ -308,6 +309,8 @@ Merge sequence and bring-up:
 - On `main`, dispatch the OpenTofu workflow with only `apply_gateway_ipfix` enabled. The targeted plan is reviewed and applied against the production environment; the workflow applies only the uploaded immutable artifact.
 - Verify WAN records arrive with expected fields (sampler address from the gateway, `etype`/`proto` names, `src_addr`/`dst_addr` populated), the `sk-flow` dashboard returns data, and ingestion-health panels show collector packets and ClickHouse sink deliveries.
 - Confirm the UniFi console remains on `.56` and the collector VIP is unique in live Cilium LB IPAM and the committed DNS inventory.
+- Create the Bitwarden-backed `maxmind-geoip` Secret, allow the non-blocking `observability-flow-geoip` Kustomization to run, and verify the bootstrap Job loads `flows.ip_geo` without credential output.
+- Verify the source and destination Geomaps show country markers for small or uncertain locations and approximate city markers only for large countries within the configured 100 km accuracy radius.
 
 Acceptance criteria per the design contract:
 
@@ -317,6 +320,7 @@ Acceptance criteria per the design contract:
 - `apply_gateway_ipfix` mutual exclusion and immutable apply path work.
 - `observability-capacity` quota remains healthy with the added 100 GiB claim and memory requests.
 - No dropped records, repeated restarts, or unexpected exposure during soak.
+- GeoIP refresh failures leave the last successful dictionary data available and do not block flow ingestion or dashboard provisioning.
 
 Rollback: suspend or revert the `observability-flow-collector` Flux Kustomization while retaining the ClickHouse PVC. Never delete the retained PV or the Synology LUN as part of routine rollback; the gateway target removal is a separate reviewed OpenTofu apply.
 
@@ -346,6 +350,8 @@ Known item names needed by the rollout are:
 - `SK-TALOS-UNIFI-CONTROLLER-PASSWORD` (`8fa7fee1-3612-42e7-895f-b49000a68ffd`): matching UniFi Network administrator password only
 - `SK-TALOS-UNIFI-MONGODB-ROOT-PASSWORD` (`989143be-3e3e-4a66-b85c-b4910055b1bf`): Talos UniFi MongoDB root password used only to initialize the database
 - `SK-TALOS-UNIFI-MONGODB-APPLICATION-PASSWORD-ROTATED` (`be72e505-dffe-41ac-aca8-b49100b86d86`): replacement Talos UniFi least-privilege MongoDB application-user password only
+- `SK-TALOS-MAXMIND-GEOLITE2-ACCOUNT-ID`: MaxMind Account ID only, used by the local GeoLite2 City database updater
+- `SK-TALOS-MAXMIND-GEOLITE2-LICENSE-KEY`: MaxMind license key only, used by the local GeoLite2 City database updater
 - `SK-TALOS-SYNO-MONITORING-USERNAME` (`23d42b1f-323c-4405-b36c-b49000a69047`): dedicated temporary Synology DSM administrator setup username used only to enable and verify SNMP
 - `SK-TALOS-SYNO-MONITORING-PASSWORD` (`8d9d92fb-aada-4dab-997d-b49000a690a7`): matching temporary Synology DSM administrator setup password only
 - `SK-TALOS-APC-UPS-USERNAME` (`88990a45-9e37-4a66-a7c9-b49000a690e7`): APC Network Management Card administrator username used to configure and verify SNMP

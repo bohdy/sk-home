@@ -24,7 +24,7 @@ Deploy VictoriaLogs Single separately for logs. Run Vector as a DaemonSet and us
 
 Collect IPFIX flow records from the MikroTik gateway with a single-replica goflow2 collector and store them in a single-replica ClickHouse database on a retained Synology iSCSI claim. goflow2 emits records as NDJSON on stdout; the existing Vector DaemonSet routes that stream into the ClickHouse sink. The `docs/flow-collection-design.md` document is the authoritative contract for the flow pipeline, schema, retention, and gateway export configuration.
 
-Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins, and use the pinned `netsage-sankey-panel` for Sankey visualizations. Use Grafana's native Geomap and State timeline panels instead of the deprecated Worldmap plugin. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
+Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins, and use the pinned `netsage-sankey-panel` for Sankey visualizations. Use Grafana's native Geomap and State timeline panels instead of the deprecated Worldmap plugin. Flow Geomaps use the local GeoLite2 City lookup with country fallback and approximate city coordinates; they do not call a third-party geolocation API per flow. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
 
 Use Blackbox Exporter for synthetic checks and Prometheus SNMP Exporter for network and hardware polling. Use a dedicated read-only Proxmox exporter identity with the `PVEAuditor` role.
 
@@ -186,7 +186,7 @@ Use one shared observability namespace for Vector, Grafana, VictoriaMetrics, Vic
 
 Apply namespace-wide resource requests, practical memory limits, and an aggregate quota that leaves worker headroom for eviction and recovery.
 
-Use default-deny policies and explicitly allow required component flows. Use Cilium DNS-aware `toFQDNs` egress policy plus DNS proxy rules for Telegram, Discord, Cloudflare, ACME, and the pinned Grafana plugin source rather than broad outbound HTTPS.
+Use default-deny policies and explicitly allow required component flows. Use Cilium DNS-aware `toFQDNs` egress policy plus DNS proxy rules for Telegram, Discord, Cloudflare, ACME, MaxMind GeoIP refresh, and the pinned Grafana plugin source rather than broad outbound HTTPS.
 
 Keep VictoriaMetrics and VictoriaLogs unauthenticated inside the cluster. Their ClusterIP services remain accessible only to explicitly authorized pods through NetworkPolicy. Revisit `vmauth` if external writers or multiple tenants are introduced.
 
@@ -204,7 +204,7 @@ Commit the selected non-secret addresses and matching internal A/PTR records onl
 
 Every deployment PR must define and pass checks appropriate to its manifests. Render Helm and Kustomize output, validate schemas and custom resources, lint YAML and Markdown, scan rendered output for secrets, and use server-side dry-run where installed CRDs are required.
 
-Workload acceptance must verify PVC attachment and persistence, Grafana HTTPS and both data sources, the pinned VictoriaLogs plugin, expected scrape targets, one-year and 30-day retention settings, Vector parsing and sender identity, TCP and UDP syslog, Talos service and kernel logs, audit-event delivery without bodies, SNMPv2c and SNMPv3 discovery, synthetic probes, DNS query privacy fields, default-deny policy flows, capacity alerts, and observability self-metrics.
+Workload acceptance must verify PVC attachment and persistence, Grafana HTTPS and both data sources, the pinned VictoriaLogs plugin, expected scrape targets, one-year and 30-day retention settings, Vector parsing and sender identity, TCP and UDP syslog, Talos service and kernel logs, audit-event delivery without bodies, SNMPv2c and SNMPv3 discovery, synthetic probes, DNS query privacy fields, GeoLite2 dictionary loading and fallback behavior, default-deny policy flows, capacity alerts, and observability self-metrics.
 
 Trigger dedicated synthetic alert rules to verify Telegram and Discord routing, grouping, inhibition, recovery messages, and secret masking. Do not break production services for alert tests; remove or disable the test rules after acceptance.
 

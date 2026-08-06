@@ -1,6 +1,6 @@
 # ClickHouse serves only the in-cluster writer (Vector), the Grafana datasource,
-# and the one-shot DDL Job; egress is denied entirely because the server makes
-# no outbound connections.
+# the one-shot DDL Job, and the GeoIP refresh workload; egress is denied entirely
+# because the server makes no outbound connections.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -32,6 +32,13 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: clickhouse-ddl
+      ports:
+        - port: 8123
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: flow-geoip-updater
       ports:
         - port: 8123
           protocol: TCP

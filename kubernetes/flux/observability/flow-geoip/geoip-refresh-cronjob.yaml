@@ -1,0 +1,84 @@
+# MaxMind publishes database changes regularly; twice-weekly refreshes keep
+# the local lookup current without creating per-flow external API traffic.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: flow-geoip-refresh-scheduled
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: flow-geoip-updater
+    app.kubernetes.io/component: flow-geoip
+spec:
+  schedule: "17 3 * * 2,5"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: flow-geoip-updater
+            app.kubernetes.io/component: flow-geoip
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 65532
+          containers:
+            - name: updater
+              # Keep the scheduled updater identical to the bootstrap Job so an
+              # operator can compare failures without two code paths.
+              image: curlimages/curl:8.21.0@sha256:7c12af72ceb38b7432ab85e1a265cff6ae58e06f95539d539b654f2cfa64bb13
+              command:
+                - /bin/sh
+                - /scripts/geoip-refresh.sh
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 256Mi
+                  ephemeral-storage: 2Gi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+                  ephemeral-storage: 2Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                seccompProfile:
+                  type: RuntimeDefault
+              volumeMounts:
+                - name: refresh-script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+                - name: maxmind
+                  mountPath: /var/run/secrets/maxmind
+                  readOnly: true
+          volumes:
+            - name: refresh-script
+              configMap:
+                name: flow-geoip-refresh
+                defaultMode: 0444
+            - name: work
+              emptyDir:
+                sizeLimit: 2Gi
+            - name: maxmind
+              secret:
+                secretName: maxmind-geoip
+                defaultMode: 0440
+                items:
+                  - key: account-id
+                    path: account-id
+                  - key: license-key
+                    path: license-key
