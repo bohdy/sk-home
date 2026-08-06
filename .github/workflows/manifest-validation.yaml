@@ -1,0 +1,48 @@
+name: Manifest validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Validation only needs to read the repository and does not receive secrets.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  validate:
+    name: Validate manifests and repository hygiene
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Use the repository-pinned kubectl, OpenTofu, and pre-commit versions.
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Run repository hooks
+        run: pre-commit run --all-files
+
+      - name: Confirm hooks left a clean checkout
+        run: git diff --exit-code
+
+      - name: Validate rendered manifests and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 scripts/render-dns.py --check
+          kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null
+          kubectl kustomize kubernetes/flux/observability/flow-collector >/dev/null
+          kubectl kustomize kubernetes/flux/observability/flow-geoip >/dev/null
+          kubectl kustomize kubernetes/flux/clusters/sk-talos/observability >/dev/null
+          sh -n kubernetes/flux/observability/flow-geoip/geoip-refresh.sh
+          jq empty kubernetes/flux/observability/dashboards/sk-flow.json
