@@ -1,8 +1,10 @@
 # Applies the repository-owned schema before any writer inserts rows. The
 # container waits for the server's /ping, then POSTs each single-statement DDL
 # file through ClickHouse's HTTP interface because that endpoint rejects
-# multi-statement requests. The geo tables and dictionary are created before
-# the separate GeoIP refresh workload starts importing data.
+# multi-statement requests. The flow analytics view is created immediately
+# after the base table so dashboard queries share one internal-network policy.
+# The geo tables and dictionary are created before the separate GeoIP refresh
+# workload starts importing data.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -42,6 +44,7 @@ spec:
               echo "ClickHouse ready, applying database and table DDL" >&2
               apply_ddl clickhouse-database.sql
               apply_ddl clickhouse-init.sql
+              apply_ddl clickhouse-flow-analytics.sql
               apply_ddl clickhouse-geo-blocks-active.sql
               apply_ddl clickhouse-geo-blocks-candidate.sql
               apply_ddl clickhouse-geo-locations-active.sql

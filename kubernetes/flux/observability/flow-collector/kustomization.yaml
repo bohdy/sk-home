@@ -20,6 +20,7 @@ configMapGenerator:
     files:
       - clickhouse-database.sql
       - clickhouse-init.sql
+      - clickhouse-flow-analytics.sql
       - clickhouse-geo-blocks-active.sql
       - clickhouse-geo-blocks-candidate.sql
       - clickhouse-geo-locations-active.sql

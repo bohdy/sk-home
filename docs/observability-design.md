@@ -22,9 +22,9 @@ Deploy the official `victoria-metrics-k8s-stack` Helm chart through a Flux `Helm
 
 Deploy VictoriaLogs Single separately for logs. Run Vector as a DaemonSet and use it as the single collector for Kubernetes container logs, network syslog, Talos service logs, Talos kernel logs, and Kubernetes audit events.
 
-Collect IPFIX flow records from the MikroTik gateway with a single-replica goflow2 collector and store them in a single-replica ClickHouse database on a retained Synology iSCSI claim. goflow2 emits records as NDJSON on stdout; the existing Vector DaemonSet routes that stream into the ClickHouse sink. The `docs/flow-collection-design.md` document is the authoritative contract for the flow pipeline, schema, retention, and gateway export configuration.
+Collect IPFIX flow records from the MikroTik gateway with a single-replica goflow2 collector and store them in a single-replica ClickHouse database on a retained Synology iSCSI claim. The gateway exports WAN and routed inter-VLAN traffic; same-VLAN switching remains outside this collector. goflow2 emits records as NDJSON on stdout; the existing Vector DaemonSet routes that stream into the ClickHouse sink. The `docs/flow-collection-design.md` document is the authoritative contract for the flow pipeline, schema, retention, and gateway export configuration.
 
-Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins, and use the pinned `netsage-sankey-panel` for Sankey visualizations. Use Grafana's native Geomap and State timeline panels instead of the deprecated Worldmap plugin. Flow Geomaps use the local GeoLite2 City lookup with country fallback and approximate city coordinates; they do not call a third-party geolocation API per flow. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
+Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins, and use the pinned `netsage-sankey-panel` for Sankey visualizations. Use Grafana's native Geomap and State timeline panels instead of the deprecated Worldmap plugin. Flow Geomaps use the local GeoLite2 City lookup with country fallback and approximate city coordinates; they do not call a third-party geolocation API per flow. The `sk-flow` dashboard selects observed internal IPs from the repository-owned ClickHouse analytics view and supports a validated manual override. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
 
 Use Blackbox Exporter for synthetic checks and Prometheus SNMP Exporter for network and hardware polling. Use a dedicated read-only Proxmox exporter identity with the `PVEAuditor` role.
 
@@ -57,7 +57,7 @@ Use a dependency-ordered rollout:
 5. Deploy VictoriaLogs, Vector, syslog, Talos log forwarding, and audit logging.
 6. Add SNMP, Proxmox, and blackbox targets.
 7. Add reviewed dashboards, alerts, and notification routing.
-8. Add IPFIX flow collection (goflow2, ClickHouse, gateway export, flow dashboard and alerts).
+8. Add IPFIX flow collection (goflow2, ClickHouse, routed gateway export, selected-host flow dashboard and alerts).
 
 Proceed between stages after automated validation and workload smoke tests pass. A fixed soak period is not required, but stop progression on dropped data, repeated restarts, capacity pressure, or excessive alert noise.
 
@@ -220,7 +220,7 @@ Track these items explicitly after the first release:
 - UniFi Poller after the controller migration
 - Brother printer SNMP after its administrator-password reset; configure or confirm read-only SNMPv2c with the shared profile, validate `system` and `printer_mib` from the exporter, then enable its intermittent scrape without offline alerting
 - Klipper and Moonraker monitoring after exporter and read-only authentication review
-- Flow collection follow-ups (inter-VLAN flows, materialized views or rollups, ClickHouse backups) as listed in `docs/flow-collection-design.md`
+- Flow collection follow-ups (same-VLAN switch telemetry, materialized views or rollups, ClickHouse backups) as listed in `docs/flow-collection-design.md`
 - Distributed tracing after applications emit OpenTelemetry spans
 - Pre-bundled Grafana image if runtime plugin installation becomes unreliable
 - Additional workers or clustered VictoriaMetrics-family storage if availability requirements change

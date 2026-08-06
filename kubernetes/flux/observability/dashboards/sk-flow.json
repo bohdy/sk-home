@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "WAN flow analytics backed by ClickHouse flow records collected from the MikroTik gateway. Approximate geography uses GeoLite Data created by MaxMind, available from https://www.maxmind.com/en/home.",
+  "description": "WAN and routed inter-VLAN flow analytics backed by ClickHouse records collected from the MikroTik gateway. Select an observed internal IP or enter a manual override; approximate geography uses GeoLite Data created by MaxMind, available from https://www.maxmind.com/en/home.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
@@ -305,7 +305,7 @@
         {
           "editorMode": "code",
           "format": 1,
-          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, if(src_addr LIKE '10.%', 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
+          "rawSql": "SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, if(src_internal, 'lan-source', 'wan-source') AS direction, sum(bytes) / 60 AS traffic FROM flows.flow_analytics WHERE $__timeFilter(timestamp) GROUP BY time, direction ORDER BY time",
           "refId": "A"
         }
       ],
@@ -447,7 +447,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "FlowClickHouseIaC"
       },
-      "description": "Approximate public source geography. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
+      "description": "Approximate external-peer geography for inbound traffic to the selected internal IP. In All mode, this covers all internal hosts. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -561,17 +561,17 @@
         {
           "editorMode": "code",
           "format": 0,
-          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT src_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' GROUP BY src_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, base AS (SELECT timestamp, src_addr, dst_addr, bytes, packets, src_internal, dst_internal FROM flows.flow_analytics WHERE $__timeFilter(timestamp)), scoped AS (SELECT base.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal FROM base WHERE (selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal))), raw AS (SELECT peer AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped WHERE direction = 'inbound' AND peer != '' AND peer_internal = 0 GROUP BY peer), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
           "refId": "A"
         },
         {
           "editorMode": "code",
           "format": 0,
-          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT src_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' GROUP BY src_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, base AS (SELECT timestamp, src_addr, dst_addr, bytes, packets, src_internal, dst_internal FROM flows.flow_analytics WHERE $__timeFilter(timestamp)), scoped AS (SELECT base.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal FROM base WHERE (selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal))), raw AS (SELECT peer AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped WHERE direction = 'inbound' AND peer != '' AND peer_internal = 0 GROUP BY peer), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
           "refId": "B"
         }
       ],
-      "title": "External source geography",
+      "title": "Inbound external-peer geography",
       "type": "geomap"
     },
     {
@@ -579,7 +579,7 @@
         "type": "grafana-clickhouse-datasource",
         "uid": "FlowClickHouseIaC"
       },
-      "description": "Approximate public destination geography. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
+      "description": "Approximate external-peer geography for outbound traffic from the selected internal IP. In All mode, this covers all internal hosts. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -693,18 +693,596 @@
         {
           "editorMode": "code",
           "format": 0,
-          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT dst_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND dst_addr != '' GROUP BY dst_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, base AS (SELECT timestamp, src_addr, dst_addr, bytes, packets, src_internal, dst_internal FROM flows.flow_analytics WHERE $__timeFilter(timestamp)), scoped AS (SELECT base.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal FROM base WHERE (selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal))), raw AS (SELECT peer AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped WHERE direction = 'outbound' AND peer != '' AND peer_internal = 0 GROUP BY peer), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
           "refId": "A"
         },
         {
           "editorMode": "code",
           "format": 0,
-          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT dst_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND dst_addr != '' GROUP BY dst_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, base AS (SELECT timestamp, src_addr, dst_addr, bytes, packets, src_internal, dst_internal FROM flows.flow_analytics WHERE $__timeFilter(timestamp)), scoped AS (SELECT base.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal FROM base WHERE (selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal))), raw AS (SELECT peer AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped WHERE direction = 'outbound' AND peer != '' AND peer_internal = 0 GROUP BY peer), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
           "refId": "B"
         }
       ],
-      "title": "External destination geography",
+      "title": "Outbound external-peer geography",
       "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Number of flow records in the selected time range. Manual IP input takes precedence over the dropdown.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 58
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT count() AS flows FROM scoped",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP flows",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Total bytes represented by the selected flow scope.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 58
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT sum(bytes) AS bytes FROM scoped",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP traffic",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Total packets represented by the selected flow scope.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 58
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT sum(packets) AS packets FROM scoped",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP packets",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Distinct peers in the selected flow scope.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 58
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT uniqExactIf(peer, peer != '') AS peers FROM scoped",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP peers",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Bytes per second by direction for the selected internal IP. Inter-VLAN records are labeled separately in All mode.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 63
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 1,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, direction, sum(bytes) / 60 AS traffic FROM scoped GROUP BY time, direction ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP traffic by direction",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Flow records per second by direction for the selected internal IP.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 63
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 1,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT toStartOfInterval(timestamp, INTERVAL 1 minute) AS time, direction, count() / 60 AS flows FROM scoped GROUP BY time, direction ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP flow rate by direction",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Peers ranked by bytes for the selected internal IP and time range.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "packets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flows"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 72
+      },
+      "id": 17,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT peer, direction, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped WHERE peer != '' GROUP BY peer, direction ORDER BY bytes DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP top peers by traffic",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Transport protocols ranked by bytes for the selected internal IP.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "packets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flows"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 72
+      },
+      "id": 18,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT proto AS protocol, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped GROUP BY protocol ORDER BY bytes DESC LIMIT 30",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP protocols",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Local and remote ports ranked by bytes for the selected internal IP. All mode uses source and destination ports as the local and remote columns.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "packets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flows"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 82
+      },
+      "id": 19,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT direction, proto AS protocol, local_port, remote_port, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM scoped GROUP BY direction, protocol, local_port, remote_port ORDER BY bytes DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP ports",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Selected-host flow paths ranked by bytes. All mode shows routed internal flow paths.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 12,
+        "x": 12,
+        "y": 82
+      },
+      "id": 20,
+      "options": {
+        "color": "blue",
+        "iteration": 7,
+        "labelSize": 14,
+        "monochrome": false,
+        "nodeColor": "grey",
+        "nodePadding": 18,
+        "nodeWidth": 24,
+        "valueField": "bytes"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT if(selected_ip != '', if(src_addr = selected_ip, selected_ip, src_addr), src_addr) AS source, if(selected_ip != '', if(dst_addr = selected_ip, selected_ip, dst_addr), dst_addr) AS destination, sum(bytes) AS bytes FROM scoped WHERE src_addr != '' AND dst_addr != '' GROUP BY source, destination ORDER BY bytes DESC LIMIT 30",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected IP flow paths",
+      "type": "netsage-sankey-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Recent selected-host flow records with direction, peer, ports, bytes, and packets. The limit keeps detail queries bounded.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillWidth": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "packets"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 12,
+        "x": 0,
+        "y": 92
+      },
+      "id": 21,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH ${internal_ip:sqlstring} AS dropdown_ip, trimBoth(${manual_ip:sqlstring}) AS manual_ip, if(manual_ip = '', if(dropdown_ip = '__all__', '', dropdown_ip), if(startsWith(manual_ip, '10.1.10.') OR startsWith(manual_ip, '10.1.20.') OR startsWith(manual_ip, '10.1.100.') OR startsWith(manual_ip, '10.1.101.') OR startsWith(manual_ip, '10.1.102.'), manual_ip, '__invalid__')) AS selected_ip, scoped AS (SELECT flow.*, if(selected_ip != '' AND src_addr = selected_ip, 'outbound', if(selected_ip != '' AND dst_addr = selected_ip, 'inbound', if(src_internal AND dst_internal, 'inter-vlan', if(src_internal, 'outbound', 'inbound')))) AS direction, if(selected_ip != '', if(src_addr = selected_ip, dst_addr, src_addr), if(src_internal, dst_addr, src_addr)) AS peer, if(selected_ip != '', if(src_addr = selected_ip, dst_internal, src_internal), if(src_internal, dst_internal, src_internal)) AS peer_internal, if(selected_ip != '', if(src_addr = selected_ip, src_port, dst_port), src_port) AS local_port, if(selected_ip != '', if(src_addr = selected_ip, dst_port, src_port), dst_port) AS remote_port FROM flows.flow_analytics AS flow WHERE $__timeFilter(timestamp) AND ((selected_ip != '' AND (src_addr = selected_ip OR dst_addr = selected_ip)) OR (selected_ip = '' AND (src_internal OR dst_internal)))) SELECT timestamp AS time, direction, peer, proto AS protocol, local_port, remote_port, bytes, packets FROM scoped WHERE peer != '' ORDER BY time DESC LIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent selected IP flows",
+      "type": "table"
     }
   ],
   "refresh": "30s",
@@ -715,6 +1293,49 @@
     "ipfix",
     "clickhouse"
   ],
+  "templating": {
+    "list": [
+      {
+        "allValue": "__all__",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "FlowClickHouseIaC"
+        },
+        "definition": "WITH addresses AS (SELECT src_addr AS address FROM flows.flow_analytics WHERE $__timeFilter(timestamp) AND src_internal UNION ALL SELECT dst_addr AS address FROM flows.flow_analytics WHERE $__timeFilter(timestamp) AND dst_internal) SELECT address FROM addresses WHERE address != '' GROUP BY address ORDER BY address",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Internal IP",
+        "multi": false,
+        "name": "internal_ip",
+        "options": [],
+        "query": "WITH addresses AS (SELECT src_addr AS address FROM flows.flow_analytics WHERE $__timeFilter(timestamp) AND src_internal UNION ALL SELECT dst_addr AS address FROM flows.flow_analytics WHERE $__timeFilter(timestamp) AND dst_internal) SELECT address FROM addresses WHERE address != '' GROUP BY address ORDER BY address",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "Optional valid address from one of the managed LAN CIDRs. This value overrides the dropdown.",
+        "hide": 0,
+        "label": "Manual IP override",
+        "name": "manual_ip",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
   "time": {
     "from": "now-6h",
     "to": "now"
@@ -722,5 +1343,5 @@
   "timezone": "browser",
   "title": "Flow Analytics",
   "uid": "sk-flow",
-  "version": 1
+  "version": 2
 }
