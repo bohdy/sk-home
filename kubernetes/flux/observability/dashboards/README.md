@@ -1,6 +1,6 @@
 # Focused Dashboards
 
-This component provisions nine focused Grafana dashboards through the chart-managed dashboard sidecar. Every dashboard is committed as JSON, uses a stable datasource UID, and requires no runtime download or mutable community-dashboard ID. The `sk-flow` dashboard uses the provisioned `FlowClickHouseIaC` datasource to query `flows.flow`; the remaining dashboards use `VictoriaMetrics`.
+This component provisions nine focused Grafana dashboards through the chart-managed dashboard sidecar. Every dashboard is committed as JSON, uses a stable datasource UID, and requires no runtime download or mutable community-dashboard ID. The `sk-flow` dashboard uses the provisioned `FlowClickHouseIaC` datasource to query `flows.flow` and includes separate source-to-destination Sankey panels ranked by total bytes and flow count; the remaining dashboards use `VictoriaMetrics`.
 
 The network, DNS, ingestion, Cilium/BGP, syslog, Proxmox, Synology, and APC UPS dashboards use metric families verified in the live cluster. The USB-attached APC is collected through the Synology vendor MIB, not a separate direct UPS poll. The network dashboard may show no data until its remaining credential-gated collectors are enabled; provisioning it first does not make absent collectors appear healthy.
 
