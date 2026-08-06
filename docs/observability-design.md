@@ -24,7 +24,7 @@ Deploy VictoriaLogs Single separately for logs. Run Vector as a DaemonSet and us
 
 Collect IPFIX flow records from the MikroTik gateway with a single-replica goflow2 collector and store them in a single-replica ClickHouse database on a retained Synology iSCSI claim. goflow2 emits records as NDJSON on stdout; the existing Vector DaemonSet routes that stream into the ClickHouse sink. The `docs/flow-collection-design.md` document is the authoritative contract for the flow pipeline, schema, retention, and gateway export configuration.
 
-Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
+Use Grafana as the only user-facing observability service. Provision VictoriaMetrics, VictoriaLogs, and ClickHouse data sources, including the pinned `victoriametrics-logs-datasource` and `grafana-clickhouse-datasource` plugins, and use the pinned `netsage-sankey-panel` for Sankey visualizations. Use Grafana's native Geomap and State timeline panels instead of the deprecated Worldmap plugin. Keep VictoriaMetrics, VictoriaLogs, ClickHouse, Alertmanager, exporters, and ingestion APIs on `ClusterIP` services.
 
 Use Blackbox Exporter for synthetic checks and Prometheus SNMP Exporter for network and hardware polling. Use a dedicated read-only Proxmox exporter identity with the `PVEAuditor` role.
 
