@@ -311,6 +311,136 @@
       ],
       "title": "LAN vs WAN sources",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Top source-to-destination IP pairs ranked by total bytes during the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destination"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Destination IP"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "id": 7,
+      "options": {
+        "color": "blue",
+        "iteration": 7,
+        "labelSize": 14,
+        "monochrome": false,
+        "nodeColor": "grey",
+        "nodePadding": 18,
+        "nodeWidth": 24,
+        "valueField": "bytes"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "SELECT src_addr AS source, dst_addr AS destination, sum(bytes) AS bytes FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' AND dst_addr != '' GROUP BY src_addr, dst_addr ORDER BY bytes DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top IP pairs by bytes",
+      "type": "netsage-sankey-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Top source-to-destination IP pairs ranked by flow count during the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "source"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Source IP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destination"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Destination IP"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "id": 8,
+      "options": {
+        "color": "blue",
+        "iteration": 7,
+        "labelSize": 14,
+        "monochrome": false,
+        "nodeColor": "grey",
+        "nodePadding": 18,
+        "nodeWidth": 24,
+        "valueField": "flows"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "SELECT src_addr AS source, dst_addr AS destination, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' AND dst_addr != '' GROUP BY src_addr, dst_addr ORDER BY flows DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Top IP pairs by flow count",
+      "type": "netsage-sankey-panel"
     }
   ],
   "refresh": "30s",
