@@ -266,11 +266,12 @@ spec:
           env:
             HEALTH_PORT: "8081"
           reloadURL: https://grafana.bohdal.name:3000/api/admin/provisioning/datasources/reload
-      # Pin the signed backend plugins; do not depend on a floating marketplace
+      # Pin signed Grafana plugins; do not depend on a floating marketplace
       # version at pod startup.
       plugins:
         - victoriametrics-logs-datasource@0.29.0
         - grafana-clickhouse-datasource@4.20.0
+        - netsage-sankey-panel@1.1.4
       admin:
         existingSecret: grafana-admin
         userKey: admin-user
