@@ -171,12 +171,21 @@ The stdout handoff is node-local like every other container log, so it needs no 
 - New `sk-flow` dashboard backed by ClickHouse SQL
 - Extend `sk-ingestion` with goflow2 and Vector ClickHouse-sink health via VictoriaQL/VictoriaMetrics
 
+## Flow geography
+
+The adaptive source and destination maps use a local MaxMind GeoLite2 City CSV database. A non-blocking `observability-flow-geoip` Flux component refreshes the database twice weekly, imports IPv4 and IPv6 ranges and English locations into versioned ClickHouse staging tables, exchanges the completed tables atomically, and reloads the `flows.ip_geo` IP_TRIE dictionary. Raw flow records are not rewritten and individual flow addresses never leave the cluster.
+
+Countries at or above 500,000 km2 receive city markers when GeoLite2 provides a city and an accuracy radius no greater than 100 km. All other public endpoints use Grafana's bundled country gazetteer. Private, reserved, malformed, and unresolved addresses produce no map point. The accuracy limit lives in `flows.geo_settings` and the large-country policy is committed in `flows.geo_country_policy`.
+
+The updater requires an operator-created `maxmind-geoip` Secret with Bitwarden-backed `account-id` and `license-key` keys. Its Cilium policy allows only DNS, ClickHouse HTTP, and HTTPS to MaxMind's download and documented R2 redirect hosts. The MaxMind CSV archive remains ephemeral and is not committed or logged.
+
 ## NetworkPolicy
 
 - goflow2 ingress: UDP/2055 from `10.0.0.0/8`
 - goflow2 egress: only what the chosen Vector handoff requires
-- ClickHouse ingress: only authorized writers (Vector) and Grafana datasource path
+- ClickHouse ingress: only authorized writers (Vector), Grafana datasource, DDL Job, and GeoIP updater
 - ClickHouse egress: none by default
+- GeoIP updater egress: ClickHouse HTTP, cluster DNS, and the two exact MaxMind download hosts over HTTPS
 
 ## Alerting
 
@@ -190,7 +199,7 @@ Define exact PromQL only after measuring live metric names during bring-up. Inte
 
 ## Security and secrets
 
-No new Bitwarden secrets for v1. IPFIX is unauthenticated UDP inside the home-lab trust boundary. ClickHouse runs without authentication inside the cluster, matching VictoriaMetrics and VictoriaLogs. OpenTofu MikroTik credentials already exist.
+The original flow v1 has no new Bitwarden secrets: IPFIX is unauthenticated UDP inside the home-lab trust boundary and ClickHouse runs without authentication inside the cluster, matching VictoriaMetrics and VictoriaLogs. The GeoIP extension separately requires the operator-created Bitwarden-backed `maxmind-geoip` Secret for MaxMind database downloads. OpenTofu MikroTik credentials already exist.
 
 ## Network addresses
 
@@ -217,7 +226,9 @@ Known reserved VIPs at plan time:
 7. Provision Grafana plugin, datasource, `sk-flow`, and ingestion panels.
 8. Add NetworkPolicy.
 9. Add alerts with real metric names.
-10. Promote this plan into `docs/flow-collection-design.md`, update `docs/observability-design.md`, and add a resumable stage to `docs/observability-rollout.md`.
+10. Create the Bitwarden-backed MaxMind Secret and run the GeoIP bootstrap Job.
+11. Verify country fallback, city precision, and accuracy-radius behavior in both Geomap panels.
+12. Promote this plan into `docs/flow-collection-design.md`, update `docs/observability-design.md`, and add a resumable stage to `docs/observability-rollout.md`.
 
 Proceed between stages after automated validation and workload smoke tests pass. Stop progression on dropped data, repeated restarts, capacity pressure, secret leakage, unexpected public exposure, or excessive alert noise.
 
@@ -228,6 +239,8 @@ Proceed between stages after automated validation and workload smoke tests pass.
 - VIP is unique; UniFi console remains on `.56`
 - `apply_gateway_ipfix` mutual exclusion and immutable apply path work
 - Observability quota remains healthy after the new PVC and memory requests
+- `flows.ip_geo` loads after a complete GeoLite2 import and retains the previous dictionary data when a refresh fails
+- Source and destination Geomap panels return country and city rows without exposing private addresses or credentials
 
 Rollback by suspending or reverting the Flux `observability-flow-collector` Kustomization while retaining the ClickHouse PVC. Never delete the retained PV or Synology LUN as part of routine rollback.
 

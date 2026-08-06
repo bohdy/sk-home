@@ -1,0 +1,9 @@
+# Treat the bootstrap Job name as a reference to the generated script ConfigMap
+# so script changes create a new immutable Job instead of mutating its pod
+# template in place.
+nameReference:
+  - kind: ConfigMap
+    version: v1
+    fieldSpecs:
+      - path: metadata/name
+        kind: Job

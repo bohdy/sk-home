@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "WAN flow analytics backed by ClickHouse flow records collected from the MikroTik gateway.",
+  "description": "WAN flow analytics backed by ClickHouse flow records collected from the MikroTik gateway. Approximate geography uses GeoLite Data created by MaxMind, available from https://www.maxmind.com/en/home.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
@@ -441,6 +441,270 @@
       ],
       "title": "Top IP pairs by flow count",
       "type": "netsage-sankey-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Approximate public source geography. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 9,
+      "maxDataPoints": 200,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": true,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "color": {
+                "field": "bytes",
+                "fixed": "dark-blue"
+              },
+              "fillOpacity": 0.65,
+              "shape": "circle",
+              "showLegend": true,
+              "size": {
+                "field": "bytes",
+                "fixed": 5,
+                "max": 20,
+                "min": 4
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "location": {
+              "gazetteer": "public/gazetteer/countries.json",
+              "lookup": "lookup",
+              "mode": "lookup"
+            },
+            "name": "Countries",
+            "tooltip": true,
+            "type": "markers"
+          },
+          {
+            "config": {
+              "color": {
+                "field": "bytes",
+                "fixed": "dark-orange"
+              },
+              "fillOpacity": 0.75,
+              "shape": "square",
+              "showLegend": true,
+              "size": {
+                "field": "bytes",
+                "fixed": 5,
+                "max": 20,
+                "min": 4
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "Cities",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lastOnly": false,
+          "lat": 0,
+          "lon": 0,
+          "zoom": 1
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT src_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' GROUP BY src_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT src_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND src_addr != '' GROUP BY src_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
+          "refId": "B"
+        }
+      ],
+      "title": "External source geography",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "FlowClickHouseIaC"
+      },
+      "description": "Approximate public destination geography. Smaller countries use country markers; larger countries use GeoLite2 city points when the reported accuracy radius is at most the configured limit.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "id": 10,
+      "maxDataPoints": 200,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": true,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "color": {
+                "field": "bytes",
+                "fixed": "dark-green"
+              },
+              "fillOpacity": 0.65,
+              "shape": "circle",
+              "showLegend": true,
+              "size": {
+                "field": "bytes",
+                "fixed": 5,
+                "max": 20,
+                "min": 4
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "location": {
+              "gazetteer": "public/gazetteer/countries.json",
+              "lookup": "lookup",
+              "mode": "lookup"
+            },
+            "name": "Countries",
+            "tooltip": true,
+            "type": "markers"
+          },
+          {
+            "config": {
+              "color": {
+                "field": "bytes",
+                "fixed": "dark-red"
+              },
+              "fillOpacity": 0.75,
+              "shape": "square",
+              "showLegend": true,
+              "size": {
+                "field": "bytes",
+                "fixed": 5,
+                "max": 20,
+                "min": 4
+              }
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
+            "name": "Cities",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "fit",
+          "lastOnly": false,
+          "lat": 0,
+          "lon": 0,
+          "zoom": 1
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT dst_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND dst_addr != '' GROUP BY dst_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS lookup, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, bytes, packets, flows FROM raw) SELECT lookup, country, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE lookup != '' AND (city_enabled = 0 OR city = '' OR accuracy_radius_km > city_accuracy_limit) GROUP BY lookup, country ORDER BY bytes DESC LIMIT 100",
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "format": 0,
+          "rawSql": "WITH (SELECT value FROM flows.geo_settings WHERE setting = 'city_accuracy_radius_km' LIMIT 1) AS city_accuracy_limit, raw AS (SELECT dst_addr AS address, sum(bytes) AS bytes, sum(packets) AS packets, count() AS flows FROM flows.flow WHERE $__timeFilter(timestamp) AND dst_addr != '' GROUP BY dst_addr), geo AS (SELECT dictGetOrDefault('flows.ip_geo', 'country_code', toIPv6OrZero(address), '') AS country, dictGetOrDefault('flows.ip_geo', 'country_name', toIPv6OrZero(address), '') AS country_name, dictGetOrDefault('flows.ip_geo', 'city_name', toIPv6OrZero(address), '') AS city, dictGetFloat64('flows.ip_geo', 'latitude', toIPv6OrZero(address)) AS latitude, dictGetFloat64('flows.ip_geo', 'longitude', toIPv6OrZero(address)) AS longitude, dictGetUInt16('flows.ip_geo', 'accuracy_radius', toIPv6OrZero(address)) AS accuracy_radius_km, dictGetUInt8('flows.ip_geo', 'city_enabled', toIPv6OrZero(address)) AS city_enabled, bytes, packets, flows FROM raw) SELECT country, country_name, city, latitude, longitude, accuracy_radius_km, sum(bytes) AS bytes, sum(packets) AS packets, sum(flows) AS flows FROM geo WHERE country != '' AND city_enabled = 1 AND city != '' AND accuracy_radius_km <= city_accuracy_limit GROUP BY country, country_name, city, latitude, longitude, accuracy_radius_km ORDER BY bytes DESC LIMIT 100",
+          "refId": "B"
+        }
+      ],
+      "title": "External destination geography",
+      "type": "geomap"
     }
   ],
   "refresh": "30s",

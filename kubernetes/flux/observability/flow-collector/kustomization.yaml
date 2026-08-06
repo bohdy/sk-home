@@ -20,6 +20,18 @@ configMapGenerator:
     files:
       - clickhouse-database.sql
       - clickhouse-init.sql
+      - clickhouse-geo-blocks-active.sql
+      - clickhouse-geo-blocks-candidate.sql
+      - clickhouse-geo-locations-active.sql
+      - clickhouse-geo-locations-candidate.sql
+      - clickhouse-geo-policy-table.sql
+      - clickhouse-geo-policy-clear.sql
+      - clickhouse-geo-policy-seed.sql
+      - clickhouse-geo-settings-table.sql
+      - clickhouse-geo-settings-clear.sql
+      - clickhouse-geo-settings-seed.sql
+      - clickhouse-geo-view.sql
+      - clickhouse-geo-dictionary.sql
 generatorOptions:
   labels:
     app.kubernetes.io/name: clickhouse

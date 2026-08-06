@@ -1,0 +1,57 @@
+# Only the refresh workload may reach ClickHouse and MaxMind. Cilium's DNS
+# proxy limits external resolution to the download endpoint and its documented
+# R2 redirect host; no other Internet egress is granted.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: flow-geoip-updater
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: flow-geoip-updater
+  ingress: []
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              # Kubernetes resolver search domains are tried before the
+              # absolute name because the application hostname has fewer
+              # labels than the cluster's ndots setting. Cilium requires
+              # each completed search-list name to be allowed explicitly.
+              - matchName: clickhouse.observability.svc.cluster.local.observability.svc.cluster.local
+              - matchName: clickhouse.observability.svc.cluster.local.svc.cluster.local
+              - matchName: clickhouse.observability.svc.cluster.local.cluster.local
+              - matchName: clickhouse.observability.svc.cluster.local
+              - matchName: download.maxmind.com
+              - matchName: download.maxmind.com.observability.svc.cluster.local
+              - matchName: download.maxmind.com.svc.cluster.local
+              - matchName: download.maxmind.com.cluster.local
+              - matchName: mm-prod-geoip-databases.a2649acb697e2c09b632799562c076f2.r2.cloudflarestorage.com
+              - matchName: mm-prod-geoip-databases.a2649acb697e2c09b632799562c076f2.r2.cloudflarestorage.com.observability.svc.cluster.local
+              - matchName: mm-prod-geoip-databases.a2649acb697e2c09b632799562c076f2.r2.cloudflarestorage.com.svc.cluster.local
+              - matchName: mm-prod-geoip-databases.a2649acb697e2c09b632799562c076f2.r2.cloudflarestorage.com.cluster.local
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/name: clickhouse
+      toPorts:
+        - ports:
+            - port: "8123"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: download.maxmind.com
+        - matchName: mm-prod-geoip-databases.a2649acb697e2c09b632799562c076f2.r2.cloudflarestorage.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

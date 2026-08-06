@@ -13,5 +13,6 @@ resources:
   - blackbox-kustomization.yaml
   - snmp-kustomization.yaml
   - flow-collector-kustomization.yaml
+  - flow-geoip-kustomization.yaml
   - proxmox-kustomization.yaml
   - alerting-kustomization.yaml

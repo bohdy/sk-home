@@ -1,7 +1,8 @@
 # Applies the repository-owned schema before any writer inserts rows. The
 # container waits for the server's /ping, then POSTs each single-statement DDL
 # file through ClickHouse's HTTP interface because that endpoint rejects
-# multi-statement requests. Busybox wget delivers the SQL directly.
+# multi-statement requests. The geo tables and dictionary are created before
+# the separate GeoIP refresh workload starts importing data.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -32,10 +33,27 @@ spec:
                 echo "waiting for clickhouse" >&2
                 sleep 3
               done
-              echo "ClickHouse ready, applying database DDL" >&2
-              wget -qO- --post-file=/ddl/clickhouse-database.sql "http://clickhouse.observability.svc.cluster.local:8123/" >&2
-              echo "Applying table DDL" >&2
-              wget -qO- --post-file=/ddl/clickhouse-init.sql "http://clickhouse.observability.svc.cluster.local:8123/" >&2
+              apply_ddl() {
+                ddl="$1"
+                echo "Applying ${ddl}" >&2
+                wget -qO- --post-file="/ddl/${ddl}" "http://clickhouse.observability.svc.cluster.local:8123/" >&2
+              }
+
+              echo "ClickHouse ready, applying database and table DDL" >&2
+              apply_ddl clickhouse-database.sql
+              apply_ddl clickhouse-init.sql
+              apply_ddl clickhouse-geo-blocks-active.sql
+              apply_ddl clickhouse-geo-blocks-candidate.sql
+              apply_ddl clickhouse-geo-locations-active.sql
+              apply_ddl clickhouse-geo-locations-candidate.sql
+              apply_ddl clickhouse-geo-policy-table.sql
+              apply_ddl clickhouse-geo-policy-clear.sql
+              apply_ddl clickhouse-geo-policy-seed.sql
+              apply_ddl clickhouse-geo-settings-table.sql
+              apply_ddl clickhouse-geo-settings-clear.sql
+              apply_ddl clickhouse-geo-settings-seed.sql
+              apply_ddl clickhouse-geo-view.sql
+              apply_ddl clickhouse-geo-dictionary.sql
               echo "DDL applied" >&2
           resources:
             requests:

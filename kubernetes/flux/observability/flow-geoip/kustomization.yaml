@@ -1,0 +1,19 @@
+# The generated script name changes whenever the refresh logic changes, which
+# rolls both the bootstrap Job and the scheduled updater onto the same script.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - geoip-refresh-job.yaml
+  - geoip-refresh-cronjob.yaml
+  - geoip-network-policy.yaml
+configMapGenerator:
+  - name: flow-geoip-refresh
+    namespace: observability
+    files:
+      - geoip-refresh.sh
+generatorOptions:
+  labels:
+    app.kubernetes.io/component: flow-geoip
+    app.kubernetes.io/part-of: observability
+configurations:
+  - kustomizeconfig.yaml

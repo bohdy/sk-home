@@ -1,0 +1,20 @@
+# GeoIP refresh depends on the ClickHouse dictionary schema but is deliberately
+# non-blocking for the collector and dashboards when the operator has not yet
+# created the Bitwarden-backed MaxMind Secret.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-flow-geoip
+  namespace: flux-system
+spec:
+  interval: 30m
+  timeout: 10m
+  retryInterval: 2m
+  wait: false
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/flux/observability/flow-geoip
+  dependsOn:
+    - name: observability-flow-collector
