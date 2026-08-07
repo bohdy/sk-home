@@ -1,6 +1,6 @@
 # Cloudflare Tunnel Connector
 
-This component runs two fixed `cloudflared` 2026.7.2 replicas for the remotely managed shared `sk-talos` tunnel. The replicas provide process and rollout redundancy; preferred anti-affinity will spread them across nodes when another schedulable worker exists.
+This component runs two fixed `cloudflared` 2026.7.2 replicas for the remotely managed shared `sk-talos` tunnel. The replicas provide process and rollout redundancy; preferred anti-affinity spreads them across schedulable nodes when capacity permits.
 
 The Cloudflare control-plane stack routes only `grafana.bohdal.name` through these connectors and leaves a terminal `404` rule for every unmatched hostname. Deploying the connector alone still cannot publish an application; public DNS, tunnel ingress, and Access remain OpenTofu-owned resources.
 
