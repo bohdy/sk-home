@@ -125,9 +125,9 @@ These traffic-flow resources are separate from the currently blocked BGP resourc
 | Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
 |-----------|------------|-----------|----------------|--------------|
 | goflow2 | 50m | 250m | 64 MiB | 256 MiB |
-| ClickHouse | 500m | 2000m | 1 GiB | 2 GiB |
+| ClickHouse | 500m | 2000m | 2 GiB | 4 GiB |
 
-Vector already runs on all four nodes; flow handoff adds configuration, not a new Deployment family.
+Vector already runs on every Linux node; flow handoff adds configuration, not a new Deployment family.
 
 Fit check against `observability-capacity` is required at acceptance. Current quota is 8 PVCs and 300 GiB storage; one additional 100 GiB claim is feasible but tight on recovery headroom.
 
