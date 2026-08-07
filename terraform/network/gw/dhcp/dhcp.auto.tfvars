@@ -111,6 +111,22 @@ dhcp_reservations = {
     mac_address = "BC:24:11:20:40:44"
     comment     = "Talos worker sk-talos-worker-1"
   }
+  talos_worker_2 = {
+    # Mirror the Talos inventory so future DHCP migration retains the worker's
+    # existing management address.
+    server      = "server20"
+    address     = "10.1.20.45"
+    mac_address = "BC:24:11:20:40:45"
+    comment     = "Talos worker sk-talos-worker-2"
+  }
+  talos_worker_3 = {
+    # Mirror the Talos inventory so future DHCP migration retains the worker's
+    # existing management address.
+    server      = "server20"
+    address     = "10.1.20.46"
+    mac_address = "BC:24:11:20:40:46"
+    comment     = "Talos worker sk-talos-worker-3"
+  }
   ap_1np = {
     server      = "server102"
     address     = "10.1.102.11"

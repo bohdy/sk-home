@@ -76,5 +76,5 @@ securityContext:
 
 tolerations:
   # System networking must remain schedulable on control planes so adding or
-  # losing the single worker cannot prevent Cilium from running cluster-wide.
+  # losing any one worker cannot prevent Cilium from running cluster-wide.
   - operator: Exists

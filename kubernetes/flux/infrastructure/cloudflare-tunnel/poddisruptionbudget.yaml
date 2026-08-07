@@ -1,5 +1,5 @@
-# Keep one connector available during voluntary maintenance; this does not claim
-# node-level HA while both replicas share the cluster's only worker.
+# Keep one connector available during voluntary maintenance; preferred
+# anti-affinity provides node-level separation when schedulable capacity permits.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

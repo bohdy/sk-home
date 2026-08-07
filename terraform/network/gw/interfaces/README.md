@@ -24,7 +24,7 @@ The two gateway SNMP identities are already represented in remote OpenTofu state
 The gateway peers with the Talos Kubernetes nodes on VLAN 20:
 
 - Gateway address: `10.1.20.1`
-- Node peers: `10.1.20.41`, `10.1.20.42`, `10.1.20.43`, `10.1.20.44`
+- Node peers: `10.1.20.41`, `10.1.20.42`, `10.1.20.43`, `10.1.20.44`, `10.1.20.45`, `10.1.20.46`
 - ASN: `65001` on both sides
 - Accepted routes: `/32` LoadBalancer VIP routes inside `10.1.30.0/24`
 
