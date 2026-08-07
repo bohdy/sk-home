@@ -1,6 +1,7 @@
-# Cilium advertises the reserved IPFIX VIP over BGP. Cluster traffic policy
-# forwards the gateway's UDP stream to the active collector pod regardless of
-# which worker hosts it; the fixed NodePort remains available for diagnostics.
+# Cilium advertises the reserved IPFIX VIP over BGP, but external VXLAN
+# forwarding from the CP nodes to the worker is unreliable in the current Talos
+# veth Cilium mode. The MikroTik target therefore uses the pinned NodePort on
+# worker-1's physical address; the VIP remains available for future acceptance.
 apiVersion: v1
 kind: Service
 metadata:

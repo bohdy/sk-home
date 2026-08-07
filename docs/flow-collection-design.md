@@ -104,7 +104,7 @@ The same DDL creates `flows.flow_analytics`, a repository-owned view that adds `
 Manage IPFIX through OpenTofu in `terraform/network/gw/interfaces/` using:
 
 - `routeros_ip_traffic_flow` — accounting on `ether8` plus every routed VLAN interface from `vlans.auto.tfvars`; leave timeouts at RouterOS defaults unless measured need appears
-- `routeros_ip_traffic_flow_target` — active collector VIP `10.1.30.57:2055`, version `9` in the provider configuration because the pinned provider validates that spelling while the live RouterOS target is maintained as IPFIX, `v9_template_refresh = 20`, and `v9_template_timeout = "5m"`
+- `routeros_ip_traffic_flow_target` — active collector NodePort on worker-1 at `10.1.20.44:31236`, version `9` in the provider configuration because the pinned provider validates that spelling while the live RouterOS target is maintained as IPFIX, `v9_template_refresh = 20`, and `v9_template_timeout = "5m"`
 
 Add workflow input `apply_gateway_ipfix` with an immutable targeted plan, production environment apply, and full mutual exclusion against `apply_gateway`, `apply_gateway_snmp`, `plan_gateway_snmp`, `apply_gateway_dhcp`, and `apply_cloudflare`.
 
