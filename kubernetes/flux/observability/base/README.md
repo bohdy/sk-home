@@ -6,7 +6,7 @@ The namespace retains its explicit privileged Pod Security Admission profile bec
 
 The base also owns the namespace `LimitRange` and `ResourceQuota`. The `LimitRange` supplies a 25 millicore/32 MiB request and a 250 millicore/256 MiB limit only when a chart-managed container omits its own values; explicit workload sizing remains authoritative. Per-container maxima stay above the current VMSingle envelope, and PVCs are bounded between 1 GiB and 150 GiB.
 
-The aggregate quota permits 4 requested CPU cores, 6 GiB requested memory, 16 limited CPU cores, 20 GiB limited memory, 30 pods, 8 claims, and 300 GiB of requested storage. During sizing, the live namespace used 18 pods, 1.805 requested CPU cores, approximately 3.22 GiB requested memory, and 161 GiB of claims. The remaining allowance covers ordinary rolling updates and the planned SNMP and Proxmox exporters while preserving worker recovery headroom. Control-plane DaemonSet pods count toward the namespace totals even though they do not consume worker capacity.
+The aggregate quota permits 4 requested CPU cores, 6 GiB requested memory, 20 limited CPU cores, 20 GiB limited memory, 30 pods, 8 claims, and 300 GiB of requested storage. The CPU limit includes six Vector and node-exporter DaemonSet replicas plus ordinary rolling-update headroom; control-plane DaemonSet pods count toward the namespace totals even though they do not consume worker capacity.
 
 Validate with:
 
