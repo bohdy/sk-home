@@ -23,17 +23,17 @@ resource "routeros_ip_traffic_flow" "wan" {
   interfaces = join(",", local.traffic_flow_interfaces)
 }
 
-# The collector target uses the reserved Cilium LoadBalancer VIP so the gateway
-# does not depend on one worker's physical address. The service uses Cluster
-# traffic policy and the verified BGP route to reach the active collector pod.
-# The version value must pass the provider's case-sensitive validation ("IPFIX")
-# while RouterOS expects lowercase "ipfix"; the lifecycle ignore keeps the
-# manually-set ipfix version from being reverted.
+# The collector target uses the worker node's physical address and the fixed
+# NodePort (31236) because external VXLAN forwarding from the CP nodes to the
+# worker is unreliable in the current Talos veth Cilium mode. The version value
+# must pass the provider's case-sensitive validation ("IPFIX") while RouterOS
+# expects lowercase "ipfix"; the lifecycle ignore keeps the manually-set ipfix
+# version from being reverted.
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 
-  dst_address         = var.kubernetes_flow_collector_vip
-  port                = 2055
+  dst_address         = var.kubernetes_bgp.nodes.worker1.address
+  port                = 31236
   version             = "9"
   v9_template_refresh = 20
   v9_template_timeout = "5m"
