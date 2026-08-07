@@ -70,11 +70,13 @@ run_sql() {
 insert_csv() {
     table="$1"
     csv_file="$2"
+    # The ClickHouse pod has a bounded memory envelope. Serial parsing and
+    # smaller insert blocks keep the large GeoLite2 CSV imports below it.
     curl --config /dev/null \
         --fail \
         --silent \
         --show-error \
-        --url-query "query=INSERT INTO ${table} FORMAT CSVWithNames" \
+        --url-query "query=INSERT INTO ${table} SETTINGS input_format_parallel_parsing=0,max_insert_block_size=100000,max_threads=1 FORMAT CSVWithNames" \
         --data-binary "@${csv_file}" \
         "${clickhouse_url}/"
 }
