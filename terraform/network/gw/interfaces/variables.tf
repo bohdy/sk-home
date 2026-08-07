@@ -86,6 +86,14 @@ variable "kubernetes_bgp_tcp_md5_key" {
   }
 }
 
+variable "kubernetes_flow_collector_vip" {
+  # Keep the gateway's IPFIX destination on the Cilium LoadBalancer VIP so a
+  # worker replacement does not require a RouterOS target mutation.
+  description = "Cilium LoadBalancer VIP used by the Kubernetes IPFIX collector."
+  type        = string
+  default     = "10.1.30.57"
+}
+
 # Keep SNMP community and user identities sensitive because RouterOS represents
 # both as the community `name`, and v2c uses that value as its shared secret.
 variable "snmp_v2_community" {

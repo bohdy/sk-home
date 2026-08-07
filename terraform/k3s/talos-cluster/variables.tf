@@ -173,16 +173,15 @@ variable "worker_nodes" {
       mac_address  = "BC:24:11:20:40:44"
       vm_id        = 1044
     }
-    # Keep the additional workers smaller than the original worker so the
-    # current Proxmox host retains memory headroom while the workload plane
-    # gains node-level redundancy.
+    # Keep the additional workers smaller than the original worker while giving
+    # each node enough memory for its Vector agent and recovery workloads.
     worker2 = {
       hostname     = "sk-talos-worker-2"
       ipv4_address = "10.1.20.45/24"
       mac_address  = "BC:24:11:20:40:45"
       vm_id        = 1045
       cpu_cores    = 2
-      memory_mb    = 4096
+      memory_mb    = 5120
     }
     worker3 = {
       hostname     = "sk-talos-worker-3"
@@ -190,7 +189,7 @@ variable "worker_nodes" {
       mac_address  = "BC:24:11:20:40:46"
       vm_id        = 1046
       cpu_cores    = 2
-      memory_mb    = 4096
+      memory_mb    = 5120
     }
   }
 
