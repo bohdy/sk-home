@@ -19,6 +19,7 @@ spec:
   # starting a replacement so a resource rollout cannot deadlock on attach.
   strategy:
     type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app.kubernetes.io/name: clickhouse
