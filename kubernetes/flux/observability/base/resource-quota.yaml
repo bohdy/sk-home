@@ -9,11 +9,11 @@ metadata:
 spec:
   hard:
     requests.cpu: "4"
-    requests.memory: 6Gi
+    requests.memory: 8Gi
     # Six Vector and node-exporter DaemonSet pods now count toward this limit,
     # so retain room for Alertmanager and ordinary rolling updates.
     limits.cpu: "20"
-    limits.memory: 20Gi
+    limits.memory: 24Gi
     pods: "30"
     persistentvolumeclaims: "8"
     requests.storage: 300Gi
