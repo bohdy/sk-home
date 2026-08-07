@@ -40,7 +40,6 @@ resource "routeros_interface_vlan" "iface_vlan" {
   name     = "vlan${each.key}"
   // Terminate each VLAN on the shared bridge so Layer 3 services can bind to
   // the logical VLAN interface rather than to a specific access port.
-  // interface = "vlan${each.key}"
   interface = routeros_interface_bridge.bridge.name
   comment   = each.value.name
 }

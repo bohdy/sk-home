@@ -6,7 +6,7 @@ The design's follow-up debt list is authoritative for later flow-collection work
 
 ## Goals
 
-Collect IPFIX flow records from the MikroTik gateway, store them in a ClickHouse database inside the cluster, and expose flow analytics through provisioned Grafana dashboards. The pipeline should fit into the existing Home Infrastructure Observability pattern: plain Kubernetes manifests, Flux reconciliation, Cilium LoadBalancer exposure, and Synology iSCSI persistent storage.
+Collect IPFIX flow records from the MikroTik gateway, store them in a ClickHouse database inside the cluster, and expose flow analytics through provisioned Grafana dashboards. The pipeline fits the existing Home Infrastructure Observability pattern: plain Kubernetes manifests, Flux reconciliation, retained Cilium LoadBalancer exposure, and Synology iSCSI persistent storage. The accepted gateway target currently uses a worker-1 NodePort because the Cilium VIP path is not yet worker-failure tolerant.
 
 Collect WAN traffic and routed traffic between the managed VLAN interfaces. Same-VLAN switched traffic remains outside the gateway collector scope because it does not traverse the routed interfaces.
 
@@ -16,7 +16,7 @@ The first release excludes same-VLAN switched traffic, sFlow, non-IPFIX NetFlow 
 
 ## Architecture
 
-Deploy goflow2 as a single-replica in-cluster IPFIX collector. Expose it on a free fixed Cilium LoadBalancer IP with UDP/2055 for IPFIX ingestion from the MikroTik gateway. Use `externalTrafficPolicy: Cluster` — IPFIX records embed the exporter address in the `sampler_address` field, so network-layer source IP preservation is not required the way it is for syslog.
+Deploy goflow2 as a single-replica in-cluster IPFIX collector. Retain a fixed Cilium LoadBalancer IP with UDP/2055 for the future worker-failure-tolerant path; the accepted production target currently reaches worker-1's physical address through NodePort `31236` because the Cilium VIP path is not reliable across the current CP-to-worker network. Use `externalTrafficPolicy: Cluster` — IPFIX records embed the exporter address in the `sampler_address` field, so network-layer source IP preservation is not required the way it is for syslog.
 
 Deploy ClickHouse as a single-replica stateful database on a retained Synology iSCSI PVC.
 
@@ -38,7 +38,7 @@ Depends on `observability-base`, `cilium`, and `storage-synology-csi`. Dashboard
 ```text
 MikroTik gateway (ether8 and routed VLAN interfaces)
   -> IPFIX UDP/2055
-  -> goflow2 LB <free VIP in 10.1.30.0/24>
+  -> goflow2 Service (reserved VIP 10.1.30.57; active gateway path: worker-1 NodePort 31236)
   -> goflow2 NDJSON stdout (kubernetes_logs source)
   -> Vector route flow container stdout
   -> Vector parse_flow remap
@@ -141,7 +141,7 @@ Plain manifests reconciled by Flux. Pin images by immutable digest with human-re
 ### goflow2
 
 - Single replica
-- UDP/2055 LoadBalancer on a free VIP in `10.1.30.0/24`
+- UDP/2055 LoadBalancer on reserved VIP `10.1.30.57`; the accepted gateway path uses worker-1 NodePort `31236`
 - `loadBalancerSourceRanges: ["10.0.0.0/8"]`
 - `externalTrafficPolicy: Cluster`
 - `-format=json -transport=file` with no file path, emitting NDJSON on stdout; Vector collects it through the existing `kubernetes_logs` source
@@ -204,7 +204,7 @@ The original flow v1 has no new Bitwarden secrets: IPFIX is unauthenticated UDP 
 
 ## Network addresses
 
-- IPFIX VIP: free address in `10.1.30.0/24`
+- IPFIX VIP: reserved `10.1.30.57` in `10.1.30.0/24`; it remains available for the deferred worker-failure-tolerant path
 - Do **not** use `10.1.30.56`; that VIP is already assigned to UniFi LAN console HTTPS and DNS `unifi A 10.1.30.56`
 - Confirm against live Cilium LB IPAM and committed DNS inventory before commit
 
@@ -216,22 +216,9 @@ Known reserved VIPs at plan time:
 - `10.1.30.55` Grafana
 - `10.1.30.56` UniFi console
 
-## Implementation order
+## Implementation status
 
-1. Choose and reserve a free IPFIX VIP.
-2. Deploy ClickHouse with retained PVC and DDL/TTL Job.
-3. Deploy goflow2 with LoadBalancer Service and metrics scrape.
-4. Wire Vector handoff and ClickHouse sink; prove inserts.
-5. Configure MikroTik IPFIX through `apply_gateway_ipfix`.
-6. Verify WAN flow records arrive with expected fields.
-7. Provision Grafana plugin, datasource, `sk-flow`, and ingestion panels.
-8. Add NetworkPolicy.
-9. Add alerts with real metric names.
-10. Create the Bitwarden-backed MaxMind Secret and run the GeoIP bootstrap Job.
-11. Verify country fallback, city precision, and accuracy-radius behavior in both direction-aware selected-host Geomap panels.
-12. Promote this plan into `docs/flow-collection-design.md`, update `docs/observability-design.md`, and add a resumable stage to `docs/observability-rollout.md`.
-
-Proceed between stages after automated validation and workload smoke tests pass. Stop progression on dropped data, repeated restarts, capacity pressure, secret leakage, unexpected public exposure, or excessive alert noise.
+The original staged bring-up is complete. RouterOS exports `ether8` and every routed VLAN through worker-1 at `10.1.20.44:31236`, while the declared Cilium LoadBalancer remains reserved for the deferred worker-failure-tolerant transport path. A test cutover to the VIP did not sustain records and was reverted. Future changes must stop on dropped data, repeated restarts, capacity pressure, secret leakage, unexpected public exposure, or excessive alert noise.
 
 ## Validation and rollback
 

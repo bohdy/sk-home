@@ -46,7 +46,7 @@ Reverse records are expected for committed infrastructure records.
 
 ## Smoke tests
 
-Before changing DHCP, test directly from LAN clients on each relevant VLAN:
+The DHCP stack advertises `10.1.30.53` to every routed scope. Before changing the DNS or DHCP path, test directly from LAN clients on each relevant VLAN:
 
 ```bash
 dig @10.1.30.53 dns.bohdal.name A
@@ -76,4 +76,4 @@ Public-name tests should assert successful resolution, not exact public IP addre
 
 ## Rollback
 
-Before MikroTik DHCP points clients at `10.1.30.53`, rollback is disabling or removing the DNS Flux Kustomization and rendered manifests. After DHCP changes, rollback must also restore the previous DHCP DNS option.
+While MikroTik DHCP points clients at `10.1.30.53`, rollback must disable or remove the DNS Flux Kustomization and rendered manifests and restore the previous DHCP DNS option.

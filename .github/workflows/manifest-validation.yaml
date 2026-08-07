@@ -22,7 +22,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      # Use the repository-pinned kubectl, OpenTofu, and pre-commit versions.
+      # Use the repository-selected kubectl, OpenTofu, and pre-commit tools.
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
         with:

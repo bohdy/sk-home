@@ -159,7 +159,6 @@ variable "vlans" {
     # the same declarative inventory.
     tagged   = optional(set(string), null)
     untagged = optional(set(string), null)
-    //ip_address = optional(set(string), null)
     # A VLAN IP makes OpenTofu create a routed SVI-style interface for that
     # network on top of the shared bridge.
     ip_address = optional(string, null)

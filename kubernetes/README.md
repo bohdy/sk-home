@@ -1,6 +1,6 @@
 # Kubernetes add-ons
 
-This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
+This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. OpenTofu still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
 Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, the shared Cloudflare Tunnel connector depends on policy and Cilium, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP.
 
@@ -8,11 +8,11 @@ Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` r
 
 Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Manager CLI, and `jq`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
 
-1. Apply the Talos Terraform stack so the cluster starts without the Talos default CNI or kube-proxy.
+1. Apply the Talos OpenTofu stack so the cluster starts without the Talos default CNI or kube-proxy.
 2. Retrieve kubeconfig into a local ignored path:
 
    ```bash
-   terraform -chdir=terraform/k3s/talos-cluster output -raw kubeconfig > /tmp/sk-talos-kubeconfig
+   tofu -chdir=terraform/k3s/talos-cluster output -raw kubeconfig > /tmp/sk-talos-kubeconfig
    chmod 0600 /tmp/sk-talos-kubeconfig
    ```
 
@@ -145,4 +145,4 @@ mise run dns-check
 
 Flux applies the committed rendered manifests from `kubernetes/flux/infrastructure/dns/rendered`. Do not edit rendered DNS files directly.
 
-Before MikroTik DHCP hands out `10.1.30.53`, validate the VIP with direct `dig @10.1.30.53` tests from LAN clients on each relevant VLAN. DHCP changes should be a follow-up after the Kubernetes DNS path is healthy.
+The MikroTik DHCP stack now advertises `10.1.30.53` to every routed scope. Validate the VIP with direct `dig @10.1.30.53` tests from LAN clients on each relevant VLAN before changing the DNS or DHCP path.

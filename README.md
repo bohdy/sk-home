@@ -1,6 +1,6 @@
 # sk-home
 
-This repository was intentionally reset to an almost-empty learning repo.
+This repository contains the active home-lab infrastructure learning implementation.
 
 The previous home-lab automation implementation was archived in Git before this reset:
 
@@ -9,20 +9,24 @@ The previous home-lab automation implementation was archived in Git before this 
 
 Use those refs whenever you want to review or restore the original home-lab automation, scripts, workflows, and operational documentation.
 
-## Current Goal
+## Current State
 
-The active working tree is intentionally minimal. Keep only `README.md` and Codex-related files committed by default, then add new project files only when a specific learning task requires them.
+The active working tree contains the OpenTofu stacks, Flux-managed Kubernetes configuration, validation workflows, local tooling, and operational documentation for the current learning environment. Keep changes scoped to one coherent learning or operations task rather than restoring archived material wholesale.
 
-The currently intended committed surface is:
+The committed surface includes:
 
-- `README.md`
-- `.gitignore`
-- `AGENTS.md`
-- repo-local Codex files under `.codex/`
+- repository policy and local Codex files such as `README.md`, `AGENTS.md`, `.gitignore`, and `.codex/`
+- active OpenTofu configuration under `terraform/`
+- Flux-managed Kubernetes configuration under `kubernetes/`
+- CI and local tooling under `.github/`, `.devcontainer/`, `mise.toml`, `.pre-commit-config.yaml`, and `scripts/`
+- design, rollout, and architecture decision records under `docs/`
+
+The paused Flow and Grafana cleanup work is tracked in [PLAN.md](PLAN.md).
+The repository cleanup follow-up is tracked in [docs/repo-cleanup-plan.md](docs/repo-cleanup-plan.md).
 
 ## Rebuild Rules
 
-- Reintroduce one concern at a time.
+- Change one concern at a time and keep the active configuration reviewable.
 - Keep secrets outside the repo and load them through the shared secret-management approach when automation returns.
 - Update documentation in the same task whenever behavior or layout changes.
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
@@ -34,9 +38,9 @@ The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces` and `k3s/talos-cluster`. It applies only `k3s/talos-cluster` on `main`; `network/gw/interfaces` stays plan-only because gateway changes have higher operational blast radius.
+The `main` OpenTofu workflow plans the active stacks `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, and `cloudflare/tunnel`. It applies only `k3s/talos-cluster` on `main`; gateway and Cloudflare stacks stay plan-only because network and external-access changes have higher operational blast radius.
 
-The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys during the first OpenTofu migration. After the first successful OpenTofu apply, treat the retained remote state objects as OpenTofu-owned.
+The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys after the OpenTofu migration. Treat the retained remote state objects as OpenTofu-owned.
 
 ## Local Development
 

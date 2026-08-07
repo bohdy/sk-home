@@ -64,11 +64,11 @@ DNS pods should have modest resource requests and memory limits. Avoid tight CPU
 
 ## Client configuration
 
-MikroTik DHCP should hand out `10.1.30.53` directly as the DNS server for LAN clients. MikroTik should not remain in the normal client DNS forwarding path, although the router itself may use `10.1.30.53` for its own resolution.
+MikroTik DHCP hands out `10.1.30.53` directly as the DNS server for LAN clients. MikroTik should not remain in the normal client DNS forwarding path, although the router itself may use `10.1.30.53` for its own resolution. The desired state is managed in `terraform/network/gw/dhcp`.
 
-The MikroTik DHCP change should be a follow-up after the Kubernetes DNS VIP is deployed and validated. First validation should use `dig @10.1.30.53` from at least one LAN client on each relevant VLAN.
+Validate the DNS VIP with `dig @10.1.30.53` from at least one LAN client on each relevant VLAN before changing either DNS or DHCP configuration.
 
-Document rollback before changing DHCP. Before DHCP points clients at `10.1.30.53`, rollback is removing or disabling the DNS manifests. After DHCP changes, rollback must also restore the previous DHCP DNS option.
+Document rollback before changing DHCP. While DHCP points clients at `10.1.30.53`, rollback must restore the previous DHCP DNS option as well as disabling or removing the DNS manifests.
 
 ## Blocky responsibilities
 
@@ -239,4 +239,4 @@ Use a default-deny posture for DNS pod egress, including no Kubernetes API egres
 
 ## Remaining follow-up
 
-The Kubernetes DNS manifests, render workflow, validation wiring, and documentation are now represented in the repository. The MikroTik DHCP change that hands out `10.1.30.53` remains a follow-up after the Kubernetes DNS VIP is deployed and validated from LAN clients.
+The Kubernetes DNS manifests, render workflow, validation wiring, documentation, and reviewed MikroTik DHCP configuration are represented in the repository. Follow-up changes to the DHCP DNS option remain targeted, production-gated operations.

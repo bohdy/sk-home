@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository is now an almost-empty learning repo. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
+This repository contains active home-lab infrastructure and learning documentation. Agents working here must prefer clear, maintainable, well-documented changes over fast but opaque edits. This repository also targets a high security standard. Agents must treat credential handling, secret exposure, and log safety as first-class concerns in every task.
 
 ## Task Start Workflow
 
@@ -44,8 +44,8 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not keep real shared configuration only in `*.example` files when that configuration is intended to be the repository source of truth.
 - Reserve example files for templates, onboarding, or local-secret guidance; commit actual non-sensitive defaults and shared values in real config files.
 - New functions, features, workflows, and dependencies MUST use the latest stable versions available when they are introduced. Upgrades to existing components must be evaluated and planned carefully instead of being changed automatically.
-- Rebuild the repository in small steps. Prefer one clearly scoped learning change per task instead of restoring large operational batches.
-- Keep the default committed surface minimal. Unless a task requires more, keep only `README.md`, `.gitignore`, and Codex-related files such as `AGENTS.md` and `.codex/`.
+- Maintain the active repository in small steps. Prefer one clearly scoped learning or operations change per task instead of restoring large archived batches.
+- Keep active infrastructure, validation, and documentation files only while they serve the current operating model; do not delete them merely to recreate the historical minimal-reset state.
 
 ## Documentation Standards
 

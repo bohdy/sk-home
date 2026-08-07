@@ -294,7 +294,7 @@ Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the co
 
 ## Flow collection stage
 
-The IPFIX flow collection stage follows `docs/flow-collection-design.md`. It ships in five stacked milestone PRs that merge in order:
+The IPFIX flow collection stage follows `docs/flow-collection-design.md`. Five stacked milestone PRs delivered the collector, Grafana integration, gateway export, adaptive GeoIP, and the promoted design contract:
 
 1. Collector pipeline: goflow2 and ClickHouse manifests, Vector handoff, and the `observability-flow-collector` Flux component.
 2. Grafana: pinned ClickHouse plugin and datasource, `sk-flow` dashboard, ingestion-health panels, and the flow alert group.
@@ -302,15 +302,15 @@ The IPFIX flow collection stage follows `docs/flow-collection-design.md`. It shi
 4. Adaptive GeoIP: local GeoLite2 City refresh, ClickHouse IP_TRIE lookup, and source/destination Geomap layers.
 5. Documentation promotion of the design contract.
 
-Merge sequence and bring-up:
+Bring-up history:
 
-- Merge PRs 1-3 in order. The collector pipeline deploys `clickhouse`, `goflow2`, and the `clickhouse-ddl` Job in the `observability` namespace; the Job applies the committed `flows.flow` schema and 30-day TTL before writers start. goflow2 is reachable on the reserved `10.1.30.57` VIP, UDP/2055.
-- `FlowCollectorRecordsStopped` fires warning-level from collector bring-up until the gateway exports flows; it is the intended rollout signal, not noise.
-- On `main`, dispatch the OpenTofu workflow with only `apply_gateway_ipfix` enabled. The targeted plan is reviewed and applied against the production environment; the workflow applies only the uploaded immutable artifact.
-- Verify WAN records arrive with expected fields (sampler address from the gateway, `etype`/`proto` names, `src_addr`/`dst_addr` populated), the `sk-flow` dashboard returns data, and ingestion-health panels show collector packets and ClickHouse sink deliveries.
-- Confirm the UniFi console remains on `.56` and the collector VIP is unique in live Cilium LB IPAM and the committed DNS inventory.
-- Create the Bitwarden-backed `maxmind-geoip` Secret, allow the non-blocking `observability-flow-geoip` Kustomization to run, and verify the bootstrap Job loads `flows.ip_geo` without credential output.
-- Verify the source and destination Geomaps show country markers for small or uncertain locations and approximate city markers only for large countries within the configured 100 km accuracy radius.
+- The collector pipeline deployed `clickhouse`, `goflow2`, and the `clickhouse-ddl` Job in the `observability` namespace; the Job applies the committed `flows.flow` schema and 30-day TTL before writers start. The reserved `10.1.30.57` VIP remains declared, while the accepted gateway path uses worker-1 NodePort `31236`.
+- `FlowCollectorRecordsStopped` fired at warning level during collector bring-up until the gateway exported flows; it was the intended rollout signal, not noise.
+- The production workflow applied the reviewed `apply_gateway_ipfix` plan through its immutable artifact path.
+- Acceptance verified WAN records with expected sampler, protocol, address, dashboard, ingestion-health, and ClickHouse sink data.
+- Acceptance confirmed the UniFi console remained on `.56` and the collector VIP remained unique in live Cilium LB IPAM and the committed DNS inventory.
+- The Bitwarden-backed `maxmind-geoip` Secret was created, the non-blocking `observability-flow-geoip` Kustomization completed, and the bootstrap Job loaded `flows.ip_geo` without credential output.
+- Acceptance verified country and city Geomap behavior within the configured 100 km accuracy radius.
 
 Flow acceptance completed on 2026-08-07 for the active NodePort path: RouterOS exported `ether8` and every routed VLAN through worker-1 at `10.1.20.44:31236`, ClickHouse contained active `flows.flow` and `flows.flow_analytics` data, and the GeoIP dictionary tables were loaded. A test cutover to the Cilium collector VIP did not sustain new records and was reverted; worker-failure-tolerant IPFIX transport remains deferred until the CP-to-worker path is fixed. The post-recovery GeoIP refresh completed successfully after the ClickHouse memory and RWO rollout fixes, and `flows.ip_geo` reported `LOADED`.
 
