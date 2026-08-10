@@ -104,7 +104,7 @@ The same DDL creates `flows.flow_analytics`, a repository-owned view that adds `
 Manage IPFIX through OpenTofu in `terraform/network/gw/interfaces/` using:
 
 - `routeros_ip_traffic_flow` — accounting on `ether8` plus every routed VLAN interface from `vlans.auto.tfvars`; leave timeouts at RouterOS defaults unless measured need appears
-- `routeros_ip_traffic_flow_target` — active collector NodePort on worker-1, version `9` in the provider configuration because the pinned provider validates that spelling while the live RouterOS target is maintained as IPFIX, `v9_template_refresh = 20`, and `v9_template_timeout = "5m"`
+- `routeros_ip_traffic_flow_target` — active collector NodePort on worker-1 at `10.1.20.44:31236`, version `9` in the provider configuration because the pinned provider validates that spelling while the live RouterOS target is maintained as IPFIX, `v9_template_refresh = 20`, and `v9_template_timeout = "5m"`
 
 Add workflow input `apply_gateway_ipfix` with an immutable targeted plan, production environment apply, and full mutual exclusion against `apply_gateway`, `apply_gateway_snmp`, `plan_gateway_snmp`, `apply_gateway_dhcp`, and `apply_cloudflare`.
 
@@ -125,9 +125,9 @@ These traffic-flow resources are separate from the currently blocked BGP resourc
 | Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
 |-----------|------------|-----------|----------------|--------------|
 | goflow2 | 50m | 250m | 64 MiB | 256 MiB |
-| ClickHouse | 500m | 2000m | 1 GiB | 2 GiB |
+| ClickHouse | 500m | 2000m | 2 GiB | 4 GiB |
 
-Vector already runs on all four nodes; flow handoff adds configuration, not a new Deployment family.
+Vector already runs on every Linux node; flow handoff adds configuration, not a new Deployment family.
 
 Fit check against `observability-capacity` is required at acceptance. Current quota is 8 PVCs and 300 GiB storage; one additional 100 GiB claim is feasible but tight on recovery headroom.
 

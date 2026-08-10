@@ -312,6 +312,8 @@ Merge sequence and bring-up:
 - Create the Bitwarden-backed `maxmind-geoip` Secret, allow the non-blocking `observability-flow-geoip` Kustomization to run, and verify the bootstrap Job loads `flows.ip_geo` without credential output.
 - Verify the source and destination Geomaps show country markers for small or uncertain locations and approximate city markers only for large countries within the configured 100 km accuracy radius.
 
+Flow acceptance completed on 2026-08-07 for the active NodePort path: RouterOS exported `ether8` and every routed VLAN through worker-1 at `10.1.20.44:31236`, ClickHouse contained active `flows.flow` and `flows.flow_analytics` data, and the GeoIP dictionary tables were loaded. A test cutover to the Cilium collector VIP did not sustain new records and was reverted; worker-failure-tolerant IPFIX transport remains deferred until the CP-to-worker path is fixed. The post-recovery GeoIP refresh completed successfully after the ClickHouse memory and RWO rollout fixes, and `flows.ip_geo` reported `LOADED`.
+
 Acceptance criteria per the design contract:
 
 - Records from the WAN path present with expected fields.

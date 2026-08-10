@@ -1,5 +1,5 @@
 # Two fixed replicas provide connector-process redundancy. Preferred pod
-# anti-affinity spreads them once another schedulable worker joins the cluster.
+# anti-affinity spreads them across schedulable nodes when capacity permits.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

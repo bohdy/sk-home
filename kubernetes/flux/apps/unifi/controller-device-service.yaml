@@ -2,7 +2,7 @@
 # carries only UniFi inform, STUN, and discovery traffic; the administrator
 # console remains private until a separately accepted public-routing change.
 # Cluster traffic policy lets every established BGP speaker advertise the VIP
-# while the sole controller endpoint remains on the unpeered worker node.
+# while the single controller endpoint remains on a schedulable worker node.
 apiVersion: v1
 kind: Service
 metadata:

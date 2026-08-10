@@ -15,6 +15,11 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 2
+  # The retained ClickHouse claim is ReadWriteOnce; stop the old pod before
+  # starting a replacement so a resource rollout cannot deadlock on attach.
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app.kubernetes.io/name: clickhouse
@@ -62,7 +67,7 @@ spec:
               memory: 1Gi
             limits:
               cpu: 2000m
-              memory: 2Gi
+              memory: 4Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

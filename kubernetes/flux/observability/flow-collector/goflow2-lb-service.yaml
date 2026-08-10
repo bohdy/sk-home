@@ -1,10 +1,7 @@
 # Cilium advertises the reserved IPFIX VIP over BGP, but external VXLAN
-# forwarding from the CP nodes to the worker is unreliable in Talos' veth
-# Cilium mode (root cause still under investigation). The MikroTik target
-# uses the pinned NodePort on worker-1's physical address instead, bypassing
-# the Cilium LB entirely. Keep the VIP and LoadBalancer for future use when
-# the VXLAN path is resolved; the fixed NodePort is the active data-plane
-# path today.
+# forwarding from the CP nodes to the worker is unreliable in the current Talos
+# veth Cilium mode. The MikroTik target therefore uses the pinned NodePort on
+# worker-1's physical address; the VIP remains available for future acceptance.
 apiVersion: v1
 kind: Service
 metadata:

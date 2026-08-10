@@ -24,12 +24,11 @@ resource "routeros_ip_traffic_flow" "wan" {
 }
 
 # The collector target uses the worker node's physical address and the fixed
-# NodePort (31236) instead of the Cilium VIP. Cilium VXLAN forwarding from CP
-# nodes to workers is unreliable in the current Talos veth Cilium mode, and
-# the NodePort on the pod's own node routes directly without crossing the
-# overlay. The version value must pass the provider's case-sensitive
-# validation ("IPFIX") while RouterOS expects lowercase "ipfix"; the
-# lifecycle ignore keeps the manually-set ipfix version from being reverted.
+# NodePort (31236) because external VXLAN forwarding from the CP nodes to the
+# worker is unreliable in the current Talos veth Cilium mode. The version value
+# must pass the provider's case-sensitive validation ("IPFIX") while RouterOS
+# expects lowercase "ipfix"; the lifecycle ignore keeps the manually-set ipfix
+# version from being reverted.
 resource "routeros_ip_traffic_flow_target" "goflow2" {
   provider = routeros.gw
 

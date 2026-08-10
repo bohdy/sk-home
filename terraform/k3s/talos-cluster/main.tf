@@ -8,6 +8,14 @@ locals {
     for node in var.nodes : split("/", node.ipv4_address)[0]
   ]
 
+  # Include workers in the generated Talos client inventory so recovery tools
+  # can target every node without replacing the control-plane bootstrap set.
+  worker_ips = [
+    for node in var.worker_nodes : split("/", node.ipv4_address)[0]
+  ]
+
+  all_node_ips = concat(local.control_plane_ips, local.worker_ips)
+
   # Include the VIP and node IPs in the Kubernetes API certificate so operators
   # can use either the HA endpoint or a direct node endpoint during recovery.
   api_server_cert_sans = distinct(concat(
@@ -211,11 +219,11 @@ data "talos_machine_configuration" "worker" {
 
 data "talos_client_configuration" "cluster" {
   # Generate talosconfig from the same secrets used by the machine configs so
-  # recovery operations can target either the VIP or individual control planes.
+  # recovery operations can target either the VIP or any individual node.
   cluster_name         = var.cluster_name
   client_configuration = talos_machine_secrets.cluster.client_configuration
   endpoints            = [var.cluster_endpoint_vip]
-  nodes                = local.control_plane_ips
+  nodes                = local.all_node_ips
 }
 
 resource "proxmox_virtual_environment_file" "talos_user_data" {
@@ -465,7 +473,7 @@ resource "talos_machine_configuration_apply" "worker" {
   for_each = var.worker_nodes
 
   # Workers use the same reboot-safe reconciliation mode so ordinary config
-  # changes cannot unexpectedly remove the cluster's only worker.
+  # changes cannot unexpectedly remove a workload-plane node.
   depends_on = [
     proxmox_virtual_environment_vm.worker,
   ]

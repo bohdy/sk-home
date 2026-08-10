@@ -22,7 +22,7 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability create secret gen
 
 Keep shell tracing disabled while the values are present. The bootstrap Job runs once after the ClickHouse dictionary exists; the CronJob refreshes the database twice weekly. The Flux Kustomization is intentionally non-blocking when the Secret has not yet been created, so the collector and dashboard can reconcile independently.
 
-The updater uses HTTPS with certificate validation, follows MaxMind's documented R2 redirect, allows egress only to the two required MaxMind names, and never sends individual flow addresses to MaxMind. The downloaded CSV files are staged in ephemeral storage and are not retained outside ClickHouse.
+The updater uses HTTPS with certificate validation, follows MaxMind's documented R2 redirect, retries transient download failures within a bounded window, imports CSV files with bounded serial ClickHouse parsing, allows egress only to the two required MaxMind names, and never sends individual flow addresses to MaxMind. The downloaded CSV files are staged in ephemeral storage and are not retained outside ClickHouse.
 
 The deployment must retain MaxMind's required GeoLite2 attribution and comply with the account's current license terms; the repository stores neither the database nor the license credential.
 

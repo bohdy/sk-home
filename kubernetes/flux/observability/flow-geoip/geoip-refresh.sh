@@ -23,7 +23,9 @@ test -n "${account_id}"
 test -n "${license_key}"
 
 # A netrc file keeps the credential out of the curl process arguments and is
-# removed before any CSV is imported into ClickHouse.
+# removed before any CSV is imported into ClickHouse. MaxMind occasionally
+# returns transient 5xx responses, so bounded retries keep the active dictionary
+# from going stale during a short provider outage.
 printf 'machine download.maxmind.com\nlogin %s\npassword %s\n' \
     "${account_id}" "${license_key}" > "${work}/.netrc"
 chmod 600 "${work}/.netrc"
@@ -32,6 +34,10 @@ curl --config /dev/null \
     --silent \
     --show-error \
     --location \
+    --retry 5 \
+    --retry-all-errors \
+    --retry-delay 30 \
+    --retry-max-time 300 \
     --netrc-file "${work}/.netrc" \
     --output "${work}/geoip.zip" \
     'https://download.maxmind.com/geoip/databases/GeoLite2-City-CSV/download?suffix=zip'
@@ -64,11 +70,13 @@ run_sql() {
 insert_csv() {
     table="$1"
     csv_file="$2"
+    # The ClickHouse pod has a bounded memory envelope. Serial parsing and
+    # smaller insert blocks keep the large GeoLite2 CSV imports below it.
     curl --config /dev/null \
         --fail \
         --silent \
         --show-error \
-        --url-query "query=INSERT INTO ${table} FORMAT CSVWithNames" \
+        --url-query "query=INSERT INTO ${table} SETTINGS input_format_parallel_parsing=0,max_insert_block_size=100000,max_threads=1 FORMAT CSVWithNames" \
         --data-binary "@${csv_file}" \
         "${clickhouse_url}/"
 }
