@@ -239,4 +239,4 @@ Use a default-deny posture for DNS pod egress, including no Kubernetes API egres
 
 ## Remaining follow-up
 
-The Kubernetes DNS manifests, render workflow, validation wiring, and documentation are now represented in the repository. The MikroTik DHCP change that hands out `10.1.30.53` remains a follow-up after the Kubernetes DNS VIP is deployed and validated from LAN clients.
+The Kubernetes DNS manifests, render workflow, validation wiring, and documentation are now represented in the repository. The MikroTik DHCP change that hands out `10.1.30.53` remains a follow-up after the Kubernetes DNS VIP is deployed and validated from LAN clients. Track execution in `docs/deferred-work-plan.md`.

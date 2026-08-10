@@ -2,7 +2,7 @@
 
 This document is the implementation contract for Home Infrastructure Observability in the `sk-talos` cluster. It records the decisions agreed before manifests are introduced.
 
-The resumable implementation status and ordered next actions live in `docs/observability-rollout.md`.
+The resumable implementation status and ordered next actions live in `docs/observability-rollout.md`. The consolidated deferred-work checklist lives in `docs/deferred-work-plan.md`.
 
 ## Goals
 
