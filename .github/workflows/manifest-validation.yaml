@@ -16,11 +16,15 @@ env:
 jobs:
   validate:
     name: Validate manifests and repository hygiene
-    runs-on: self-hosted
+    # Keep PR-controlled hooks off the shared infrastructure runner while
+    # retaining the existing runner for trusted main-branch validation.
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
 
       # Use the repository-pinned kubectl, OpenTofu, and pre-commit versions.
       - name: Set up mise

@@ -34,7 +34,7 @@ The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces` and `k3s/talos-cluster`. It applies only `k3s/talos-cluster` on `main`; `network/gw/interfaces` stays plan-only because gateway changes have higher operational blast radius.
+The trusted `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, and `cloudflare/tunnel`. It applies only `k3s/talos-cluster` on `main`; gateway and Cloudflare changes stay plan-only because they have higher operational blast radius.
 
 The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys during the first OpenTofu migration. After the first successful OpenTofu apply, treat the retained remote state objects as OpenTofu-owned.
 
@@ -70,20 +70,35 @@ The devcontainer post-create step trusts the repository `mise.toml`, installs th
 
 ### Testing Workflows Locally
 
-To test GitHub Actions workflows locally using act:
+Run the credential-free pull-request validation workflow locally without loading `.env` or passing any secret:
 
 ```bash
-# Load environment variables and run the OpenTofu workflow
+act --workflows .github/workflows/terraform-pr-validation.yaml \
+  -P ubuntu-latest=node:24-bookworm \
+  --container-architecture linux/amd64
+```
+
+Run the trusted workflow locally only when testing Bitwarden-backed planning behavior:
+
+```bash
+# Load environment variables and run the trusted OpenTofu workflow
 source .env && act --workflows .github/workflows/terraform.yaml \
   -P self-hosted=node:18-bookworm \
+  -P ubuntu-latest=node:24-bookworm \
   --container-architecture linux/amd64 \
   --secret BWS_ACCESS_TOKEN="$BWS_ACCESS_TOKEN"
 ```
 
 **Important notes:**
-- Uses `node:18-bookworm` Docker image (required for Bitwarden action compatibility)
-- Secrets are retrieved from Bitwarden using the access token
-- This ensures local testing matches CI/CD behavior exactly
+- The pull-request workflow intentionally has no Bitwarden token, remote backend credentials, provider credentials, plan creation, or artifact upload.
+- The trusted workflow uses the `node:18-bookworm` Docker image for Bitwarden action compatibility and must be run only against trusted repository contents.
+- Local `act` runs do not reproduce GitHub production-environment approvals or self-hosted runner behavior exactly.
+
+### GitHub Actions Trust Boundaries
+
+`.github/workflows/terraform-pr-validation.yaml` is the only OpenTofu workflow triggered by pull requests. It uses an ephemeral hosted runner, initializes every stack with `-backend=false`, validates configuration without contacting infrastructure, and never retrieves secrets or creates binary plans.
+
+`.github/workflows/terraform.yaml` is trusted-only. It runs for pushes to `main` and manual dispatches from `main`, retrieves Bitwarden values only for those trusted events, and creates immutable plan artifacts only during trusted runs for the existing production-gated apply jobs. A manual dispatch pointed at any other ref fails before credential retrieval, and multiple mutation inputs fail closed.
 
 ### Running OpenTofu Locally
 
@@ -102,18 +117,18 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's and UniFi's public DNS, HTTPS tunnel routes, exact Google identity policies, and the terminal `404` fallback. Both applications rely on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
 
-The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the working GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
+The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the trusted GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
 
 ```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_cloudflare=false
+gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=false
 ```
 
-The gated gateway job uses the immutable gateway plan artifact produced earlier in the same run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
+The gated gateway job uses the immutable gateway plan artifact produced earlier in the same trusted run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
 
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
 ```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true -f apply_gateway_dhcp=false -f apply_cloudflare=false
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=false
 ```
 
 The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment.
@@ -121,7 +136,7 @@ The targeted job creates an immutable plan containing only `routeros_snmp_commun
 Apply the reviewed DHCP plan, including DNS servers advertised to LAN clients, through its separate targeted path:
 
 ```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=true -f apply_cloudflare=false
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=true -f apply_gateway_ipfix=false -f apply_cloudflare=false
 ```
 
 That job applies the immutable full DHCP-stack plan in the `production` environment without evaluating the provider-blocked gateway interface and BGP resources. DHCP leases must already be static before they are added as `routeros_ip_dhcp_server_lease` resources; the repository does not use imperative dynamic-to-static conversion helpers.
@@ -129,10 +144,10 @@ That job applies the immutable full DHCP-stack plan in the `production` environm
 Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
 
 ```sh
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_cloudflare=true
+gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=true
 ```
 
-The four manual apply inputs are mutually exclusive; setting more than one skips every mutation path. The Cloudflare job consumes the matrix plan artifact created in the same run and requires the `production` environment before changing public routing or Access.
+The five manual mutation inputs and the dedicated SNMP plan-only input are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
 
 The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired or unreachable gateway certificate requires the narrowly scoped bootstrap option; that one-time path uses the gateway's private HTTP REST endpoint, forces the stack-owned leaf import to displace ambiguous legacy certificate names, renames the imported leaf by its public fingerprint, and verifies the bound leaf. The installer writes each temporary file through the RouterOS REST execute endpoint because this device rejects file contents in the REST file-create body; it uploads only the leaf's immediate issuer because RouterOS also rejects the full multi-certificate issuer bundle, while client trust stores provide the remaining root chain. Normal and scheduled runs use HTTPS by DNS name. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection:
 
