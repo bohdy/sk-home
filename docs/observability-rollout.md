@@ -336,7 +336,7 @@ Acceptance requires no unexpected storage pressure, no dropped Vector-to-ClickHo
 
 ## Remaining stages
 
-The first observability release is accepted. Follow-up work must use a fresh branch for each coherent deferred item. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
+The first observability release is accepted. Follow-up work must use a fresh branch for each coherent deferred item; the execution checklist is `docs/deferred-work-plan.md`. Stop progression on dropped data, repeated restarts, storage or worker pressure, unexpected public exposure, secret leakage, or excessive alert noise.
 
 ## Secret inventory
 
@@ -377,4 +377,4 @@ Create dedicated Bitwarden items before the stages that require device-specific 
 
 ## Deferred debt
 
-Keep the design document's follow-up list authoritative. In particular, Brother printer SNMP acceptance, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. The Brother printer requires an administrator-password reset before configuring or confirming read-only SNMPv2c with the existing shared profile; once it is online, re-probe `system` and `printer_mib` from the exporter before enabling its bounded intermittent scrape. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3. Reassess the Proxmox group `acl` lifecycle ignore when upgrading beyond provider 0.106.0; remove it only after a live no-destroy plan and effective-permission verification.
+Keep the design document's follow-up list authoritative for requirements and use `docs/deferred-work-plan.md` for execution status. In particular, Brother printer SNMP acceptance, traces, Moonraker/Klipper monitoring, UniFi Poller, automated Bitwarden reconciliation, raw telemetry backup, NetFlow or sFlow, and an external dead-man monitor remain deferred. The Brother printer requires an administrator-password reset before configuring or confirming read-only SNMPv2c with the existing shared profile; once it is online, re-probe `system` and `printer_mib` from the exporter before enabling its bounded intermittent scrape. RouterOS v2c compatibility diagnosis is also follow-up debt; the accepted production scrape uses SNMPv3. Reassess the Proxmox group `acl` lifecycle ignore when upgrading beyond provider 0.106.0; remove it only after a live no-destroy plan and effective-permission verification.

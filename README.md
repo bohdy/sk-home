@@ -28,6 +28,8 @@ The currently intended committed surface is:
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
 - Do not keep placeholder project directories when they are not actively used.
 
+The active deferred-work checklist is [`docs/deferred-work-plan.md`](docs/deferred-work-plan.md).
+
 ## Active OpenTofu Stacks
 
 The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane, three-worker upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and OpenTofu-managed Talos bootstrap state.

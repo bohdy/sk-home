@@ -2,7 +2,7 @@
 
 This document is the implementation contract for IPFIX flow collection in the `sk-talos` cluster. It records the decisions agreed before manifests are introduced and now serves as the reference for the delivered component.
 
-The design's follow-up debt list is authoritative for later flow-collection work; `docs/observability-design.md` and `docs/observability-rollout.md` reference this document instead of duplicating it.
+The detailed flow follow-up requirements remain authoritative in this document, while execution status is tracked in `docs/deferred-work-plan.md`. `docs/observability-design.md` and `docs/observability-rollout.md` reference both documents instead of duplicating the flow contract.
 
 ## Goals
 
