@@ -45,14 +45,8 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "cluster" {
   }
 }
 
-# Adopt the existing proxied record instead of replacing it. Public DNS routes
-# to the tunnel while internal split DNS continues resolving the same name to
-# Grafana's fixed Cilium LoadBalancer address.
-import {
-  to = cloudflare_dns_record.grafana
-  id = "${var.cloudflare_zone_id}/94dea7d9e24ce33427f871c9b7bb0409"
-}
-
+# Public DNS routes to the tunnel while internal split DNS continues resolving
+# the same name to Grafana's fixed Cilium LoadBalancer address.
 resource "cloudflare_dns_record" "grafana" {
   zone_id = var.cloudflare_zone_id
   name    = var.grafana_hostname
@@ -63,26 +57,8 @@ resource "cloudflare_dns_record" "grafana" {
   comment = "Grafana through the shared sk-talos tunnel; managed by OpenTofu"
 }
 
-# Discover and adopt the existing proxied public record rather than replacing
-# it. Its target changes atomically with the tunnel configuration during the
+# The target changes atomically with the tunnel configuration during the
 # reviewed Cloudflare apply, while LAN split DNS remains independent.
-data "cloudflare_dns_record" "unifi" {
-  zone_id = var.cloudflare_zone_id
-
-  filter = {
-    match = "all"
-    name = {
-      exact = var.unifi_hostname
-    }
-    type = "CNAME"
-  }
-}
-
-import {
-  to = cloudflare_dns_record.unifi
-  id = "${var.cloudflare_zone_id}/${data.cloudflare_dns_record.unifi.id}"
-}
-
 resource "cloudflare_dns_record" "unifi" {
   zone_id = var.cloudflare_zone_id
   name    = var.unifi_hostname
@@ -102,12 +78,6 @@ data "cloudflare_zero_trust_access_identity_provider" "google" {
 
 # Independent MFA must be enabled at the Zero Trust organization before an
 # application can require a Cloudflare-managed second factor after Google.
-# Preserve the existing organization presentation while adopting its state.
-import {
-  to = cloudflare_zero_trust_organization.account
-  id = var.cloudflare_account_id
-}
-
 resource "cloudflare_zero_trust_organization" "account" {
   account_id                                  = var.cloudflare_account_id
   name                                        = "bohdy.cloudflareaccess.com"
@@ -181,21 +151,8 @@ resource "cloudflare_zero_trust_access_application" "grafana" {
   depends_on = [cloudflare_zero_trust_organization.account]
 }
 
-# The old UniFi Access application is already active but unmanaged. Locate it
-# by its exact hostname and adopt it so the single-owner policy is reviewed in
-# Git before the route moves to the Talos controller.
-data "cloudflare_zero_trust_access_applications" "unifi" {
-  account_id = var.cloudflare_account_id
-  domain     = var.unifi_hostname
-  exact      = true
-  max_items  = 1
-}
-
-import {
-  to = cloudflare_zero_trust_access_application.unifi
-  id = "accounts/${var.cloudflare_account_id}/${one(data.cloudflare_zero_trust_access_applications.unifi.result).id}"
-}
-
+# Keep the UniFi Access policy under the same reviewed ownership model as the
+# tunnel route and DNS record.
 resource "cloudflare_zero_trust_access_application" "unifi" {
   account_id                 = var.cloudflare_account_id
   name                       = "UniFi"

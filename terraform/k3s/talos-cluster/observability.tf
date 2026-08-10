@@ -29,17 +29,6 @@ resource "proxmox_user_token" "observability_exporter" {
   privileges_separation = true
 }
 
-# Provider 0.106.0 recorded the parent-user ACL as present while Proxmox stored
-# only the similarly prefixed token ACL. Forget that phantom state entry without
-# issuing a delete that could remove the real token ACL.
-removed {
-  from = proxmox_acl.observability_user
-
-  lifecycle {
-    destroy = false
-  }
-}
-
 # Group membership supplies the parent user's half of the separated-token
 # permission intersection without colliding with the token's ACL identity.
 resource "proxmox_acl" "observability_group" {
