@@ -132,6 +132,62 @@ variable "snmp_v3_priv_password" {
   }
 }
 
+# Keep the packet policy in one non-secret object so rule matchers, interface
+# lists, and live-inventory-derived exceptions remain reviewable together.
+variable "firewall_policy" {
+  description = "Non-secret RouterOS input and forward firewall policy."
+  type = object({
+    trusted_interface_list   = optional(string, "LAN")
+    wan_interface_list       = optional(string, "WAN")
+    kubernetes_bgp_interface = optional(string, "vlan20")
+    management_source_cidr   = optional(string, "10.1.100.0/24")
+    management_ports         = optional(set(string), ["443"])
+    snmp_source_cidr         = optional(string, "10.0.0.0/8")
+    service_vip_address_list = optional(string, "sk-kubernetes-service-vips")
+    kubernetes_node_addresses = optional(set(string), [
+      "10.1.20.41",
+      "10.1.20.42",
+      "10.1.20.43",
+      "10.1.20.44",
+      "10.1.20.45",
+      "10.1.20.46",
+    ])
+    wireguard = optional(object({
+      # Keep remote-access rules disabled until the read-only inventory confirms
+      # the live interface, tunnel CIDR, and listen port.
+      enabled        = optional(bool, false)
+      interface_name = optional(string)
+      source_cidr    = optional(string)
+      listen_port    = optional(string)
+    }), {})
+    # These entries are intentionally empty until the live baseline identifies
+    # an approved inter-VLAN management path. No broad management exception is
+    # safe to infer from the existing VLAN names alone.
+    forward_management_rules = optional(map(object({
+      src_address        = optional(string)
+      src_address_list   = optional(string)
+      dst_address        = optional(string)
+      dst_address_list   = optional(string)
+      protocol           = optional(string)
+      src_port           = optional(string)
+      dst_port           = optional(string)
+      in_interface_list  = optional(string)
+      out_interface_list = optional(string)
+      comment            = string
+    })), {})
+  })
+  default = {}
+
+  validation {
+    condition = !var.firewall_policy.wireguard.enabled || (
+      var.firewall_policy.wireguard.interface_name != null &&
+      var.firewall_policy.wireguard.source_cidr != null &&
+      var.firewall_policy.wireguard.listen_port != null
+    )
+    error_message = "Enabled WireGuard firewall policy requires the verified interface name, tunnel CIDR, and listen port."
+  }
+}
+
 variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.

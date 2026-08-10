@@ -28,6 +28,13 @@ on:
         required: true
         default: false
         type: boolean
+      apply_gateway_firewall:
+        # Firewall changes get a dedicated targeted artifact so provider-broken
+        # interface, IP-address, and BGP resources are not evaluated together.
+        description: Apply only the reviewed gateway firewall policy
+        required: true
+        default: false
+        type: boolean
       apply_gateway_dhcp:
         # Keep network-wide DHCP changes explicitly opt-in and independently
         # reviewable from unrelated gateway interface and BGP resources.
@@ -76,6 +83,7 @@ jobs:
       APPLY_GATEWAY: ${{ inputs.apply_gateway || false }}
       APPLY_GATEWAY_SNMP: ${{ inputs.apply_gateway_snmp || false }}
       PLAN_GATEWAY_SNMP: ${{ inputs.plan_gateway_snmp || false }}
+      APPLY_GATEWAY_FIREWALL: ${{ inputs.apply_gateway_firewall || false }}
       APPLY_GATEWAY_DHCP: ${{ inputs.apply_gateway_dhcp || false }}
       APPLY_GATEWAY_IPFIX: ${{ inputs.apply_gateway_ipfix || false }}
       APPLY_CLOUDFLARE: ${{ inputs.apply_cloudflare || false }}
@@ -97,6 +105,7 @@ jobs:
             "${APPLY_GATEWAY}" \
             "${APPLY_GATEWAY_SNMP}" \
             "${PLAN_GATEWAY_SNMP}" \
+            "${APPLY_GATEWAY_FIREWALL}" \
             "${APPLY_GATEWAY_DHCP}" \
             "${APPLY_GATEWAY_IPFIX}" \
             "${APPLY_CLOUDFLARE}"; do
@@ -130,7 +139,7 @@ jobs:
     needs: [detect-changes, validate-dispatch]
     # Only main-branch pushes and explicit main-branch dispatches may access
     # remote state, provider credentials, or immutable plan artifacts.
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && inputs.apply_gateway_firewall && matrix.stacks == 'network/gw/interfaces')
     strategy:
       max-parallel: 1
       matrix:
@@ -333,7 +342,7 @@ jobs:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against
     # main; pull requests and ordinary main pushes remain plan-only.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
@@ -400,7 +409,7 @@ jobs:
     name: Plan gateway SNMP adoption
     # A separate targeted artifact avoids planning the provider-broken IP and
     # BGP updates while retaining reviewable, immutable OpenTofu execution.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -471,7 +480,7 @@ jobs:
 
   gateway-snmp-apply:
     name: Apply gateway SNMP adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-snmp-plan
     environment: production
@@ -532,11 +541,178 @@ jobs:
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
+  gateway-firewall-plan:
+    name: Plan gateway firewall policy
+    # Keep the firewall plan independent from provider-broken gateway
+    # interface, IP-address, and BGP resources while retaining immutable review.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: validate-dispatch
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-firewall-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Get gateway firewall secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Plan gateway firewall resources
+        run: >-
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=routeros_ip_firewall_addr_list.kubernetes_bgp_peers
+          -target=routeros_ip_firewall_addr_list.management_sources
+          -target=routeros_ip_firewall_addr_list.kubernetes_service_vips
+          -target=routeros_ip_firewall_filter.input_accept_established
+          -target=routeros_ip_firewall_filter.input_drop_invalid
+          -target=routeros_ip_firewall_filter.input_allow_icmp_trusted
+          -target=routeros_ip_firewall_filter.input_allow_dhcp
+          -target=routeros_ip_firewall_filter.input_allow_kubernetes_bgp
+          -target=routeros_ip_firewall_filter.input_allow_snmp_monitoring
+          -target=routeros_ip_firewall_filter.input_allow_management
+          -target=routeros_ip_firewall_filter.input_allow_wireguard
+          -target=routeros_ip_firewall_filter.input_drop_unmatched
+          -target=routeros_ip_firewall_filter.forward_accept_established
+          -target=routeros_ip_firewall_filter.forward_drop_invalid
+          -target=routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan
+          -target=routeros_ip_firewall_filter.forward_allow_wireguard_to_trusted_lan
+          -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips
+          -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
+          -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
+          -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
+          -target=routeros_ip_firewall_filter.allow_unifi_snmp_responses
+          -target=routeros_ip_firewall_filter.forward_management
+          -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
+          -target=routeros_ip_firewall_filter.forward_drop_wan_inbound
+          -target=routeros_ip_firewall_filter.forward_drop_unmatched
+          -out=firewall-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Reject destructive firewall plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json firewall-tofuplan \
+            | jq -e 'all(.resource_changes[]?.change.actions; index("delete") == null)' >/dev/null; then
+            echo "The firewall plan contains a delete or replacement; refusing to upload it." >&2
+            exit 1
+          fi
+
+      - name: Upload gateway firewall plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/firewall-tofuplan
+          if-no-files-found: error
+          retention-days: 7
+
+  gateway-firewall-apply:
+    name: Apply gateway firewall policy
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: [validate-dispatch, gateway-firewall-plan]
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-firewall-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Download gateway firewall plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get gateway firewall secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Apply gateway firewall plan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve firewall-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
   gateway-dhcp-plan:
     name: Plan gateway DHCP
     # Keep the dedicated DHCP plan isolated from the provider-blocked interface
     # and BGP stack while preserving immutable review before production apply.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -589,7 +765,7 @@ jobs:
 
   gateway-dhcp-apply:
     name: Apply gateway DHCP
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-dhcp-plan
     environment: production
@@ -645,7 +821,7 @@ jobs:
     # A dedicated targeted artifact adopts only the traffic-flow resources,
     # isolating them from the provider-broken interface and BGP stack while
     # keeping immutable reviewed execution and full mutual exclusion.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -712,7 +888,7 @@ jobs:
 
   gateway-ipfix-apply:
     name: Apply gateway IPFIX resources
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-ipfix-plan
     environment: production
@@ -777,7 +953,7 @@ jobs:
     name: Apply reviewed Cloudflare plan
     # External publication is opt-in and mutually exclusive with every gateway
     # mutation path so one approval always has one operational blast radius.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
