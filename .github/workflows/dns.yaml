@@ -20,7 +20,8 @@ on:
 jobs:
   validate:
     name: Validate DNS manifests
-    runs-on: self-hosted
+    # Rendered PR content must not execute on the shared infrastructure runner.
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'self-hosted' }}
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
@@ -30,6 +31,8 @@ jobs:
       # Terraform so manifest drift checks cannot expose infrastructure values.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
