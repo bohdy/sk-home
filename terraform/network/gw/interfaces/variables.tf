@@ -259,6 +259,82 @@ variable "firewall_policy" {
   }
 }
 
+# WireGuard interface identity and peer metadata are non-secret desired state.
+# Existing private keys and preshared keys stay in encrypted OpenTofu state and
+# are deliberately ignored during adoption so this migration never prints or
+# regenerates key material.
+variable "wireguard_interfaces" {
+  description = "Verified WireGuard interfaces to adopt on the gateway."
+  type = map(object({
+    name        = string
+    listen_port = number
+    mtu         = optional(string, null)
+    comment     = optional(string, null)
+  }))
+  default = {
+    roadwarrior = {
+      name        = "wg-roadwarrior"
+      listen_port = 51820
+      mtu         = "1420"
+    }
+    site_to_site = {
+      name        = "wireguard1"
+      listen_port = 51280
+      mtu         = "1420"
+    }
+  }
+}
+
+variable "wireguard_peers" {
+  description = "Verified WireGuard peer public configuration to adopt."
+  type = map(object({
+    interface            = string
+    public_key           = string
+    allowed_address      = list(string)
+    endpoint_address     = optional(string, null)
+    endpoint_port        = optional(string, null)
+    persistent_keepalive = optional(string, null)
+    disabled             = optional(bool, false)
+    comment              = optional(string, null)
+  }))
+  default = {
+    site_to_site_sh = {
+      interface        = "wireguard1"
+      public_key       = "1nxcJU+oaBJ2Vw4gXjx7ZBFmTdMJTPlEkLavhMsHmGo="
+      allowed_address  = ["169.254.0.2/32", "fd00:12::2/128", "10.2.0.0/16", "2001:718:2:d7::/64"]
+      endpoint_address = "2001:718:2:40::70"
+      endpoint_port    = "51820"
+      comment          = "SH"
+    }
+    site_to_site_ck = {
+      interface            = "wireguard1"
+      public_key           = "gL+kVkdg4SuMhz5GXINNC7N4O7ITyiDx5BcCoBCiTgI="
+      allowed_address      = ["169.254.0.0/24", "fd00:10::/64"]
+      endpoint_address     = "2001:470:6e:969::2"
+      endpoint_port        = "13231"
+      persistent_keepalive = "5s"
+      disabled             = true
+      comment              = "CK"
+    }
+    roadwarrior_viktor = {
+      interface        = "wg-roadwarrior"
+      public_key       = "Irpx45OP/VgU7ua+tfHa+mweEvq4GWmPy+F2A9+9ZkQ="
+      allowed_address  = ["10.1.250.10/32"]
+      endpoint_address = ""
+      endpoint_port    = "0"
+      comment          = "Viktor MacBookPro"
+    }
+    roadwarrior_ipad = {
+      interface        = "wg-roadwarrior"
+      public_key       = "//NZ0x1Ni9H4lWwOD9vbK/hJY6hcQW8Jzyy1WaFSono="
+      allowed_address  = ["10.1.250.11/32"]
+      endpoint_address = ""
+      endpoint_port    = "0"
+      comment          = "ipad"
+    }
+  }
+}
+
 variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.
