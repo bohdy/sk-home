@@ -132,59 +132,109 @@ variable "snmp_v3_priv_password" {
   }
 }
 
-# Keep the packet policy in one non-secret object so rule matchers, interface
-# lists, and live-inventory-derived exceptions remain reviewable together.
+# Keep the first firewall migration focused on adopting verified live rules.
+# New default-deny policy should not be inferred from names or added until the
+# adopted baseline has a clean no-destroy plan and live acceptance evidence.
 variable "firewall_policy" {
-  description = "Non-secret RouterOS input and forward firewall policy."
+  description = "Verified non-secret RouterOS firewall rules to adopt."
   type = object({
-    trusted_interface_list   = optional(string, "LAN")
-    wan_interface_list       = optional(string, "WAN")
-    kubernetes_bgp_interface = optional(string, "vlan20")
-    management_source_cidr   = optional(string, "10.1.100.0/24")
-    management_ports         = optional(set(string), ["443"])
-    snmp_source_cidr         = optional(string, "10.0.0.0/8")
-    service_vip_address_list = optional(string, "sk-kubernetes-service-vips")
-    kubernetes_node_addresses = optional(set(string), [
-      "10.1.20.41",
-      "10.1.20.42",
-      "10.1.20.43",
-      "10.1.20.44",
-      "10.1.20.45",
-      "10.1.20.46",
-    ])
-    wireguard = optional(object({
-      # Keep remote-access rules disabled until the read-only inventory confirms
-      # the live interface, tunnel CIDR, and listen port.
-      enabled        = optional(bool, false)
-      interface_name = optional(string)
-      source_cidr    = optional(string)
-      listen_port    = optional(string)
-    }), {})
-    # These entries are intentionally empty until the live baseline identifies
-    # an approved inter-VLAN management path. No broad management exception is
-    # safe to infer from the existing VLAN names alone.
-    forward_management_rules = optional(map(object({
-      src_address        = optional(string)
-      src_address_list   = optional(string)
-      dst_address        = optional(string)
-      dst_address_list   = optional(string)
-      protocol           = optional(string)
-      src_port           = optional(string)
-      dst_port           = optional(string)
-      in_interface_list  = optional(string)
-      out_interface_list = optional(string)
-      comment            = string
-    })), {})
+    address_lists = map(object({
+      list    = string
+      address = string
+      comment = optional(string, null)
+    }))
+    input_rules = map(object({
+      action               = string
+      comment              = optional(string, null)
+      connection_state     = optional(string, null)
+      connection_nat_state = optional(string, null)
+      src_address          = optional(string, null)
+      src_address_list     = optional(string, null)
+      dst_address          = optional(string, null)
+      dst_address_list     = optional(string, null)
+      protocol             = optional(string, null)
+      src_port             = optional(string, null)
+      dst_port             = optional(string, null)
+      in_interface         = optional(string, null)
+      in_interface_list    = optional(string, null)
+      out_interface        = optional(string, null)
+      out_interface_list   = optional(string, null)
+    }))
+    forward_rules = map(object({
+      action               = string
+      comment              = optional(string, null)
+      connection_state     = optional(string, null)
+      connection_nat_state = optional(string, null)
+      src_address          = optional(string, null)
+      src_address_list     = optional(string, null)
+      dst_address          = optional(string, null)
+      dst_address_list     = optional(string, null)
+      protocol             = optional(string, null)
+      src_port             = optional(string, null)
+      dst_port             = optional(string, null)
+      in_interface         = optional(string, null)
+      in_interface_list    = optional(string, null)
+      out_interface        = optional(string, null)
+      out_interface_list   = optional(string, null)
+    }))
   })
-  default = {}
-
-  validation {
-    condition = !var.firewall_policy.wireguard.enabled || (
-      var.firewall_policy.wireguard.interface_name != null &&
-      var.firewall_policy.wireguard.source_cidr != null &&
-      var.firewall_policy.wireguard.listen_port != null
-    )
-    error_message = "Enabled WireGuard firewall policy requires the verified interface name, tunnel CIDR, and listen port."
+  default = {
+    # The public VPN endpoint is already used by the live KNOWN WAN rule; keep
+    # its address-list ownership declarative without changing its value.
+    address_lists = {
+      known_wan = {
+        list    = "ACCD"
+        address = "44.237.169.3"
+        comment = "VPN-WEST-02"
+      }
+    }
+    input_rules = {
+      wireguard_roadwarrior = {
+        action       = "accept"
+        comment      = "wireguard"
+        in_interface = "wg-roadwarrior"
+      }
+      ssh_lan = {
+        action            = "accept"
+        comment           = "SSH LAN IN"
+        protocol          = "tcp"
+        dst_port          = "22"
+        in_interface_list = "LAN"
+      }
+      kubernetes_snmp = {
+        action      = "accept"
+        comment     = "LAN k3s"
+        src_address = "10.42.0.0/16"
+        protocol    = "udp"
+        dst_port    = "161"
+      }
+      snmp_lan = {
+        action            = "accept"
+        comment           = "SNMP LAN IN"
+        protocol          = "udp"
+        dst_port          = "161"
+        in_interface_list = "LAN"
+      }
+      wireguard_handshake = {
+        action   = "accept"
+        comment  = "Allow WireGuard roadwarrior"
+        protocol = "udp"
+        dst_port = "51820"
+      }
+    }
+    forward_rules = {
+      site_to_site = {
+        action      = "accept"
+        src_address = "10.1.0.0/16"
+        dst_address = "10.2.0.0/16"
+      }
+      known_wan = {
+        action            = "accept"
+        comment           = "KNOWN WAN"
+        src_address_list  = "ACCD"
+        in_interface_list = "WAN"
+      }
+    }
   }
 }
 

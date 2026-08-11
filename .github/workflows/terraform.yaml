@@ -29,9 +29,10 @@ on:
         default: false
         type: boolean
       apply_gateway_firewall:
-        # Firewall changes get a dedicated targeted artifact so provider-broken
-        # interface, IP-address, and BGP resources are not evaluated together.
-        description: Apply only the reviewed gateway firewall policy
+        # Firewall adoption gets a dedicated targeted artifact so
+        # provider-broken interface, IP-address, and BGP resources are not
+        # evaluated together.
+        description: Apply only the reviewed gateway firewall adoption
         required: true
         default: false
         type: boolean
@@ -544,9 +545,9 @@ jobs:
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
   gateway-firewall-plan:
-    name: Plan gateway firewall policy
-    # Keep the firewall plan independent from provider-broken gateway
-    # interface, IP-address, and BGP resources while retaining immutable review.
+    name: Plan gateway firewall adoption
+    # Keep baseline adoption independent from provider-broken gateway interface,
+    # IP-address, and BGP resources while retaining immutable review.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
@@ -591,31 +592,13 @@ jobs:
       - name: Plan gateway firewall resources
         run: >-
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
-          -target=routeros_ip_firewall_addr_list.kubernetes_bgp_peers
-          -target=routeros_ip_firewall_addr_list.management_sources
-          -target=routeros_ip_firewall_addr_list.kubernetes_service_vips
-          -target=routeros_ip_firewall_filter.input_accept_established
-          -target=routeros_ip_firewall_filter.input_drop_invalid
-          -target=routeros_ip_firewall_filter.input_allow_icmp_trusted
-          -target=routeros_ip_firewall_filter.input_allow_dhcp
-          -target=routeros_ip_firewall_filter.input_allow_kubernetes_bgp
-          -target=routeros_ip_firewall_filter.input_allow_snmp_monitoring
-          -target=routeros_ip_firewall_filter.input_allow_management
-          -target=routeros_ip_firewall_filter.input_allow_wireguard
-          -target=routeros_ip_firewall_filter.input_drop_unmatched
-          -target=routeros_ip_firewall_filter.forward_accept_established
-          -target=routeros_ip_firewall_filter.forward_drop_invalid
-          -target=routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan
-          -target=routeros_ip_firewall_filter.forward_allow_wireguard_to_trusted_lan
-          -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips
+          -target=routeros_ip_firewall_addr_list.adopted
+          -target=routeros_ip_firewall_filter.adopted_input
+          -target=routeros_ip_firewall_filter.adopted_forward
           -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
           -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
           -target=routeros_ip_firewall_filter.allow_unifi_snmp_responses
-          -target=routeros_ip_firewall_filter.forward_management
-          -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
-          -target=routeros_ip_firewall_filter.forward_drop_wan_inbound
-          -target=routeros_ip_firewall_filter.forward_drop_unmatched
           -out=firewall-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -648,7 +631,7 @@ jobs:
           retention-days: 7
 
   gateway-firewall-apply:
-    name: Apply gateway firewall policy
+    name: Apply gateway firewall adoption
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-firewall-plan]
