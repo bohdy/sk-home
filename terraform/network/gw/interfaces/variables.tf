@@ -221,6 +221,13 @@ variable "firewall_policy" {
         protocol = "udp"
         dst_port = "51820"
       }
+      wireguard_site_to_site_handshake = {
+        action            = "accept"
+        comment           = "Allow WireGuard site-to-site handshake"
+        protocol          = "udp"
+        dst_port          = "51280"
+        in_interface_list = "WAN"
+      }
     }
     forward_rules = {
       site_to_site = {
@@ -233,6 +240,20 @@ variable "firewall_policy" {
         comment           = "KNOWN WAN"
         src_address_list  = "ACCD"
         in_interface_list = "WAN"
+      }
+      wireguard_roadwarrior_to_trusted_lan = {
+        action             = "accept"
+        comment            = "Allow WireGuard roadwarrior to trusted LAN"
+        src_address        = "10.1.250.0/24"
+        in_interface       = "wg-roadwarrior"
+        out_interface_list = "LAN"
+      }
+      wireguard_site_to_site_to_trusted_lan = {
+        action             = "accept"
+        comment            = "Allow WireGuard site-to-site to trusted LAN"
+        src_address        = "10.2.0.0/16"
+        in_interface       = "wireguard1"
+        out_interface_list = "LAN"
       }
     }
   }
