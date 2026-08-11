@@ -148,6 +148,22 @@ gh workflow run terraform.yaml --ref main \
 
 The first targeted firewall artifact adopted only verified existing rules and failed closed if it contained a delete or replacement. Its temporary import blocks were removed after the adoption apply and a clean follow-up plan is required. Broad default-deny policy and declarative WireGuard peers remain separate follow-up stages.
 
+Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway=false \
+  -f apply_gateway_snmp=false \
+  -f plan_gateway_snmp=false \
+  -f apply_gateway_firewall=false \
+  -f apply_gateway_wireguard=true \
+  -f apply_gateway_dhcp=false \
+  -f apply_gateway_ipfix=false \
+  -f apply_cloudflare=false
+```
+
+The WireGuard path imports only public peer configuration and interface identity; private and preshared keys remain sensitive state and are ignored during adoption. Remove the temporary import blocks after the production-gated apply and require a clean follow-up plan.
+
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
 ```bash
@@ -170,7 +186,7 @@ Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access config
 gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=true
 ```
 
-The five manual mutation inputs and the dedicated SNMP plan-only input are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
+The six manual mutation inputs and the dedicated SNMP plan-only input are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
 
 The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired or unreachable gateway certificate requires the narrowly scoped bootstrap option; that one-time path uses the gateway's private HTTP REST endpoint, forces the stack-owned leaf import to displace ambiguous legacy certificate names, renames the imported leaf by its public fingerprint, and verifies the bound leaf. The installer writes each temporary file through the RouterOS REST execute endpoint because this device rejects file contents in the REST file-create body; it uploads only the leaf's immediate issuer because RouterOS also rejects the full multi-certificate issuer bundle, while client trust stores provide the remaining root chain. Normal and scheduled runs use HTTPS by DNS name. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection:
 

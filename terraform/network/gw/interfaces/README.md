@@ -14,6 +14,8 @@ The inventory also confirmed the existing RouterOS default input and forward rul
 
 The focused WireGuard contract now owns the two verified listener ports and the peer forwarding boundaries needed by #302: UDP/51820 for `wg-roadwarrior`, UDP/51280 for `wireguard1`, `10.1.250.0/24` from `wg-roadwarrior` to the trusted `LAN` interface list, and `10.2.0.0/16` from `wireguard1` to the trusted `LAN` interface list. This does not create or modify peer keys; peer ownership remains the separate #302 change. The broader default-deny policy remains deferred.
 
+The peer adoption map covers `SH`, disabled `CK`, `Viktor MacBookPro`, and `ipad` with their verified public keys, allowed addresses, endpoints, and comments. Interface private keys and the existing `SH` preshared key are retained in sensitive provider state through lifecycle ignores; no key values are committed or printed. Adopt peers with the dedicated `apply_gateway_wireguard=true` workflow input, then remove its temporary import blocks and verify a clean follow-up plan.
+
 Capture the live baseline from `main` with the read-only workflow:
 
 ```bash
