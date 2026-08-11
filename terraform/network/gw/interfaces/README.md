@@ -33,7 +33,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-The targeted plan imports only the verified baseline exceptions and refuses to upload any artifact containing a delete or replacement. The apply job consumes only that immutable artifact in the `production` environment. Remove the temporary import blocks after the adoption apply and verify a clean follow-up plan; do not repair the live firewall through an imperative REST workaround.
+The targeted plan imported only the verified baseline exceptions and refused to upload any artifact containing a delete or replacement. The temporary import blocks were removed immediately after that production-gated adoption; the next targeted plan must remain clean. Do not repair the live firewall through an imperative REST workaround.
 
 ## IPFIX flow collection
 

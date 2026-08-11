@@ -146,7 +146,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-The first targeted firewall artifact adopts only verified existing rules and fails closed if it contains a delete or replacement. Remove its temporary import blocks after the adoption apply and verify a clean follow-up plan. Broad default-deny policy and declarative WireGuard peers remain separate follow-up stages.
+The first targeted firewall artifact adopted only verified existing rules and failed closed if it contained a delete or replacement. Its temporary import blocks were removed after the adoption apply and a clean follow-up plan is required. Broad default-deny policy and declarative WireGuard peers remain separate follow-up stages.
 
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
