@@ -2,42 +2,23 @@
 
 This stack manages the MikroTik gateway bridge, VLAN interfaces, interface lists, Kubernetes BGP peering, and the declarative IPv4 firewall policy for the homelab gateway.
 
-## Firewall policy
+## Firewall baseline adoption
 
-The firewall policy is intentionally fail-closed for router input and unauthorized forwarding. Trusted LAN egress to the WAN is allowed, established and related return traffic is preserved, and unsolicited WAN-to-LAN traffic is denied. The current trusted interface list is `LAN`, which contains VLANs 10, 20, and 100 in `vlans.auto.tfvars`; VLANs 101 and 102 remain outside that broad trust boundary.
+The first firewall stage adopts verified existing rules without adding a new default-deny policy or reordering the live chains. This keeps the change reviewable and avoids changing behavior before the existing RouterOS policy is represented in OpenTofu state.
 
-The input chain is ordered as follows:
+The live baseline recorded two active WireGuard interfaces: `wg-roadwarrior` on UDP/51820 with tunnel network `10.1.250.0/24`, and `wireguard1` on UDP/51280 with site-to-site routes for `10.2.0.0/16`. The current peer resources remain outside this issue and are tracked by #302.
 
-| Order | Rule | Policy |
-| ---: | --- | --- |
-| 1 | `sk-firewall/input/accept-established-related` | Accept established and related connections. |
-| 2 | `sk-firewall/input/drop-invalid` | Drop invalid connection-tracking state. |
-| 3 | `sk-firewall/input/allow-icmp-trusted` | Allow ICMP from the trusted interface list. |
-| 4 | `sk-firewall/input/allow-dhcp` | Allow DHCP client UDP/68 to UDP/67 from trusted VLANs. |
-| 5 | `sk-firewall/input/allow-kubernetes-bgp` | Allow TCP/179 from the six declared Kubernetes node addresses on VLAN 20. |
-| 6 | `sk-firewall/input/allow-snmp-monitoring` | Allow UDP/161 from the existing `10.0.0.0/8` SNMP boundary. |
-| 7 | `sk-firewall/input/allow-management` | Allow TCP/443 from the VLAN 100 management source list. Additional ports require a reviewed policy entry. |
-| 8 | `sk-firewall/input/allow-wireguard` | Allow the verified WireGuard UDP listen port on the WAN interface. Disabled until live WireGuard inventory supplies the interface, tunnel CIDR, and port. |
-| 9 | `sk-firewall/input/drop-unmatched` | Drop all remaining input traffic. |
+The adopted input exceptions are `wireguard` on `wg-roadwarrior`, `SSH LAN IN` on TCP/22, `LAN k3s` from `10.42.0.0/16` to UDP/161, `SNMP LAN IN` on UDP/161 from `LAN`, and `Allow WireGuard roadwarrior` on UDP/51820. The adopted forward exceptions are the existing `10.1.0.0/16` to `10.2.0.0/16` site-to-site path and the `KNOWN WAN` path sourced from the existing `ACCD` address list. The four Kubernetes SNMP exceptions remain separately managed at their existing Terraform resource addresses.
 
-The forward chain permits trusted LAN to WAN traffic, preserves established and related sessions, permits trusted LAN access to the Kubernetes service VIP address list, and then denies unauthorized inter-VLAN and inbound WAN paths. The existing SNMP exceptions remain narrow and precede the inter-VLAN drop:
+The inventory also confirmed the existing RouterOS default input and forward rules, IPsec rules, fasttrack rule, WAN DST-NAT behavior, and interface-list membership. Those rules remain deliberately unmanaged in this adoption stage; the later default-deny design must be based on their verified behavior rather than replacing them implicitly.
 
-| Rule | Source | Destination | Service |
-| --- | --- | --- | --- |
-| `allow_kubernetes_synology_snmp` | `10.1.20.0/24` | `10.1.100.10` | UDP/161 |
-| `allow_synology_snmp_responses` | `10.1.100.10` | `10.1.20.0/24` | UDP source port 161 |
-| `allow_kubernetes_unifi_snmp` | `10.1.20.0/24` | `10.1.102.0/24` | UDP/161 |
-| `allow_unifi_snmp_responses` | `10.1.102.0/24` | `10.1.20.0/24` | UDP source port 161 |
-
-The remaining forward rules are `sk-firewall/forward/accept-established-related`, `sk-firewall/forward/drop-invalid`, `sk-firewall/forward/allow-trusted-lan-to-wan`, `sk-firewall/forward/allow-wireguard-to-trusted-lan`, `sk-firewall/forward/allow-kubernetes-service-vips`, `sk-firewall/forward/drop-inter-vlan`, `sk-firewall/forward/drop-wan-inbound`, and `sk-firewall/forward/drop-unmatched`. WireGuard peers are allowed to reach all trusted LAN interfaces once the verified tunnel values enable that rule; they are not allowed to bypass the untrusted VLAN boundary.
-
-Before enabling or applying the policy, capture the live baseline from `main` with the read-only workflow:
+Capture the live baseline from `main` with the read-only workflow:
 
 ```bash
 gh workflow run routeros-firewall-inventory.yaml --ref main
 ```
 
-The workflow uploads only projected rule, address, interface, route, service, NAT, and WireGuard metadata. It never writes RouterOS state and never includes private keys, preshared keys, passwords, or raw API responses. Use the resulting artifact to confirm existing rules, address-list ownership, interface-list membership, management ports, WireGuard values, and the ordering anchors before changing `firewall_policy`.
+The workflow uploads only projected rule, address, interface, route, service, NAT, and WireGuard metadata. It never writes RouterOS state and never includes private keys, preshared keys, passwords, or raw API responses. The resulting artifact is the source for the adoption maps in `firewall_policy`.
 
 The targeted firewall plan and apply path is mutually exclusive with every other gateway mutation mode:
 
@@ -52,7 +33,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-The plan job refuses to upload any artifact containing a delete or replacement. The apply job consumes only that immutable artifact in the `production` environment. If the policy blocks an intended path, revert the policy commit and run the reviewed targeted plan again; do not repair the live firewall through an imperative REST workaround.
+The targeted plan imports only the verified baseline exceptions and refuses to upload any artifact containing a delete or replacement. The apply job consumes only that immutable artifact in the `production` environment. Remove the temporary import blocks after the adoption apply and verify a clean follow-up plan; do not repair the live firewall through an imperative REST workaround.
 
 ## IPFIX flow collection
 
