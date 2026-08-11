@@ -11,6 +11,7 @@ This is the execution checklist for work intentionally deferred after the first 
 ## Priority 0
 
 - [ ] Resolve the RouterOS provider incompatibility affecting the worker BGP peer, then apply and verify the declarative peer through the production-gated workflow; do not use an imperative REST workaround. Track implementation in [issue #276](https://github.com/bohdy/sk-home/issues/276).
+- [ ] Capture the live RouterOS firewall baseline, review the declarative input and forward policy, then run the no-destroy targeted firewall plan and representative access tests before applying through the production-gated workflow. Complete this before [issue #302](https://github.com/bohdy/sk-home/issues/302); implementation is tracked in [issue #301](https://github.com/bohdy/sk-home/issues/301).
 - [x] Separate untrusted pull-request OpenTofu validation from trusted production planning and applying so PRs receive no infrastructure credentials and sensitive binary plans are not retained as ordinary artifacts.
 
 ## Priority 1

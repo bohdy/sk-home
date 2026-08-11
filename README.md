@@ -34,7 +34,7 @@ The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The trusted `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, and `cloudflare/tunnel`. It applies only `k3s/talos-cluster` on `main`; gateway and Cloudflare changes stay plan-only because they have higher operational blast radius.
+The trusted `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, and `cloudflare/tunnel`. It applies only `k3s/talos-cluster` on `main`; gateway and Cloudflare changes stay plan-only because they have higher operational blast radius. The gateway firewall has its own targeted, production-gated apply path because the RouterOS provider can fail unrelated gateway resources during a full plan.
 
 The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys during the first OpenTofu migration. After the first successful OpenTofu apply, treat the retained remote state objects as OpenTofu-owned.
 
@@ -124,6 +124,29 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway
 ```
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same trusted run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
+
+Capture the read-only RouterOS firewall baseline before enabling or reviewing the firewall policy:
+
+```bash
+gh workflow run routeros-firewall-inventory.yaml --ref main
+```
+
+The inventory workflow runs only from `main`, uses Bitwarden-backed RouterOS credentials, projects only non-secret metadata, and uploads no private keys, preshared keys, passwords, or raw API responses. Review its artifact before changing the gateway firewall policy or dispatching the targeted firewall apply.
+
+Apply the reviewed firewall policy through its dedicated immutable artifact path:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway=false \
+  -f apply_gateway_snmp=false \
+  -f plan_gateway_snmp=false \
+  -f apply_gateway_firewall=true \
+  -f apply_gateway_dhcp=false \
+  -f apply_gateway_ipfix=false \
+  -f apply_cloudflare=false
+```
+
+The firewall plan fails closed if it contains a delete or replacement, and the production apply consumes only that reviewed artifact. WireGuard firewall values remain disabled until the live inventory confirms the interface, tunnel CIDR, and UDP listen port.
 
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 

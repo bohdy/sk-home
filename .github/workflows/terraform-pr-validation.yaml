@@ -6,6 +6,7 @@ on:
       - "terraform/**"
       - ".github/workflows/terraform.yaml"
       - ".github/workflows/terraform-pr-validation.yaml"
+      - ".github/workflows/routeros-firewall-inventory.yaml"
       - "mise.toml"
       - ".pre-commit-config.yaml"
 
