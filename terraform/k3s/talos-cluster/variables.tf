@@ -30,6 +30,27 @@ variable "cluster_dns_servers" {
   default     = ["10.1.20.1"]
 }
 
+# Cilium handles service VIP TCP and UDP traffic in eBPF, but its current
+# kube-proxy replacement does not answer ICMP echo requests for those VIPs.
+# Install a node-local blackhole for the advertised pool so unsupported ICMP
+# packets terminate instead of following the BGP route back to the gateway.
+variable "service_vip_blackhole_cidr" {
+  description = "Cilium LoadBalancer service-VIP pool to terminate locally for unsupported protocols."
+  type        = string
+  default     = "10.1.30.0/24"
+}
+
+variable "service_vip_blackhole_metric" {
+  description = "Metric for the node-local service-VIP blackhole route."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.service_vip_blackhole_metric >= 0
+    error_message = "service_vip_blackhole_metric must be zero or greater."
+  }
+}
+
 variable "cluster_endpoint_sans" {
   # Additional API server SANs are optional; the VIP and node addresses are
   # always added by local configuration.

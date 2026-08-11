@@ -20,6 +20,8 @@ Blocky is the only DNS service exposed to LAN clients. It should run with at lea
 
 The chosen client-facing DNS VIP is `10.1.30.53`. Cilium already advertises LoadBalancer service VIP host routes from `10.1.30.0/24` to the MikroTik gateway over BGP, so the DNS service should fit into that existing routing model instead of introducing a separate BGP speaker.
 
+Cilium's current eBPF LoadBalancer implementation handles the service's TCP/UDP/53 frontends but does not answer ICMP echo requests for service VIPs. Talos therefore installs a node-local blackhole for `10.1.30.0/24` to prevent unsupported ICMP from looping back through the BGP gateway. Validate this VIP with UDP/TCP DNS queries, not ping; the blackhole is intentionally removed only when an ICMP service-VIP responder is available and enabled.
+
 The Blocky `LoadBalancer` service should request `10.1.30.53` with Cilium LB IPAM annotation `lbipam.cilium.io/ips`. Leave `spec.loadBalancerIP` unset unless implementation testing shows the annotation is unavailable for the installed Cilium version. Leave `loadBalancerClass` unset while Cilium is the default LoadBalancer allocator.
 
 CoreDNS should stay internal to the cluster behind a `ClusterIP` service unless a later requirement needs direct LAN access.
