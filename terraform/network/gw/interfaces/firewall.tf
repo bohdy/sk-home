@@ -107,47 +107,51 @@ import {
 resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
   provider = routeros.gw
 
-  action      = "accept"
-  chain       = "forward"
-  src_address = "10.1.20.0/24"
-  dst_address = "10.1.100.10"
-  protocol    = "udp"
-  dst_port    = "161"
-  comment     = "Allow Kubernetes worker VLAN to poll Synology SNMP"
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.20.0/24"
+  dst_address  = "10.1.100.10"
+  protocol     = "udp"
+  dst_port     = "161"
+  place_before = 0
+  comment      = "Allow Kubernetes worker VLAN to poll Synology SNMP"
 }
 
 resource "routeros_ip_firewall_filter" "allow_synology_snmp_responses" {
   provider = routeros.gw
 
-  action      = "accept"
-  chain       = "forward"
-  src_address = "10.1.100.10"
-  dst_address = "10.1.20.0/24"
-  protocol    = "udp"
-  src_port    = "161"
-  comment     = "Allow Synology SNMP replies to Kubernetes worker VLAN"
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.100.10"
+  dst_address  = "10.1.20.0/24"
+  protocol     = "udp"
+  src_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id
+  comment      = "Allow Synology SNMP replies to Kubernetes worker VLAN"
 }
 
 resource "routeros_ip_firewall_filter" "allow_kubernetes_unifi_snmp" {
   provider = routeros.gw
 
-  action      = "accept"
-  chain       = "forward"
-  src_address = "10.1.20.0/24"
-  dst_address = "10.1.102.0/24"
-  protocol    = "udp"
-  dst_port    = "161"
-  comment     = "Allow Kubernetes worker VLAN to poll UniFi SNMP"
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.20.0/24"
+  dst_address  = "10.1.102.0/24"
+  protocol     = "udp"
+  dst_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_synology_snmp_responses.id
+  comment      = "Allow Kubernetes worker VLAN to poll UniFi SNMP"
 }
 
 resource "routeros_ip_firewall_filter" "allow_unifi_snmp_responses" {
   provider = routeros.gw
 
-  action      = "accept"
-  chain       = "forward"
-  src_address = "10.1.102.0/24"
-  dst_address = "10.1.20.0/24"
-  protocol    = "udp"
-  src_port    = "161"
-  comment     = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.102.0/24"
+  dst_address  = "10.1.20.0/24"
+  protocol     = "udp"
+  src_port     = "161"
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id
+  comment      = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
 }
