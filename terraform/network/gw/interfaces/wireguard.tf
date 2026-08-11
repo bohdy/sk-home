@@ -36,35 +36,3 @@ resource "routeros_interface_wireguard_peer" "managed" {
     ignore_changes = [private_key, preshared_key]
   }
 }
-
-# These imports are temporary state-migration scaffolding. Remove them after
-# the targeted no-destroy adoption apply and a clean follow-up plan.
-import {
-  to = routeros_interface_wireguard.managed["roadwarrior"]
-  id = "*1A"
-}
-
-import {
-  to = routeros_interface_wireguard.managed["site_to_site"]
-  id = "*14"
-}
-
-import {
-  to = routeros_interface_wireguard_peer.managed["site_to_site_sh"]
-  id = "*4"
-}
-
-import {
-  to = routeros_interface_wireguard_peer.managed["site_to_site_ck"]
-  id = "*5"
-}
-
-import {
-  to = routeros_interface_wireguard_peer.managed["roadwarrior_viktor"]
-  id = "*6"
-}
-
-import {
-  to = routeros_interface_wireguard_peer.managed["roadwarrior_ipad"]
-  id = "*8"
-}
