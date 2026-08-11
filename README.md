@@ -162,7 +162,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-The WireGuard path imports only public peer configuration and interface identity; private and preshared keys remain sensitive state and are ignored during adoption. Remove the temporary import blocks after the production-gated apply and require a clean follow-up plan.
+The WireGuard path imported only public peer configuration and interface identity; private and preshared keys remain sensitive state and are ignored during adoption. Its temporary import blocks were removed after the production-gated apply, and a clean follow-up plan is required.
 
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
