@@ -60,48 +60,6 @@ resource "routeros_ip_firewall_filter" "adopted_forward" {
   depends_on           = [routeros_ip_firewall_addr_list.adopted]
 }
 
-# These imports are temporary state-migration scaffolding. Remove them after
-# one reviewed targeted apply confirms the adopted resources are in state.
-import {
-  to = routeros_ip_firewall_addr_list.adopted["known_wan"]
-  id = "*1"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_input["wireguard_roadwarrior"]
-  id = "*22"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_input["ssh_lan"]
-  id = "*11"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_input["kubernetes_snmp"]
-  id = "*14"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_input["snmp_lan"]
-  id = "*12"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_input["wireguard_handshake"]
-  id = "*1C"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_forward["site_to_site"]
-  id = "*1A"
-}
-
-import {
-  to = routeros_ip_firewall_filter.adopted_forward["known_wan"]
-  id = "*10"
-}
-
 # These four SNMP exceptions were already OpenTofu-owned. Keep their resource
 # addresses and live matchers stable while the rest of the baseline is adopted.
 resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
