@@ -49,6 +49,15 @@ Acceptance completed on 2026-07-17:
 
 1. Resolve the pinned RouterOS provider's RouterOS 7.21/7.22 incompatibility before retrying the manually gated gateway apply. Upstream issues `terraform-routeros/terraform-provider-routeros#944` and `#959` track the rejected `vrf` and `add-path-out` fields; proposed fix PR `#910` remains unmerged. Do not bypass OpenTofu state with an imperative REST creation merely to add the worker peer.
 
+## Kubernetes service-VIP ICMP acceptance
+
+Acceptance completed on 2026-08-11 after PR #308 and trusted OpenTofu run `31535410002`:
+
+- Every Talos control-plane and worker node has a node-local blackhole route for `10.1.30.0/24` with metric `1`, preventing unsupported service-VIP ICMP packets from following the BGP route back to the gateway.
+- Cilium's service map still exposes Blocky at `10.1.30.53:53` and Grafana at `10.1.30.55:443`; DNS over both UDP and TCP and Grafana HTTPS remained successful after the route rollout.
+- Before the route rollout, pinging `10.1.30.53` through the existing WireGuard client returned TTL-exceeded messages from `10.1.20.41`. After the rollout, the same ping timed out without TTL-exceeded responses, which is the expected behavior because Cilium 1.19.4 does not provide an ICMP service-VIP responder.
+- ICMP to node address `10.1.20.41` remained successful, so node ICMP health checks and service-port probes remain distinct and valid.
+
 ## Final release acceptance
 
 Acceptance completed on 2026-08-02 after PR #195 deferred Brother printer SNMP acceptance until its administrator password can be reset:
