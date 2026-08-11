@@ -12,6 +12,8 @@ The adopted input exceptions are `wireguard` on `wg-roadwarrior`, `SSH LAN IN` o
 
 The inventory also confirmed the existing RouterOS default input and forward rules, IPsec rules, fasttrack rule, WAN DST-NAT behavior, and interface-list membership. Those rules remain deliberately unmanaged in this adoption stage; the later default-deny design must be based on their verified behavior rather than replacing them implicitly.
 
+The focused WireGuard contract now owns the two verified listener ports and the peer forwarding boundaries needed by #302: UDP/51820 for `wg-roadwarrior`, UDP/51280 for `wireguard1`, `10.1.250.0/24` from `wg-roadwarrior` to the trusted `LAN` interface list, and `10.2.0.0/16` from `wireguard1` to the trusted `LAN` interface list. This does not create or modify peer keys; peer ownership remains the separate #302 change. The broader default-deny policy remains deferred.
+
 Capture the live baseline from `main` with the read-only workflow:
 
 ```bash
