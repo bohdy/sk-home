@@ -23,6 +23,15 @@ locals {
     local.control_plane_ips,
     var.cluster_endpoint_sans,
   ))
+
+  # Cilium's service maps consume supported L4 traffic before the host route;
+  # this Talos document only terminates unsupported traffic such as ICMP.
+  service_vip_blackhole_config = yamlencode({
+    apiVersion = "v1alpha1"
+    kind       = "BlackholeRouteConfig"
+    name       = var.service_vip_blackhole_cidr
+    metric     = var.service_vip_blackhole_metric
+  })
 }
 
 resource "talos_machine_secrets" "cluster" {
@@ -132,6 +141,7 @@ data "talos_machine_configuration" "control_plane" {
       name       = "observability"
       url        = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
     }),
+    local.service_vip_blackhole_config,
   ]
 }
 
@@ -214,6 +224,7 @@ data "talos_machine_configuration" "worker" {
       name       = "observability"
       url        = "tcp://${split("/", each.value.ipv4_address)[0]}:${var.talos_log_port}/"
     }),
+    local.service_vip_blackhole_config,
   ]
 }
 

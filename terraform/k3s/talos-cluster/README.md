@@ -23,6 +23,12 @@ The control-plane configuration explicitly enables kube-apiserver audit logging 
 
 Talos does not install the default CNI or kube-proxy for this cluster. Cilium is installed after bootstrap from `kubernetes/bootstrap/cilium/values.yaml`, runs kube-proxy replacement, and later advertises `LoadBalancer` service VIP routes through its BGP control plane.
 
+## Service VIP ICMP handling
+
+Each node receives a Talos `BlackholeRouteConfig` for `10.1.30.0/24` with metric `1`. Cilium 1.19.4 handles supported TCP and UDP service ports in its eBPF service map but does not answer ICMP echo requests for a service VIP. Without the node-local blackhole, an ICMP packet falls through to the node FIB, follows the BGP route back to the gateway, and loops until its TTL expires. The blackhole terminates unsupported traffic locally while leaving DNS and HTTPS service-port handling in Cilium unchanged.
+
+This is a loop-prevention workaround, not an ICMP responder: service VIPs are validated with their real DNS, TCP, or HTTPS probes, while node addresses remain the ICMP health targets. Remove the blackhole only after the deployed Cilium version provides and enables an equivalent service-VIP ICMP responder.
+
 The Talos image schematic includes the `siderolabs/iscsi-tools` system extension so the cluster can later run Synology CSI-backed iSCSI storage. Updating the schematic only changes the desired Talos image; nodes must still be rolled or upgraded onto the generated image before iSCSI storage is considered available.
 
 ## Secrets and variables
