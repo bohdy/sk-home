@@ -230,7 +230,7 @@ jobs:
             ' "${baseline_dir}/routeros-firewall-baseline.json"
             echo
             echo "#### Filter order"
-            jq -r '.filters[] | "- `\(.id)` [\(.chain)] \(.action) \(.comment // \"\")"' \
+            jq -r '.filters[] | "- `\(.id)` [\(.chain)] \(.action) \(.comment // "")"' \
               "${baseline_dir}/routeros-firewall-baseline.json"
           } >> "${GITHUB_STEP_SUMMARY}"
 
