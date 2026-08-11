@@ -155,9 +155,13 @@ jobs:
           collect /rest/interface/wireguard/peers | jq -ce '[.[] | {
             id: .[".id"],
             interface,
+            public_key: .["public-key"],
             allowed_address: .["allowed-address"],
+            endpoint_address: .["endpoint-address"],
             endpoint_port: .["endpoint-port"],
             persistent_keepalive: .["persistent-keepalive"],
+            last_handshake: .["last-handshake"],
+            preshared_key_configured: ((.["preshared-key"] // "") | length > 0),
             disabled,
             comment
           }]' > "${baseline_dir}/wireguard-peers.json"
