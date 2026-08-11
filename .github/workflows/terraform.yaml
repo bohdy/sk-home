@@ -139,11 +139,13 @@ jobs:
     needs: [detect-changes, validate-dispatch]
     # Only main-branch pushes and explicit main-branch dispatches may access
     # remote state, provider credentials, or immutable plan artifacts.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && inputs.apply_gateway_firewall && matrix.stacks == 'network/gw/interfaces')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     strategy:
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, network/gw/dhcp, k3s/talos-cluster, cloudflare/tunnel]
+        # Targeted firewall dispatches use their dedicated job and omit the
+        # provider-sensitive interface stack from this ordinary plan matrix.
+        stacks: ${{ fromJSON(inputs.apply_gateway_firewall && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
