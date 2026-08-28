@@ -288,6 +288,18 @@ Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed. R
 - A read-only query through the least-privilege application user found both `default` and `super` sites, one SNMP settings record, and three adopted AP records: `AP-1NP` (`10.1.102.11`), `AP-1PP` (`10.1.102.10`), and `AP-temp` (`10.1.102.12`). The setting value was not read. The independently verified `AP-1PP` SNMPv2c scrape proves the deployed device-side compatibility profile works through the new worker VLAN path.
 - Initial live reconciliation showed that MongoDB requires `CHOWN`, `DAC_OVERRIDE`, `SETGID`, and `SETUID` for first-run setup. The LinuxServer controller's `s6` phase fails to render its packaged template under no-new-privileges, so it uses the supported image initialization context. Pod-level RuntimeDefault seccomp, private-only exposure, and Cilium policy remain enforced.
 
+## UniFi Poller
+
+The UniFi Poller (API-based Prometheus exporter) was added on 2026-08-27 after the controller migration to Talos was accepted. It complements the per-AP SNMP path by exposing controller-level and site-level metrics that SNMP cannot reach: controller version and update availability, site adoption and client counts, and per-client and per-device gauges.
+
+- The exporter is `unpoller/unpoller` v4.0.1, pinned by digest, deployed as a single non-root replica in the `unifi` namespace with a read-only root filesystem and a bounded memory-backed `/tmp`. It polls the private `unifi-console` console on `8443` with `UP_UNIFI_DEFAULT_VERIFY_SSL=false` because the console uses a self-signed certificate.
+- A dedicated read-only UniFi Network user `observability` is created in the controller and its password is stored in a new Bitwarden item `SK-TALOS-UNIFI-POLLER-PASSWORD` (single value). The username is non-secret and committed in the manifest; the password is injected from the Bitwarden-backed `unifi-poller` Secret and is absent from Git, ConfigMaps, pod arguments, and logs.
+- The `unifi-poller` VMServiceScrape polls the exporter on `9130` every 60 seconds with `cluster="sk-talos"`, `site="sk"`, `instance="unifi-poller"`, `vendor="ubiquiti"`, and `availability="always-on"` labels.
+- The `unifi-poller` Cilium policy permits no DNS egress and only the console `8443` for API collection; the Prometheus port is reachable from the metrics path.
+- A `sk-unifi-poller` Grafana dashboard renders controller, site, device, and client panels from the verified `unpoller_*` families.
+- The `unifi-poller` VMRule pages on a controller update being available, a site losing all of its access points, and a device reporting a non-operational state.
+- Flux `observability-unifi-poller` applies the component.
+
 ## Proxmox acceptance
 
 Acceptance completed on 2026-07-23 after PRs #140 through #146 introduced the collector and corrected issues found through live verification:

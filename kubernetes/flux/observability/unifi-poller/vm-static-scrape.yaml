@@ -1,0 +1,27 @@
+# Preserve the controller's stable inventory identity while scraping the
+# poller's single /metrics endpoint, which serves the cached controller, site,
+# device, and client data together with the poller's own health metrics. The
+# poller is not multi-target, so no __param_target rewrite is needed; only the
+# scrape address is redirected to the in-cluster Service.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: unifi
+  namespace: observability
+spec:
+  jobName: unifi
+  targetEndpoints:
+    - targets:
+        - unifi
+      labels:
+        instance: unifi
+        vendor: ubiquiti
+        availability: always-on
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 15s
+      sampleLimit: 10000
+      seriesLimit: 10000
+      relabelConfigs:
+        - targetLabel: __address__
+          replacement: unifi-poller.observability.svc.cluster.local.:9130

@@ -1,0 +1,51 @@
+# Place the poller in ingress and egress default-deny, admitting only VMAgent
+# scrapes, kubelet probes, CoreDNS resolution, and the single UniFi controller
+# console endpoint. The poller has no device, database, or Internet reach.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi-poller
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-poller
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: vmagent
+      toPorts:
+        - ports:
+            - port: "9130"
+              protocol: TCP
+    # Kubelet probes may originate from the local or another cluster node.
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9130"
+              protocol: TCP
+  egress:
+    # The private ClusterIP origin proxies to the controller Pod; allow only
+    # the native console listener rather than the device or database ports.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-controller
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+    # DNS is confined to CoreDNS so the service-name lookup cannot create
+    # Internet reachability while the connection rule above stays endpoint-scoped.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP

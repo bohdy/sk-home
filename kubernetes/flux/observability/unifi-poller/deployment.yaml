@@ -1,0 +1,118 @@
+# One stateless poller replica is sufficient for this single-controller
+# deployment; temporary monitoring downtime is acceptable in the home lab.
+# The poller reads the UniFi Network Application API read-only and serves the
+# resulting cache on a local /metrics endpoint for VMAgent.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi-poller
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: unifi-poller
+    app.kubernetes.io/component: infrastructure-metrics
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-poller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unifi-poller
+        app.kubernetes.io/component: infrastructure-metrics
+    spec:
+      automountServiceAccountToken: false
+      # Prefer the general-purpose worker while allowing rescheduling during
+      # maintenance because the worker is intentionally not dedicated.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: unifi-poller
+          # Digest-pinned multi-arch index so the amd64 worker pulls the
+          # matching manifest; upgrades are reviewed in separate pull requests.
+          image: ghcr.io/unpoller/unpoller:v4.0.1@sha256:b2763042859c15301c0db5056de789d75e148b9df25fce97fdb35b854f21edb1
+          # The controller is reached through its private in-cluster ClusterIP
+          # origin. The native console listener serves a self-signed
+          # certificate, so verification is disabled for this cluster-internal
+          # endpoint only; see the component README for the rationale.
+          env:
+            - name: UP_UNIFI_DEFAULT_URL
+              value: https://unifi-console.unifi.svc.cluster.local:8443
+            - name: UP_UNIFI_DEFAULT_VERIFY_SSL
+              value: "false"
+            # Poll every site on the controller so per-client and per-device
+            # coverage follows the restored site set without manual curation.
+            - name: UP_UNIFI_DEFAULT_SITES
+              value: all
+            # Serve the Prometheus cache on the standard port at the network
+            # SNMP cadence; the poller clamps intervals below 15s upward.
+            - name: UP_PROMETHEUS_HTTP_LISTEN
+              value: 0.0.0.0:9130
+            - name: UP_PROMETHEUS_INTERVAL
+              value: 60s
+            # Dedicated read-only credential, never the administrator identity
+            # used to configure access-point SNMP. Values are injected from the
+            # Bitwarden-backed Secret and never appear in arguments or files.
+            - name: UP_UNIFI_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-poller-auth
+                  key: username
+            - name: UP_UNIFI_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: unifi-poller-auth
+                  key: password
+          ports:
+            - name: http
+              containerPort: 9130
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            # The Go runtime and TLS stack may create temporary files; provide
+            # the minimum writable path without relaxing the read-only root.
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi

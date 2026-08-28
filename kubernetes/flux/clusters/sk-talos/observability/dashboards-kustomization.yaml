@@ -20,3 +20,4 @@ spec:
     - name: observability-metrics
     - name: observability-network-metrics
     - name: observability-flow-collector
+    - name: observability-unifi-poller

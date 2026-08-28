@@ -15,6 +15,7 @@ configMapGenerator:
       - cilium-bgp.json
       - syslog.json
       - sk-flow.json
+      - unifi.json
 generatorOptions:
   labels:
     grafana_dashboard: "1"

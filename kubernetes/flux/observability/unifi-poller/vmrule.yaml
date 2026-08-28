@@ -1,0 +1,42 @@
+# Alerting rules for the UniFi poller. The poller exposes unpoller_controller_up
+# and per-site topology counts (unpoller_topology_clients_total); these rules
+# surface controller reachability loss and an empty client inventory before it
+# becomes a silent monitoring gap.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: unifi-poller
+  namespace: observability
+spec:
+  groups:
+    - name: unifi-poller
+      rules:
+        - alert: UniFiPollerDown
+          # unpoller_controller_up is a GaugeVec (label: source). The absent()
+          # arm fires when the metric series disappears entirely, e.g. after a
+          # poller crash that removes all label combinations.
+          expr: unpoller_controller_up == 0 or on() absent(unpoller_controller_up)
+          for: 5m
+          labels:
+            severity: warning
+            vendor: ubiquiti
+          annotations:
+            summary: UniFi poller is not reporting metrics
+            description: >-
+              The UniFi poller has not exported metrics for 5 minutes. The
+              controller may be unreachable or the poller may be crash-looping.
+        - alert: UniFiNoClients
+          # unpoller_topology_clients_total carries a site_name label per site.
+          # A sustained zero indicates a controller issue or a genuinely empty
+          # site.
+          expr: sum by (site_name) (unpoller_topology_clients_total) == 0
+          for: 10m
+          labels:
+            severity: warning
+            vendor: ubiquiti
+          annotations:
+            summary: UniFi site reports zero clients
+            description: >-
+              The UniFi site {{ $labels.site_name }} has reported zero connected
+              clients for 10 minutes. This may indicate a controller issue or
+              a genuinely empty site.

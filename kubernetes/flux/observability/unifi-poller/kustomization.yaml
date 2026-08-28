@@ -1,0 +1,10 @@
+# The poller relies on the dedicated read-only credential injected from the
+# Bitwarden-backed Secret and on Cilium policy to reach only the controller.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - network-policy.yaml
+  - vm-static-scrape.yaml
+  - vmrule.yaml
