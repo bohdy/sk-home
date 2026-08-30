@@ -20,7 +20,7 @@ This is the execution checklist for work intentionally deferred after the first 
 - [ ] Reassess the Proxmox group `acl` lifecycle workaround after upgrading beyond provider `0.106.0`; remove it only after a live no-destroy plan and effective-permission verification.
 - [ ] Diagnose RouterOS SNMPv2c compatibility without weakening the accepted SNMPv3 production path.
 - [ ] Reset the Brother printer administrator password, confirm its read-only SNMPv2c profile, validate `system` and `printer_mib`, and enable its intermittent scrape without offline paging.
-- [ ] Add UniFi Poller now that the controller migration is complete, if controller-level metrics are still needed beyond access-point SNMP.
+- [x] Add UniFi Poller now that the controller migration is complete, retaining controller-level metrics beyond access-point SNMP without duplicating device coverage.
 - [ ] Define and implement automated Bitwarden-to-Kubernetes secret reconciliation only after reviewing the SDK-server and machine-token risks.
 - [ ] Add a raw telemetry backup or snapshot strategy covering the retention and recovery requirements for VictoriaMetrics, VictoriaLogs, and ClickHouse.
 - [ ] Add an external dead-man heartbeat and path-specific probes from a LAN host outside Kubernetes and the home internet failure domain.
