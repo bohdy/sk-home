@@ -71,15 +71,19 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
-      "description": "Age of the poller's cached data in seconds. Higher values mean the poller is falling behind its refresh cycle.",
+      "description": "Age of the poller's cached data in seconds. A value of -1 means the cache has never populated and is unhealthy; higher values mean the poller is falling behind its refresh cycle.",
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "yellow",
