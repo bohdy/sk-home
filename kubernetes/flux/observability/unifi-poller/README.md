@@ -90,7 +90,7 @@ kubectl kustomize kubernetes/flux/observability/unifi-poller |
   kubectl apply --server-side --dry-run=server -f - >/dev/null
 ```
 
-After Flux reconciliation, require the Secret to contain exactly `username` and `password`, a Ready pod with no repeated restarts, and `unpoller_controller_up` equal to `1`. The latter proves that the poller authenticated to and successfully refreshed from the controller rather than merely serving an empty HTTP endpoint. Check the metric without printing the response:
+After Flux reconciliation, require the Secret to contain exactly `username` and `password`, a Ready pod with no repeated restarts, and a non-negative `unpoller_prometheus_cache_age_seconds` value. A non-negative cache age proves that the poller authenticated and completed at least one controller refresh rather than merely serving an empty HTTP endpoint. `unpoller_controller_up` is part of the cached snapshot and is not an ongoing reachability signal: after a successful refresh it can remain `1` while later refreshes fail. Check the cache metric without printing the response:
 
 ```bash
 set -euo pipefail
@@ -104,7 +104,7 @@ PORT_FORWARD_PID=$!
 trap 'kill "${PORT_FORWARD_PID}" 2>/dev/null || true' EXIT
 for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   if curl --fail --silent --show-error http://127.0.0.1:19130/metrics 2>/dev/null |
-    rg -q '^unpoller_controller_up\{[^}]*\} 1$'; then
+    rg -q '^unpoller_prometheus_cache_age_seconds(\{[^}]*\})? [0-9]'; then
     exit 0
   fi
   sleep 1

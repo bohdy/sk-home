@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "UniFi controller health, site inventory, topology, and bandwidth as reported by the unpoller.",
+  "description": "UniFi controller status, cache freshness, site inventory, topology, and bandwidth as reported by the unpoller.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
@@ -13,7 +13,7 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
-      "description": "Poller-to-controller connectivity. 1 means the controller is reachable and returning data.",
+      "description": "Poller-to-controller status from the latest successful cached snapshot. 1 means that snapshot reported the controller as reachable; use Cache age to assess whether the current refresh is fresh.",
       "fieldConfig": {
         "defaults": {
           "thresholds": {
