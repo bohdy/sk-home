@@ -37,7 +37,7 @@ spec:
         - name: unifi-poller
           # Digest-pinned multi-arch index so the amd64 worker pulls the
           # matching manifest; upgrades are reviewed in separate pull requests.
-          image: ghcr.io/unpoller/unpoller:v5.1.0@sha256:fc931d0a0ed621f37ec820432874d91eff11a513de07286361811b5cc98e548c
+          image: ghcr.io/unpoller/unpoller:v5.1.0@sha256:4ead2ffec4ff53ffb8eea0a1d522b871e8024eac211d7321a74a61a6856d7e7d
           # The controller is reached through its private in-cluster ClusterIP
           # origin. The native console listener serves a self-signed
           # certificate, so verification is disabled for this cluster-internal
