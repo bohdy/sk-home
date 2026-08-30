@@ -10,6 +10,8 @@ The controller's native console listener uses a self-signed certificate, so `UP_
 
 Before reconciling this component, create a dedicated local UniFi Network user scoped to this private controller endpoint. Grant only the UniFi Network read-only/viewer role and the inventories needed by the poller; do not grant administrator, device-configuration, account-management, or access to other UniFi applications. Do not reuse the administrator identity used for controller administration or AP SNMP configuration.
 
+Creating this controller identity is a narrowly scoped break-glass exception because the maintained `filipowm/terraform-provider-unifi` provider reviewed for this task documents `unifi_account` as a RADIUS account and `unifi_user` as a network-client record, not as a controller administrator or API identity. Limit the exception to this one local UniFi Network viewer identity on this controller, and adopt it into Terraform/OpenTofu if suitable provider support becomes available.
+
 Create two dedicated Bitwarden Secrets Manager items, each containing exactly one value:
 
 - `SK-TALOS-UNIFI-POLLER-USERNAME`: the local UniFi Network username only, without a key name, JSON, or surrounding whitespace.
