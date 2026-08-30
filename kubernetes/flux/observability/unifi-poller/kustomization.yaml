@@ -1,8 +1,7 @@
 # The poller relies on the dedicated read-only credential injected from the
 # Bitwarden-backed Secret and on Cilium policy to reach only the controller.
-# Grafana's dashboard sidecar watches the generated ConfigMap in the
-# observability namespace; the JSON itself is kept as a source file so it can
-# be reviewed and validated independently of the Kubernetes manifest.
+# Grafana dashboards are provisioned centrally so each dashboard has one
+# authoritative ConfigMap and datasource/query definition.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -11,13 +10,3 @@ resources:
   - network-policy.yaml
   - vm-static-scrape.yaml
   - vmrule.yaml
-configMapGenerator:
-  - name: unifi-poller-dashboard
-    namespace: observability
-    files:
-      - dashboards/sk-unifi-poller.json
-generatorOptions:
-  labels:
-    grafana_dashboard: "1"
-    app.kubernetes.io/component: dashboards
-    app.kubernetes.io/part-of: observability

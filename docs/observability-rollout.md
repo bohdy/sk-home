@@ -297,7 +297,7 @@ The UniFi Poller (API-based Prometheus exporter) was added on 2026-08-27 after t
 - The `unifi` VMStaticScrape polls the exporter on `9130` every 30 seconds, preserves the global `cluster="sk-talos"` and `site="sk"` labels, and uses the stable target labels `instance="unifi"`, `vendor="ubiquiti"`, and `availability="always-on"`.
 - Its metric relabeling drops `unpoller_device_*` series that duplicate access-point and other device SNMP coverage while retaining controller, site, topology, and client metrics.
 - The `unifi-poller` Cilium policy permits metrics ingress from VMAgent and probe ingress from nodes, plus only the controller console on `8443` and CoreDNS on TCP/UDP `53` for egress; it has no device, database, or Internet reach.
-- A `sk-unifi-poller` Grafana dashboard renders controller, site, device, and client panels from the verified `unpoller_*` families.
+- The central `sk-unifi` Grafana dashboard renders controller, site, topology, and client panels from the verified `unpoller_*` families.
 - Warning-only `UniFiPollerDown` and `UniFiPollerCacheStale` rules detect controller reachability loss and cache staleness; there is no absent-target rule that pages when the intentionally optional collector is offline.
 - Flux `observability-unifi-poller` applies the component.
 
