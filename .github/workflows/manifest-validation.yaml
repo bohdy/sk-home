@@ -47,6 +47,8 @@ jobs:
           kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null
           kubectl kustomize kubernetes/flux/observability/flow-collector >/dev/null
           kubectl kustomize kubernetes/flux/observability/flow-geoip >/dev/null
+          # Render the component directly so resource errors cannot be masked by validating only its Flux wrapper.
+          kubectl kustomize kubernetes/flux/observability/unifi-poller >/dev/null
           kubectl kustomize kubernetes/flux/clusters/sk-talos/observability >/dev/null
           sh -n kubernetes/flux/observability/flow-geoip/geoip-refresh.sh
           jq empty kubernetes/flux/observability/dashboards/sk-flow.json
