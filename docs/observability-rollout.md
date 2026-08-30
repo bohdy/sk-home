@@ -292,14 +292,14 @@ Staging began on 2026-07-24 after the internal DNS and DHCP rollout completed. R
 
 The UniFi Poller (API-based Prometheus exporter) was added on 2026-08-27 after the controller migration to Talos was accepted. It complements the per-AP SNMP path by exposing controller-level and site-level metrics that SNMP cannot reach, including controller reachability, site inventory, topology, and client metrics.
 
-- The exporter is `ghcr.io/unpoller/unpoller` v5.1.0, pinned by digest, deployed as a single non-root replica in the `observability` namespace with a read-only root filesystem and a bounded memory-backed `/tmp`. It polls the private `unifi-console` console on `8443` with `UP_UNIFI_DEFAULT_VERIFY_SSL=false` because the console uses a self-signed certificate, and refreshes its Prometheus cache every 60 seconds.
+- The declarative configuration defines `ghcr.io/unpoller/unpoller` v5.1.0, pinned by digest, as a single non-root replica in the `observability` namespace with a read-only root filesystem and a bounded memory-backed `/tmp`. It is configured to poll the private `unifi-console` console on `8443` with `UP_UNIFI_DEFAULT_VERIFY_SSL=false` because the console uses a self-signed certificate, and to refresh its Prometheus cache every 60 seconds.
 - The deployment expects a dedicated endpoint-scoped read-only UniFi Network credential from the `unifi-poller-auth` Secret in `observability`; it reads the `username` and `password` keys, and neither value is committed to Git, ConfigMaps, pod arguments, or logs. The Secret bootstrap and live authentication acceptance remain pending until the documented Bitwarden items and Secret are created.
 - The `unifi` VMStaticScrape polls the exporter on `9130` every 30 seconds, preserves the global `cluster="sk-talos"` and `site="sk"` labels, and uses the stable target labels `instance="unifi"`, `vendor="ubiquiti"`, and `availability="always-on"`.
 - Its metric relabeling drops `unpoller_device_*` series that duplicate access-point and other device SNMP coverage while retaining controller, site, topology, and client metrics.
 - The `unifi-poller` Cilium policy permits metrics ingress from VMAgent and probe ingress from nodes, plus only the controller console on `8443` and CoreDNS on TCP/UDP `53` for egress; it has no device, database, or Internet reach.
-- The central `sk-unifi` Grafana dashboard renders controller, site, topology, and client panels from the verified `unpoller_*` families.
+- The committed central `sk-unifi` Grafana dashboard renders controller, site, topology, and client panels from the verified `unpoller_*` families; live panel acceptance remains part of the pending reconciliation checks.
 - Warning-only `UniFiPollerDown`, `UniFiPollerCacheStale`, and `UniFiPollerCacheNeverPopulated` rules detect controller reachability loss, cache staleness, and a failed initial refresh; there is no absent-target rule that pages when the intentionally optional collector is offline.
-- Flux `observability-unifi-poller` applies the component.
+- The `observability-unifi-poller` Flux Kustomization is configured to apply the component, but live reconciliation and authentication acceptance remain pending until the dedicated credential and Secret exist and post-reconcile checks pass.
 
 ## Proxmox acceptance
 

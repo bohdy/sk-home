@@ -1,6 +1,8 @@
 # UniFi Poller
 
-This component deploys the digest-pinned UniFi Poller v5.1.0 as one stateless, ClusterIP-only replica in the `observability` namespace. It reads controller, site, topology, and client data from the private `unifi-console.unifi.svc.cluster.local:8443` endpoint and serves the cached result to VMAgent on port `9130`.
+This component defines the digest-pinned UniFi Poller v5.1.0 as one stateless, ClusterIP-only replica in the `observability` namespace. It reads controller, site, topology, and client data from the private `unifi-console.unifi.svc.cluster.local:8443` endpoint and serves the cached result to VMAgent on port `9130`.
+
+The declarative configuration is prepared in this branch; live reconciliation and authentication acceptance remain pending until the dedicated read-only credential and Bitwarden-backed Kubernetes Secret exist and the post-reconcile checks below pass.
 
 The controller's native console listener uses a self-signed certificate, so `UP_UNIFI_DEFAULT_VERIFY_SSL=false` is restricted to this in-cluster endpoint. The Cilium policy still permits the poller to reach only the controller console and CoreDNS; it has no device, database, or Internet egress.
 

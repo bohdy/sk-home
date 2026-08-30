@@ -12,7 +12,7 @@ The platform should remain simple enough for a home lab, preserve one year of ra
 
 ## Non-goals
 
-The first release excludes distributed traces, the legacy Kubernetes cluster, UniFi controller API polling, Klipper or Moonraker monitoring, raw telemetry backups, automated Bitwarden-to-Kubernetes secret reconciliation, and an external dead-man monitor.
+The first release baseline excludes distributed traces, the legacy Kubernetes cluster, Klipper or Moonraker monitoring, raw telemetry backups, automated Bitwarden-to-Kubernetes secret reconciliation, and an external dead-man monitor; declarative UniFi controller API polling is prepared as a post-migration addition but still awaits credential bootstrap and live acceptance.
 
 Temporary observability downtime during a Kubernetes node, worker, or Synology outage is acceptable. The first release does not provide high availability for storage or Grafana.
 
@@ -107,7 +107,7 @@ Commit the SNMP generator input and generated `snmp.yml`. Do not commit vendor M
 
 Use SNMP only for MikroTik and Synology initially. Defer RouterOS and DSM API exporters until a concrete SNMP gap exists.
 
-Monitor UniFi access points through SNMP. The UniFi Poller is now deployed after the controller migration to provide controller-level metrics without duplicating device-side SNMP coverage.
+Monitor UniFi access points through SNMP. The declarative UniFi Poller configuration is prepared after the controller migration to provide controller-level metrics without duplicating device-side SNMP coverage; live deployment and authentication acceptance remain pending.
 
 Use a dedicated Proxmox API token with the read-only `PVEAuditor` role at `/`; never reuse the OpenTofu provisioning identity.
 

@@ -26,4 +26,4 @@ The settled observability implementation contract is `docs/observability-design.
 
 The first release uses the VictoriaMetrics Kubernetes stack, VictoriaLogs, Vector, Grafana, SNMP Exporter, Blackbox Exporter, VMAlert, and Alertmanager inside `sk-talos`. It requires a general-purpose worker and validated Synology CSI storage before stateful deployment.
 
-Raw metrics retention is one year and log retention is 30 days. Traces, raw telemetry backups, an external dead-man monitor, Klipper monitoring, and automated Bitwarden secret reconciliation are tracked follow-ups; UniFi controller polling is deployed as the post-migration UniFi Poller component.
+Raw metrics retention is one year and log retention is 30 days. Traces, raw telemetry backups, an external dead-man monitor, Klipper monitoring, and automated Bitwarden secret reconciliation are tracked follow-ups; declarative UniFi controller polling is prepared as the post-migration UniFi Poller component, with live credential bootstrap and acceptance still pending.
