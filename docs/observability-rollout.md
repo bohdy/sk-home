@@ -298,7 +298,7 @@ The UniFi Poller (API-based Prometheus exporter) was added on 2026-08-27 after t
 - Its metric relabeling drops `unpoller_device_*` series that duplicate access-point and other device SNMP coverage while retaining controller, site, topology, and client metrics.
 - The `unifi-poller` Cilium policy permits metrics ingress from VMAgent and probe ingress from nodes, plus only the controller console on `8443` and CoreDNS on TCP/UDP `53` for egress; it has no device, database, or Internet reach.
 - The central `sk-unifi` Grafana dashboard renders controller, site, topology, and client panels from the verified `unpoller_*` families.
-- Warning-only `UniFiPollerDown` and `UniFiPollerCacheStale` rules detect controller reachability loss and cache staleness; there is no absent-target rule that pages when the intentionally optional collector is offline.
+- Warning-only `UniFiPollerDown`, `UniFiPollerCacheStale`, and `UniFiPollerCacheNeverPopulated` rules detect controller reachability loss, cache staleness, and a failed initial refresh; there is no absent-target rule that pages when the intentionally optional collector is offline.
 - Flux `observability-unifi-poller` applies the component.
 
 ## Proxmox acceptance

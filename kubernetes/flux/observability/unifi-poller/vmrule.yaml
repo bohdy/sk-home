@@ -1,7 +1,7 @@
 # Alerting rules for the UniFi poller. The poller exposes unpoller_controller_up
 # and unpoller_prometheus_cache_age_seconds (seconds since last successful
-# refresh); these rules detect controller reachability loss and stale cache
-# data before metrics become misleading.
+# refresh); these rules detect initial refresh failures, controller reachability
+# loss, and stale cache data before metrics become misleading.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
@@ -42,3 +42,20 @@ spec:
               The UniFi poller cache has not refreshed in over 2 minutes.
               Topology and client metrics may be stale. Check controller
               connectivity and poller logs.
+        - alert: UniFiPollerCacheNeverPopulated
+          # A negative cache age is the v5.1.0 sentinel for a running poller
+          # that has not completed its first successful controller refresh.
+          # The metric is absent when the optional collector is absent or
+          # disabled, so this does not turn an intentional omission into an
+          # alert.
+          expr: unpoller_prometheus_cache_age_seconds < 0
+          for: 5m
+          labels:
+            severity: warning
+            vendor: ubiquiti
+          annotations:
+            summary: UniFi poller cache has never populated
+            description: >-
+              The UniFi poller has not completed an initial controller refresh
+              for 5 minutes. Check controller connectivity, credentials, and
+              poller logs.
