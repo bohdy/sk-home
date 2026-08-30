@@ -25,3 +25,12 @@ spec:
       relabelConfigs:
         - targetLabel: __address__
           replacement: unifi-poller.observability.svc.cluster.local.:9130
+      # Drop device-level metrics (AP, gateway, switch, PDU) that duplicate
+      # data already collected by the native SNMP exporter. The poller's
+      # controller, site, and client metrics are retained as the authoritative
+      # source for controller-level topology and inventory.
+      metricRelabelConfigs:
+        - action: drop
+          regex: unpoller_device_.*
+          sourceLabels:
+            - __name__

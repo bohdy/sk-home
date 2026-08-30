@@ -8,3 +8,4 @@ resources:
   - network-policy.yaml
   - vm-static-scrape.yaml
   - vmrule.yaml
+  - dashboards/sk-unifi-poller.json
