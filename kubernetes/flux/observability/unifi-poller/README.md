@@ -26,7 +26,8 @@ set -euo pipefail
 set +x
 
 cleanup() {
-  unset UNIFI_POLLER_USERNAME UNIFI_POLLER_PASSWORD
+  unset UNIFI_POLLER_USERNAME UNIFI_POLLER_PASSWORD \
+    UNIFI_POLLER_USERNAME_B64 UNIFI_POLLER_PASSWORD_B64
 }
 trap cleanup EXIT
 
@@ -47,11 +48,23 @@ get_bw_value() {
 UNIFI_POLLER_USERNAME="$(get_bw_value "${UNIFI_POLLER_USERNAME_ITEM_ID}")"
 UNIFI_POLLER_PASSWORD="$(get_bw_value "${UNIFI_POLLER_PASSWORD_ITEM_ID}")"
 
-kubectl -n observability create secret generic unifi-poller-auth \
-  --from-literal=username="${UNIFI_POLLER_USERNAME}" \
-  --from-literal=password="${UNIFI_POLLER_PASSWORD}" \
-  --dry-run=client -o yaml |
-  kubectl -n observability apply --server-side --field-manager=unifi-poller-bootstrap -f - >/dev/null
+# Encode from stdin so neither plaintext nor base64 credentials enter an
+# external-process argument; the generated manifest is passed to kubectl only
+# through stdin and is never written to disk.
+UNIFI_POLLER_USERNAME_B64="$(printf '%s' "${UNIFI_POLLER_USERNAME}" | base64 | tr -d '\r\n')"
+UNIFI_POLLER_PASSWORD_B64="$(printf '%s' "${UNIFI_POLLER_PASSWORD}" | base64 | tr -d '\r\n')"
+
+kubectl -n observability apply --server-side --field-manager=unifi-poller-bootstrap -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: unifi-poller-auth
+  namespace: observability
+type: Opaque
+data:
+  username: ${UNIFI_POLLER_USERNAME_B64}
+  password: ${UNIFI_POLLER_PASSWORD_B64}
+EOF
 ```
 
 If BWS authentication or either lookup fails, fix access or the item contract and rerun the complete procedure; do not substitute a plaintext value or create a partial Secret. Keep the shell tracing-disabled session short and unset any copied values immediately after the command completes.
