@@ -57,6 +57,11 @@ spec:
               value: 0.0.0.0:9130
             - name: UP_PROMETHEUS_INTERVAL
               value: 60s
+            # This deployment has no InfluxDB consumer; disable Unpoller's
+            # default localhost InfluxDB output so it cannot generate useless
+            # connection attempts or require an unowned database endpoint.
+            - name: UP_INFLUXDB_DISABLE
+              value: "true"
             # Dedicated read-only credential, never the administrator identity
             # used to configure access-point SNMP. Values are injected from the
             # Bitwarden-backed Secret and never appear in arguments or files.
