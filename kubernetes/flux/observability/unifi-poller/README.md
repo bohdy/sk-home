@@ -4,7 +4,7 @@ This component runs the maintained `unpoller/unpoller` exporter in Prometheus mo
 
 Bitwarden Secrets Manager item `SK-TALOS-UNIFI-POLLER-USERNAME` (`675e9847-f554-429b-82b8-b4b70093713d`) contains only the controller login name `unifi-poller-api`, and item `SK-TALOS-UNIFI-POLLER-PASSWORD` (`885119a8-1efa-4b04-95f5-b4b700937198`) contains only the matching password.
 
-Create the Kubernetes Secret before reconciling the Flux stage:
+Create the Kubernetes Secret before activating the Flux stage:
 
 ```sh
 set +x
@@ -23,7 +23,14 @@ unset UNIFI_POLLER_USERNAME UNIFI_POLLER_PASSWORD
 
 Keep shell tracing disabled while either credential is present.
 
-Reconcile the Flux stage after the Secret exists:
+Persistently activate the optional Flux child after the Secret exists. This is an explicit bootstrap step; after it is applied, the child Kustomization is managed by Flux and continues reconciling independently from the automatic observability parent:
+
+```sh
+kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply \
+  -f kubernetes/flux/clusters/sk-talos/observability/unifi-poller-kustomization.yaml
+```
+
+Reconcile the Flux child after activation:
 
 ```sh
 flux reconcile kustomization observability-unifi-poller -n flux-system --kubeconfig /tmp/sk-talos-kubeconfig
