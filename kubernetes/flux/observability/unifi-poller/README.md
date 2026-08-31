@@ -1,6 +1,8 @@
 # UniFi Poller
 
-This component runs the maintained `unpoller/unpoller` exporter in Prometheus mode against the restored UniFi controller so controller, site, device, and client summaries are available without duplicating the AP SNMP dashboards.
+This component runs the maintained `unpoller/unpoller` exporter in Prometheus mode against the restored UniFi controller so controller, site, and client summaries are available without duplicating the AP SNMP dashboards.
+
+The `VMServiceScrape` drops every `unpoller_device_*` series so AP device coverage remains SNMP-owned while controller, site, and `unpoller_client_*` metrics remain available. The dashboard's connected-client panel uses `unpoller_client_rssi_db` and remains populated under this contract.
 
 Bitwarden Secrets Manager item `SK-TALOS-UNIFI-POLLER-USERNAME` (`675e9847-f554-429b-82b8-b4b70093713d`) contains only the controller login name `unifi-poller-api`, and item `SK-TALOS-UNIFI-POLLER-PASSWORD` (`885119a8-1efa-4b04-95f5-b4b700937198`) contains only the matching password.
 

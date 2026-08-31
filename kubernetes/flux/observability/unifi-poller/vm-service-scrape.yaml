@@ -16,3 +16,10 @@ spec:
       scrapeTimeout: 10s
       sampleLimit: 5000
       seriesLimit: 5000
+      # AP device coverage remains owned by the SNMP exporter; retain the
+      # controller, site, and client series used by this component's dashboard.
+      metricRelabelConfigs:
+        - sourceLabels:
+            - __name__
+          regex: ^unpoller_device_.*
+          action: drop

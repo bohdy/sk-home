@@ -123,7 +123,7 @@
       },
       "targets": [
         {
-          "expr": "sum(unpoller_device_stations{site_name=~\"$Site\"})",
+          "expr": "count(unpoller_client_rssi_db{site_name=~\"$Site\"})",
           "instant": true,
           "legendFormat": "clients",
           "refId": "A"
