@@ -25,7 +25,7 @@ spec:
       serviceAccountName: unifi-poller
       containers:
         - name: unifi-poller
-          image: ghcr.io/unpoller/unpoller:v5.1.0
+          image: ghcr.io/unpoller/unpoller:v5.1.0@sha256:4ead2ffec4ff53ffb8eea0a1d522b871e8024eac211d7321a74a61a6856d7e7d
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
@@ -40,6 +40,11 @@ spec:
             - name: config
               mountPath: /etc/unpoller/up.conf
               subPath: unifi-poller.conf
+              readOnly: true
+            # UnPoller may use the process temporary directory during normal
+            # operation; keep that writable space bounded and in memory.
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /metrics
@@ -68,9 +73,20 @@ spec:
             capabilities:
               drop:
                 - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
             seccompProfile:
               type: RuntimeDefault
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
       volumes:
         - name: config
           configMap:
             name: unifi-poller-config
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
