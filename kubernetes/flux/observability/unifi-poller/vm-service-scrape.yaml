@@ -23,3 +23,7 @@ spec:
             - __name__
           regex: ^unpoller_device_.*
           action: drop
+        # Remove client identity labels at the scrape boundary while keeping
+        # metric names, sample values, and aggregate dimensions such as site.
+        - regex: ^(mac|name|hostname|ip)$
+          action: labeldrop

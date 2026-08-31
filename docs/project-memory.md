@@ -22,7 +22,7 @@ CoreDNS reached healthy state once the runtime constraints were relaxed. Blocky 
 
 ## 2026-08-31 UniFi controller polling
 
-The dedicated `observability-unifi-poller` stage is live and exports controller, device, and client metrics from the restored UniFi controller. The Bitwarden-backed Secret was bootstrapped after the reviewed change reached `main`; the optional child Kustomization reconciled successfully, the exporter collected through the verified LAN TLS VIP, VMAgent reported healthy targets, device series were dropped, VMAlert remained inactive, and the controller/client dashboard was provisioned. Client names and MAC addresses are hashed before metrics are stored. Effective controller account scope still needs an explicit least-privilege evidence record.
+The dedicated `observability-unifi-poller` stage is live and exports controller, device, and client metrics from the restored UniFi controller. The Bitwarden-backed Secret was bootstrapped after the reviewed change reached `main`; the optional child Kustomization reconciled successfully, the exporter collected through the verified LAN TLS VIP, VMAgent reported healthy targets, device series were dropped, VMAlert remained inactive, and the controller/client dashboard was provisioned. The exporter hashes client names and MAC addresses, and the scrape removes `mac`, `name`, `hostname`, and `ip` labels before storage, so stored client series retain aggregate/client-quality values without those identifying labels. Effective controller account scope still needs an explicit least-privilege evidence record.
 
 AP radio and channel detail stay on the SNMP dashboards, so the prepared controller-metrics dashboard only covers controller-side health and client summaries.
 
