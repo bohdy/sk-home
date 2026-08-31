@@ -158,16 +158,18 @@ spec:
             description: '{{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.name }} has not been Ready for fifteen minutes.'
 
     - name: homelab-unifi
+      # Use UnPoller's controller health metric so an intentionally absent
+      # collector has no series and does not create a noisy alert.
       rules:
         - alert: UniFiPollerDown
-          expr: up{job=~".*unifi-poller.*"} == 0
+          expr: unpoller_controller_up == 0
           for: 10m
           labels:
             severity: warning
             component: unifi
           annotations:
-            summary: UniFi Poller is unavailable
-            description: The controller-metrics exporter has been down for ten minutes.
+            summary: UniFi controller collection failed
+            description: UniFi Poller has reported controller collection failure for ten minutes.
 
     - name: homelab-certificates
       rules:
