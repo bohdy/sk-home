@@ -1,15 +1,21 @@
-FROM ubuntu:latest
+# Pin the Ubuntu LTS release so a moving `latest` tag cannot invalidate APT
+# indexes halfway through a reproducible devcontainer build.
+FROM ubuntu:24.04
 
 ARG TARGETARCH
 
-RUN apt-get update
-RUN apt-get install -y ca-certificates curl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
 RUN install -dm 755 /etc/apt/keyrings
-RUN curl -fSs https://mise.en.dev/gpg-key.pub | tee /etc/apt/keyrings/mise-archive-keyring.asc 1> /dev/null
-RUN echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.asc] https://mise.en.dev/deb stable main" | tee /etc/apt/sources.list.d/mise.list
+# Use Mise's current official repository. The previous mise.en.dev endpoint is
+# blocked by the configured DNS resolver, which prevents a TLS-verified build.
+# Convert the ASCII-armored signing key to APT's required binary keyring format.
+RUN curl -fsSL https://mise.jdx.dev/gpg-key.pub | gpg --dearmor --output /etc/apt/keyrings/mise-archive-keyring.gpg
+RUN echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.gpg] https://mise.jdx.dev/deb stable main" | tee /etc/apt/sources.list.d/mise.list
 
-RUN apt-get update
-RUN apt-get install -y \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
     unzip \
     gnupg \
     software-properties-common \
@@ -17,9 +23,9 @@ RUN apt-get install -y \
     sudo \
     npm \
     mise \
-    jq
-
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+    jq \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Keep the container user stable across Ubuntu base image changes. Some Ubuntu
 # images include this user and others do not, so create it only when needed.
