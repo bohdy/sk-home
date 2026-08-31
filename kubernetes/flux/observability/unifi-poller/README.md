@@ -43,4 +43,4 @@ kubectl kustomize kubernetes/flux/observability/unifi-poller | kubectl apply --s
 
 After reconciliation, require the Deployment and Service to be Ready, the exporter `/metrics` endpoint to answer through the Service, the controller login to use the dedicated read-only local account, and the dashboard and alert rule to appear in Grafana and VMAlert without exposing credential values.
 
-Rollback leaves the manually bootstrapped Secret in place and pauses reconciliation until the next apply.
+Rollback leaves the manually bootstrapped Secret in place. Revert the Flux Kustomization or suspend it separately if rollback requires reconciliation to stop.
