@@ -43,7 +43,7 @@ flux reconcile kustomization observability-unifi-poller -n flux-system --kubecon
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability wait deployment/unifi-poller --for=condition=Available --timeout=5m
 ```
 
-The dashboard in this component focuses on controller-side health and client summaries. AP radio and channel details remain on the SNMP dashboards.
+The dashboard in this component covers controller health, client totals and throughput, average client signal/noise by radio protocol, protocol distribution, and connected clients by channel. AP device-level radio and channel details remain on the SNMP dashboards.
 
 ## Validation
 
