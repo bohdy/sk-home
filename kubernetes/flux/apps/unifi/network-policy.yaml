@@ -47,6 +47,7 @@ spec:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: observability
             k8s:app.kubernetes.io/name: unifi-poller
+            io.cilium.k8s.policy.serviceaccount: unifi-poller
       toPorts:
         - ports:
             - port: "8443"
