@@ -1,6 +1,5 @@
-# The controller-metrics stage starts suspended so the operator can bootstrap
-# the read-only viewer Secret before the workload is applied. Resume and
-# reconcile this Kustomization after the Secret exists.
+# The controller-metrics stage is reconciled separately so the operator can
+# bootstrap the read-only viewer Secret before the workload is applied.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -12,8 +11,6 @@ spec:
   timeout: 10m
   path: ./kubernetes/flux/observability/unifi-poller
   prune: true
-  # Keep the workload gated until its externally bootstrapped credentials exist.
-  suspend: true
   wait: true
   sourceRef:
     kind: GitRepository
