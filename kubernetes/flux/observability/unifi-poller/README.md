@@ -6,21 +6,17 @@ The `VMServiceScrape` drops every `unpoller_device_*` series so AP device covera
 
 Bitwarden Secrets Manager item `SK-TALOS-UNIFI-POLLER-USERNAME` (`675e9847-f554-429b-82b8-b4b70093713d`) contains only the controller login name `unifi-poller-api`, and item `SK-TALOS-UNIFI-POLLER-PASSWORD` (`885119a8-1efa-4b04-95f5-b4b700937198`) contains only the matching password.
 
-Create the Kubernetes Secret before activating the Flux stage:
+Create the Kubernetes Secret before activating the Flux stage. Run this block with Bash because it uses process substitution; `jq -j` emits each value without adding a trailing newline:
 
-```sh
+```bash
 set +x
-export UNIFI_POLLER_USERNAME="$(bws secret get 675e9847-f554-429b-82b8-b4b70093713d -o json | jq -r .value)"
-export UNIFI_POLLER_PASSWORD="$(bws secret get 885119a8-1efa-4b04-95f5-b4b700937198 -o json | jq -r .value)"
 
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig create namespace observability --dry-run=client -o yaml \
   | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability create secret generic unifi-poller-auth \
-  --from-literal=UP_UNIFI_DEFAULT_USER="${UNIFI_POLLER_USERNAME}" \
-  --from-literal=UP_UNIFI_DEFAULT_PASS="${UNIFI_POLLER_PASSWORD}" \
+  --from-file=UP_UNIFI_DEFAULT_USER=<(bws secret get 675e9847-f554-429b-82b8-b4b70093713d -o json | jq -j .value) \
+  --from-file=UP_UNIFI_DEFAULT_PASS=<(bws secret get 885119a8-1efa-4b04-95f5-b4b700937198 -o json | jq -j .value) \
   --dry-run=client -o yaml | kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply -f -
-
-unset UNIFI_POLLER_USERNAME UNIFI_POLLER_PASSWORD
 ```
 
 Keep shell tracing disabled while either credential is present.
