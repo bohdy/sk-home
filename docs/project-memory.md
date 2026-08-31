@@ -22,9 +22,9 @@ CoreDNS reached healthy state once the runtime constraints were relaxed. Blocky 
 
 ## 2026-08-31 UniFi controller polling
 
-The dedicated `observability-unifi-poller` stage now exports controller, device, and client metrics from the restored UniFi controller using the read-only local service account stored in Bitwarden.
+The dedicated `observability-unifi-poller` stage is prepared to export controller, device, and client metrics from the restored UniFi controller using the read-only local service account stored in Bitwarden. Secret bootstrap, Flux reconciliation, and live acceptance remain pending.
 
-AP radio and channel detail stay on the SNMP dashboards, so the new controller-metrics dashboard only covers controller-side health and client summaries.
+AP radio and channel detail stay on the SNMP dashboards, so the prepared controller-metrics dashboard only covers controller-side health and client summaries.
 
 ## 2026-07-16 observability design
 

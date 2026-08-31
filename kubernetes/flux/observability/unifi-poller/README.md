@@ -26,7 +26,7 @@ Keep shell tracing disabled while either credential is present.
 Reconcile the Flux stage after the Secret exists:
 
 ```sh
-flux reconcile kustomization observability-unifi-poller -n flux-system
+flux reconcile kustomization observability-unifi-poller -n flux-system --kubeconfig /tmp/sk-talos-kubeconfig
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability wait deployment/unifi-poller --for=condition=Available --timeout=5m
 ```
 
