@@ -6,7 +6,9 @@ The `VMServiceScrape` drops every `unpoller_device_*` series so AP device covera
 
 Bitwarden Secrets Manager item `SK-TALOS-UNIFI-POLLER-USERNAME` (`675e9847-f554-429b-82b8-b4b70093713d`) contains only the controller login name `unifi-poller-api`, and item `SK-TALOS-UNIFI-POLLER-PASSWORD` (`885119a8-1efa-4b04-95f5-b4b700937198`) contains only the matching password.
 
-Create the Kubernetes Secret before activating the Flux stage. Run this block with Bash because it uses process substitution; `jq -j` emits each value without adding a trailing newline:
+Before promotion, do not apply the child Kustomization from an unmerged feature branch. The child remains absent from the automatic observability parent until the reviewed change is merged, and no live acceptance is claimed before that promotion.
+
+After the reviewed change is merged, update this checkout to the merged `main` revision and wait for the `flux-system` GitRepository to fetch that same revision. Only then create the Kubernetes Secret, apply the child Kustomization from the checked-out `main` revision, and reconcile it. Run the Secret bootstrap block with Bash because it uses process substitution; `jq -j` emits each value without adding a trailing newline:
 
 ```bash
 set +x
@@ -21,7 +23,13 @@ kubectl --kubeconfig /tmp/sk-talos-kubeconfig -n observability create secret gen
 
 Keep shell tracing disabled while either credential is present.
 
-Persistently activate the optional Flux child after the Secret exists. This is an explicit bootstrap step; after it is applied, the child Kustomization is managed by Flux and continues reconciling independently from the automatic observability parent:
+Confirm that the source has fetched the merged revision before applying the child:
+
+```sh
+flux get source git flux-system -n flux-system --kubeconfig /tmp/sk-talos-kubeconfig
+```
+
+Persistently activate the optional Flux child from this checked-out `main` revision after the source check and Secret bootstrap have completed. This is an explicit bootstrap step; after it is applied, the child Kustomization is managed by Flux and continues reconciling independently from the automatic observability parent:
 
 ```sh
 kubectl --kubeconfig /tmp/sk-talos-kubeconfig apply \
