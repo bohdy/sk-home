@@ -66,7 +66,7 @@
       },
       "targets": [
         {
-          "expr": "min(up{job=~\".*unifi-poller.*\"})",
+          "expr": "min(unpoller_controller_up{site_name=~\"$Site\"})",
           "instant": true,
           "legendFormat": "up",
           "refId": "A"
@@ -181,7 +181,7 @@
       },
       "targets": [
         {
-          "expr": "max(unpoller_device_uptime_seconds{site_name=~\"$Site\"})",
+          "expr": "max(unpoller_controller_uptime_seconds{site_name=~\"$Site\"})",
           "instant": true,
           "legendFormat": "uptime",
           "refId": "A"
@@ -243,13 +243,13 @@
       },
       "targets": [
         {
-          "expr": "max(unpoller_device_memory_utilization_ratio{site_name=~\"$Site\"})",
+          "expr": "max(unpoller_controller_unsupported_device_count{site_name=~\"$Site\"})",
           "instant": true,
-          "legendFormat": "memory",
+          "legendFormat": "unsupported",
           "refId": "A"
         }
       ],
-      "title": "Controller Memory",
+      "title": "Unsupported Devices",
       "type": "stat"
     },
     {
@@ -368,7 +368,7 @@
           "type": "prometheus",
           "uid": "VictoriaMetrics"
         },
-        "definition": "label_values(unpoller_device_uptime_seconds, site_name)",
+        "definition": "label_values(unpoller_controller_uptime_seconds, site_name)",
         "hide": 0,
         "includeAll": true,
         "label": "Site",
@@ -376,7 +376,7 @@
         "name": "Site",
         "options": [],
         "query": {
-          "query": "label_values(unpoller_device_uptime_seconds, site_name)",
+          "query": "label_values(unpoller_controller_uptime_seconds, site_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,

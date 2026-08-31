@@ -8,6 +8,7 @@ configMapGenerator:
     files:
       - unifi-poller.conf
 resources:
+  - serviceaccount.yaml
   - deployment.yaml
   - service.yaml
   - network-policy.yaml

@@ -21,6 +21,8 @@ spec:
         app.kubernetes.io/component: controller-metrics
         app.kubernetes.io/part-of: observability
     spec:
+      automountServiceAccountToken: false
+      serviceAccountName: unifi-poller
       containers:
         - name: unifi-poller
           image: ghcr.io/unpoller/unpoller:v5.1.0

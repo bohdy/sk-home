@@ -1,5 +1,5 @@
-# The controller-metrics stage stays suspended until the operator bootstraps
-# the read-only viewer Secret, then it can be resumed without changing Git.
+# The controller-metrics stage is reconciled separately so the operator can
+# bootstrap the read-only viewer Secret before the workload is applied.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -9,7 +9,6 @@ spec:
   interval: 30m
   retryInterval: 2m
   timeout: 10m
-  suspend: true
   path: ./kubernetes/flux/observability/unifi-poller
   prune: true
   wait: true
