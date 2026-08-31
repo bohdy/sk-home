@@ -12,7 +12,7 @@ The platform should remain simple enough for a home lab, preserve one year of ra
 
 ## Non-goals
 
-The first release excludes distributed traces, the legacy Kubernetes cluster, UniFi controller API polling, Klipper or Moonraker monitoring, raw telemetry backups, automated Bitwarden-to-Kubernetes secret reconciliation, and an external dead-man monitor.
+The first release excludes distributed traces, the legacy Kubernetes cluster, Klipper or Moonraker monitoring, raw telemetry backups, automated Bitwarden-to-Kubernetes secret reconciliation, and an external dead-man monitor.
 
 Temporary observability downtime during a Kubernetes node, worker, or Synology outage is acceptable. The first release does not provide high availability for storage or Grafana.
 
@@ -107,7 +107,7 @@ Commit the SNMP generator input and generated `snmp.yml`. Do not commit vendor M
 
 Use SNMP only for MikroTik and Synology initially. Defer RouterOS and DSM API exporters until a concrete SNMP gap exists.
 
-Monitor UniFi access points through SNMP. Add UniFi Poller only after the UniFi controller is migrated from the legacy cluster.
+Monitor UniFi access points through SNMP and add UniFi Poller for controller-side metrics after the UniFi controller is migrated from the legacy cluster.
 
 Use a dedicated Proxmox API token with the read-only `PVEAuditor` role at `/`; never reuse the OpenTofu provisioning identity.
 
@@ -217,7 +217,6 @@ Track these items explicitly after the first release:
 - Raw telemetry backup or snapshot strategy
 - External dead-man heartbeat outside the Kubernetes and home internet failure domains
 - Automated Bitwarden secret reconciliation after its SDK-server and token risks are revisited
-- UniFi Poller after the controller migration
 - Brother printer SNMP after its administrator-password reset; configure or confirm read-only SNMPv2c with the shared profile, validate `system` and `printer_mib` from the exporter, then enable its intermittent scrape without offline alerting
 - Klipper and Moonraker monitoring after exporter and read-only authentication review
 - Flow collection follow-ups (same-VLAN switch telemetry, materialized views or rollups, ClickHouse backups) as listed in `docs/flow-collection-design.md`

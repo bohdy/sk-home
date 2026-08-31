@@ -1,0 +1,51 @@
+# The exporter may only talk to the controller, kube-dns, and the VMAgent that
+# scrapes it; that keeps the read-only account and controller cache contained.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi-poller
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-poller
+      io.cilium.k8s.policy.serviceaccount: unifi-poller
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.cilium.k8s.policy.serviceaccount: vmagent-metrics-victoria-metrics-k8s-stack
+            app.kubernetes.io/name: vmagent
+      toPorts:
+        - ports:
+            - port: "9130"
+              protocol: TCP
+    # Kubelet probes may originate from the local or another cluster node.
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9130"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchName: unifi.bohdal.name
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: unifi
+            k8s:app.kubernetes.io/name: unifi-console-tls-proxy
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP

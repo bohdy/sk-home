@@ -1,6 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Docker's --env-file parser can preserve a matching quote pair around the
+# token. Normalize it before bws parses the value, and keep the same behavior
+# for every interactive Bash session in the devcontainer.
+normalize_bws_access_token() {
+  case "${BWS_ACCESS_TOKEN:-}" in
+    \"*\")
+      export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:1:${#BWS_ACCESS_TOKEN}-2}"
+      ;;
+    \'*\')
+      export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:1:${#BWS_ACCESS_TOKEN}-2}"
+      ;;
+  esac
+}
+
+normalize_bws_access_token
+
+# Keep BWS authentication state out of the container filesystem while giving
+# the CLI an explicit profile with the string-valued setting it expects.
+BWS_CONFIG_DIR="${HOME}/.config/bws"
+BWS_CONFIG_FILE="${BWS_CONFIG_DIR}/config"
+mkdir -p "${BWS_CONFIG_DIR}"
+if [ ! -f "${BWS_CONFIG_FILE}" ]; then
+  printf '%s\n' \
+    '[profiles.default]' \
+    'server_base = "https://api.bitwarden.com"' \
+    'server_api = "https://api.bitwarden.com"' \
+    'server_identity = "https://identity.bitwarden.com"' \
+    'state_opt_out = "true"' \
+    > "${BWS_CONFIG_FILE}"
+elif grep -Eq '^[[:space:]]*state_opt_out[[:space:]]*=[[:space:]]*(true|false)[[:space:]]*$' "${BWS_CONFIG_FILE}"; then
+  # Repair the boolean form written by older local bootstrap attempts.
+  sed -i -E 's/^([[:space:]]*state_opt_out[[:space:]]*=[[:space:]]*)(true|false)([[:space:]]*)$/\1"true"\3/' "${BWS_CONFIG_FILE}"
+fi
+
 # Trust the repository-local mise configuration before installing managed tools.
 mise trust
 
@@ -20,4 +54,12 @@ mise exec -- pre-commit install
 MISE_ACTIVATION='eval "$(mise activate bash)"'
 if ! grep -qxF "${MISE_ACTIVATION}" "${HOME}/.bashrc"; then
   printf '\n%s\n' "${MISE_ACTIVATION}" >> "${HOME}/.bashrc"
+fi
+
+# Install the normalizer once so repeated lifecycle runs do not grow .bashrc.
+BWS_TOKEN_NORMALIZATION_MARKER='# Normalize Docker env-file quoting for BWS_ACCESS_TOKEN.'
+if ! grep -qxF "${BWS_TOKEN_NORMALIZATION_MARKER}" "${HOME}/.bashrc"; then
+  printf '\n%s\n' "${BWS_TOKEN_NORMALIZATION_MARKER}" >> "${HOME}/.bashrc"
+  declare -f normalize_bws_access_token >> "${HOME}/.bashrc"
+  printf '%s\n' 'normalize_bws_access_token' >> "${HOME}/.bashrc"
 fi

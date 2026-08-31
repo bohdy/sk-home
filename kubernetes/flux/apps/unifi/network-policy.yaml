@@ -144,6 +144,18 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
+    # UnPoller uses the same trusted LAN VIP and hostname as LAN browsers. The
+    # ServiceAccount selector keeps this extra proxy ingress limited to the
+    # dedicated read-only collector rather than the observability namespace.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/name: unifi-poller
+            io.cilium.k8s.policy.serviceaccount: unifi-poller
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
   egress:
     - toEndpoints:
         - matchLabels:

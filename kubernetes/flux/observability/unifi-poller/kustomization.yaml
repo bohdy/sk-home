@@ -1,0 +1,19 @@
+# Controller-side UniFi metrics are intentionally staged separately so the
+# dedicated read-only Secret can be bootstrapped before Flux reconciles them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+configMapGenerator:
+  - name: unifi-poller-config
+    namespace: observability
+    files:
+      - unifi-poller.conf
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - network-policy.yaml
+  - vm-service-scrape.yaml
+generatorOptions:
+  labels:
+    app.kubernetes.io/component: controller-metrics
+    app.kubernetes.io/part-of: observability

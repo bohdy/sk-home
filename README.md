@@ -66,7 +66,7 @@ The devcontainer post-create step trusts the repository `mise.toml`, installs th
    BWS_ACCESS_TOKEN=your_bitwarden_access_token_here
    ```
 
-   The devcontainer loads this ignored file as Docker's environment file, so entries must use Docker's unquoted `KEY=value` format. `bws` receives the token in terminals and repository commands after the container is rebuilt. Do not add `.env` to Git or copy its values into `devcontainer.json`.
+   The devcontainer loads this ignored file as Docker's environment file, so use the unquoted `KEY=value` format. Its post-create bootstrap also removes one matching pair of surrounding single or double quotes from `BWS_ACCESS_TOKEN` before `bws` uses it, including in later Bash sessions. The bootstrap keeps BWS state disabled through a local `[profiles.default]` configuration with `state_opt_out = "true"`; do not add `.env` to Git or copy its values into `devcontainer.json`.
 
 2. Get your Bitwarden access token from: Account Settings → Security → API Key
 

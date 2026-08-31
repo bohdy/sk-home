@@ -15,4 +15,5 @@ resources:
   - flow-collector-kustomization.yaml
   - flow-geoip-kustomization.yaml
   - proxmox-kustomization.yaml
+  # Activate this optional child manually after bootstrapping its auth Secret.
   - alerting-kustomization.yaml

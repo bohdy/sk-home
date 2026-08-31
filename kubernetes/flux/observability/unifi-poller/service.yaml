@@ -1,0 +1,20 @@
+# The Service gives VMAgent a stable scrape endpoint while keeping the pod
+# cluster-internal only.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-poller
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: unifi-poller
+    app.kubernetes.io/component: controller-metrics
+    app.kubernetes.io/part-of: observability
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: unifi-poller
+  ports:
+    - name: http
+      port: 9130
+      targetPort: http
+      protocol: TCP

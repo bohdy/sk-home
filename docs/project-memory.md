@@ -20,10 +20,16 @@ Blocky special-use domain blocking must stay disabled while CoreDNS is the only 
 
 CoreDNS reached healthy state once the runtime constraints were relaxed. Blocky reached healthy state after the runtime fix and corrected upstream syntax; a live test showed successful resolution of `dns.bohdal.name` through CoreDNS.
 
+## 2026-08-31 UniFi controller polling
+
+The dedicated `observability-unifi-poller` stage is prepared to export controller, device, and client metrics from the restored UniFi controller using the read-only local service account stored in Bitwarden. Secret bootstrap, Flux reconciliation, and live acceptance remain pending.
+
+AP radio and channel detail stay on the SNMP dashboards, so the prepared controller-metrics dashboard only covers controller-side health and client summaries.
+
 ## 2026-07-16 observability design
 
 The settled observability implementation contract is `docs/observability-design.md`. It supersedes earlier exploratory observability notes in this file; update the design document and relevant ADRs rather than duplicating detailed decisions here.
 
 The first release uses the VictoriaMetrics Kubernetes stack, VictoriaLogs, Vector, Grafana, SNMP Exporter, Blackbox Exporter, VMAlert, and Alertmanager inside `sk-talos`. It requires a general-purpose worker and validated Synology CSI storage before stateful deployment.
 
-Raw metrics retention is one year and log retention is 30 days. Traces, raw telemetry backups, an external dead-man monitor, UniFi controller polling, Klipper monitoring, and automated Bitwarden secret reconciliation are tracked follow-ups.
+Raw metrics retention is one year and log retention is 30 days. Traces, raw telemetry backups, an external dead-man monitor, Klipper monitoring, and automated Bitwarden secret reconciliation are tracked follow-ups.
