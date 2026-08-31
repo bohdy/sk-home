@@ -305,49 +305,181 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "none"
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": -70
+              },
+              {
+                "color": "green",
+                "value": -60
+              }
+            ]
+          },
+          "unit": "dBm"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
+        "w": 4,
         "x": 12,
         "y": 8
       },
       "id": 6,
       "options": {
-        "legend": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "bottom"
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "textMode": "auto",
+        "wideLayout": true
       },
       "targets": [
         {
           "expr": "avg(unpoller_client_rssi_db{site_name=~\"$Site\"})",
+          "instant": true,
           "legendFormat": "RSSI",
           "refId": "A"
-        },
-        {
-          "expr": "avg(unpoller_client_satisfaction_ratio{site_name=~\"$Site\"})",
-          "legendFormat": "Satisfaction",
-          "refId": "B"
-        },
-        {
-          "expr": "sum(increase(unpoller_client_roam_count_total{site_name=~\"$Site\"}[5m]))",
-          "legendFormat": "Roams / 5m",
-          "refId": "C"
         }
       ],
-      "title": "Client Quality",
-      "type": "timeseries"
+      "title": "Client RSSI",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "green",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 4,
+        "x": 16,
+        "y": 8
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "avg(unpoller_client_satisfaction_ratio{site_name=~\"$Site\"})",
+          "instant": true,
+          "legendFormat": "Satisfaction",
+          "refId": "A"
+        }
+      ],
+      "title": "Client Satisfaction",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 4,
+        "x": 20,
+        "y": 8
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(unpoller_client_roam_count_total{site_name=~\"$Site\"}[5m]))",
+          "instant": true,
+          "legendFormat": "Roams / 5m",
+          "refId": "A"
+        }
+      ],
+      "title": "Client Roams (5m)",
+      "type": "stat"
     }
   ],
   "refresh": "30s",
