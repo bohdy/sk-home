@@ -40,11 +40,11 @@ spec:
               protocol: TCP
           rules:
             dns:
-              - matchName: unifi-console.unifi.svc.cluster.local
+              - matchName: unifi.bohdal.name
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: unifi
-            k8s:app.kubernetes.io/name: unifi-controller
+            k8s:app.kubernetes.io/name: unifi-console-tls-proxy
       toPorts:
         - ports:
             - port: "8443"
