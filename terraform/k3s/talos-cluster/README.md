@@ -108,7 +108,7 @@ Use this runbook when `tofu init` fails with `No valid credential sources found`
    test -f .env
    ```
 
-   If this command fails, create `.env` in the repository root with `BWS_ACCESS_TOKEN="..."`. Keep `.env` local; it is ignored by Git.
+   If this command fails, create `.env` in the repository root with `BWS_ACCESS_TOKEN=...`. Keep `.env` local; it is ignored by Git.
 
 3. Load the Bitwarden access token into the current shell:
 
