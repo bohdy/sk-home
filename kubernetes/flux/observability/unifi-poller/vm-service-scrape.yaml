@@ -1,0 +1,18 @@
+# Scrape the exporter separately from the controller-facing data so login and
+# collection health remain observable.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: unifi-poller
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unifi-poller
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 5000
+      seriesLimit: 5000

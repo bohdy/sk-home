@@ -108,7 +108,7 @@ Use `docs/observability-rollout.md` as the resumable deployment checkpoint and u
 
 ## Applications
 
-Stateful application workloads live in `kubernetes/flux/apps` and reconcile through the separate `apps` cluster tree. The `unifi` component provisions retained iSCSI storage, a pinned controller image, a private Tunnel origin, a LAN-only `10.1.30.56` console VIP, and its separate `10.1.30.1` device-communication VIP. Internal DNS resolves the canonical console name to the LAN VIP; the Cloudflare stack owns the same public hostname's Tunnel route and single-identity Access boundary. Its component README defines the required Bitwarden Secret bootstrap and restore/cutover sequence.
+Stateful application workloads live in `kubernetes/flux/apps` and reconcile through the separate `apps` cluster tree. The `unifi` component provisions retained iSCSI storage, a pinned controller image, a private Tunnel origin, a LAN-only `10.1.30.56` console VIP, and its separate `10.1.30.1` device-communication VIP. Internal DNS resolves the canonical console name to the LAN VIP; the Cloudflare stack owns the same public hostname's Tunnel route and single-identity Access boundary. Its component README defines the required Bitwarden Secret bootstrap and restore/cutover sequence. The dedicated `observability/unifi-poller` stage consumes a read-only controller service account from Bitwarden-backed Secret `unifi-poller-auth`, remains suspended until that Secret exists, and exports controller-side metrics without replacing the AP SNMP dashboards.
 
 ## Storage
 

@@ -40,6 +40,17 @@ spec:
         - ports:
             - port: "8443"
               protocol: TCP
+    # The dedicated observability poller is the only in-cluster workload that
+    # may reach the console API directly; it uses a read-only Bitwarden-backed
+    # account for metrics collection without broadening the controller surface.
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/name: unifi-poller
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
     # LoadBalancer proxying presents LAN console traffic with Cilium's world
     # identity. The Service source-range policy above is the authoritative
     # 10.0.0.0/8 admission boundary for this particular path.

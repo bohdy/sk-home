@@ -15,4 +15,5 @@ resources:
   - flow-collector-kustomization.yaml
   - flow-geoip-kustomization.yaml
   - proxmox-kustomization.yaml
+  - unifi-poller-kustomization.yaml
   - alerting-kustomization.yaml

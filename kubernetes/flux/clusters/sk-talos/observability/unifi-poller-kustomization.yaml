@@ -1,0 +1,21 @@
+# The controller-metrics stage stays suspended until the operator bootstraps
+# the read-only viewer Secret, then it can be resumed without changing Git.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-unifi-poller
+  namespace: flux-system
+spec:
+  interval: 30m
+  retryInterval: 2m
+  timeout: 10m
+  suspend: true
+  path: ./kubernetes/flux/observability/unifi-poller
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-metrics
+    - name: unifi

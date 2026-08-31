@@ -157,6 +157,18 @@ spec:
             summary: Flux reconciliation remains failed
             description: '{{ $labels.kind }} {{ $labels.namespace }}/{{ $labels.name }} has not been Ready for fifteen minutes.'
 
+    - name: homelab-unifi
+      rules:
+        - alert: UniFiPollerDown
+          expr: up{job=~".*unifi-poller.*"} == 0
+          for: 10m
+          labels:
+            severity: warning
+            component: unifi
+          annotations:
+            summary: UniFi Poller is unavailable
+            description: The controller-metrics exporter has been down for ten minutes.
+
     - name: homelab-certificates
       rules:
         - alert: CertificateExpiringSoon
