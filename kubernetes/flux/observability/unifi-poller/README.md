@@ -2,7 +2,7 @@
 
 This component runs the maintained `unpoller/unpoller` exporter in Prometheus mode against the restored UniFi controller so controller, site, and client summaries are available without duplicating the AP SNMP dashboards.
 
-The `VMServiceScrape` drops every `unpoller_device_*` series so AP device coverage remains SNMP-owned while controller, site, and `unpoller_client_*` metrics remain available. The exporter connects to the cert-manager-backed `unifi-console-lan` Service through canonical hostname `unifi.bohdal.name` on port 443, with certificate verification enabled. The dashboard's connected-client panel uses `unpoller_client_rssi_db` and remains populated under this contract.
+The `VMServiceScrape` drops every `unpoller_device_*` series so AP device coverage remains SNMP-owned while controller, site, and `unpoller_client_*` metrics remain available. The exporter connects to the cert-manager-backed `unifi-console-lan` Service through canonical hostname `unifi.bohdal.name` on port 443, with certificate verification enabled. Its Cilium policy permits only the Service's fixed `10.1.30.56/32:443` VIP and the selected TLS proxy backend on `8443`; it does not permit direct controller access. The dashboard's connected-client panel uses `unpoller_client_rssi_db` and remains populated under this contract.
 
 Bitwarden Secrets Manager item `SK-TALOS-UNIFI-POLLER-USERNAME` (`675e9847-f554-429b-82b8-b4b70093713d`) contains only the controller login name `unifi-poller-api`, and item `SK-TALOS-UNIFI-POLLER-PASSWORD` (`885119a8-1efa-4b04-95f5-b4b700937198`) contains only the matching password.
 
