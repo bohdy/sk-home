@@ -41,9 +41,10 @@ spec:
           rules:
             dns:
               - matchName: unifi.bohdal.name
-    # The canonical hostname resolves to the LAN LoadBalancer VIP. Permit
-    # only that Service-facing HTTPS tuple; the selected proxy endpoint rule
-    # below remains necessary for Cilium's translated backend connection.
+    # Pod-local hostAliases maps the canonical hostname to the LAN
+    # LoadBalancer VIP. Permit only that Service-facing HTTPS tuple; the
+    # selected proxy endpoint rule below remains necessary for Cilium's
+    # translated backend connection.
     - toCIDR:
         - 10.1.30.56/32
       toPorts:

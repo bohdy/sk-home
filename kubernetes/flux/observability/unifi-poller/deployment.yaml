@@ -23,6 +23,13 @@ spec:
     spec:
       automountServiceAccountToken: false
       serviceAccountName: unifi-poller
+      # Public DNS for the canonical name points at Cloudflare. Keep this
+      # collector on the private LAN LoadBalancer while preserving the
+      # canonical hostname for TLS SNI and certificate verification.
+      hostAliases:
+        - ip: "10.1.30.56"
+          hostnames:
+            - "unifi.bohdal.name"
       containers:
         - name: unifi-poller
           image: ghcr.io/unpoller/unpoller:v5.1.0@sha256:4ead2ffec4ff53ffb8eea0a1d522b871e8024eac211d7321a74a61a6856d7e7d
