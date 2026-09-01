@@ -25,7 +25,8 @@ require_command jq
 require_command dig
 
 # Verify that the requested VIP belongs to the declared Cilium pool and is not
-# already assigned or requested by a live Service.
+# already assigned or requested by another live Service. Once Flux has created
+# the relay Service, that one expected assignment is checked separately below.
 pool_json="$(kubectl get ciliumloadbalancerippools -A -o json)" || fail 'cannot read Cilium LoadBalancer pools'
 jq -e --arg pool_cidr '10.1.30.0/24' \
   '[.items[]?.spec.blocks[]?.cidr] | any(. == $pool_cidr)' <<<"${pool_json}" >/dev/null \
@@ -33,7 +34,7 @@ jq -e --arg pool_cidr '10.1.30.0/24' \
 
 services_json="$(kubectl get services -A -o json)" || fail 'cannot read live Services'
 jq -e --arg vip "${smtp_vip}" \
-  '[.items[]? | .status.loadBalancer.ingress[]?.ip, .spec.loadBalancerIP, .metadata.annotations["lbipam.cilium.io/ips"]] | any(. == $vip)' \
+  '[.items[]? | select(.metadata.namespace != "smtp-relay" or .metadata.name != "smtp-relay") | .status.loadBalancer.ingress[]?.ip, .spec.loadBalancerIP, .metadata.annotations["lbipam.cilium.io/ips"]] | any(. == $vip)' \
   <<<"${services_json}" >/dev/null \
   && fail "VIP ${smtp_vip} is already assigned to a live Service"
 
@@ -55,10 +56,22 @@ jq -e '[.status.conditions[]? | select(.type == "Ready" and .status == "True")] 
 
 # Split DNS and public DMARC are checked independently: the former protects
 # printer certificate validation, while the latter protects Seznam alignment.
+require_exact_a_record() {
+  local hostname="$1"
+  local expected_ip="$2"
+  local answers="$3"
+  local normalized_answers
+
+  # An extra public or stale A record could send the printer to the wrong
+  # endpoint, so accepting one matching answer is not sufficient here.
+  normalized_answers="$(printf '%s\n' "${answers}" | sed '/^[[:space:]]*$/d' | sort -u)"
+  [[ "${normalized_answers}" == "${expected_ip}" ]] || fail "${hostname} does not resolve exclusively to ${expected_ip}"
+}
+
 smtp_dns="$(dig +short @"${internal_dns_server}" "${smtp_hostname}" A)"
-printf '%s\n' "${smtp_dns}" | grep -Fxq "${smtp_vip}" || fail "${smtp_hostname} does not resolve to ${smtp_vip}"
+require_exact_a_record "${smtp_hostname}" "${smtp_vip}" "${smtp_dns}"
 printer_dns="$(dig +short @"${internal_dns_server}" "${printer_hostname}" A)"
-printf '%s\n' "${printer_dns}" | grep -Fxq "${printer_ip}" || fail "${printer_hostname} does not resolve to ${printer_ip}"
+require_exact_a_record "${printer_hostname}" "${printer_ip}" "${printer_dns}"
 dmarc_txt="$(dig +short @"${public_dns_server}" _dmarc.sk.bohdal.net TXT)"
 printf '%s\n' "${dmarc_txt}" | grep -Eiq 'v=DMARC1' || fail 'DMARC TXT record is missing'
 printf '%s\n' "${dmarc_txt}" | grep -Eiq 'p[[:space:]]*=[[:space:]]*none' || fail 'DMARC policy is not p=none'
