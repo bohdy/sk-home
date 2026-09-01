@@ -108,6 +108,11 @@ jq -e '
 service_json="$(kubectl get service smtp-relay -n smtp-relay -o json)" || fail 'relay Service is missing'
 jq -e --arg vip "${smtp_vip}" --arg printer_ip "${printer_ip}" '
   .spec.type == "LoadBalancer" and
+  .spec.externalTrafficPolicy == "Local" and
+  .spec.ipFamilyPolicy == "SingleStack" and
+  .spec.ipFamilies == ["IPv4"] and
+  .metadata.annotations["lbipam.cilium.io/ips"] == $vip and
+  .metadata.annotations["service.cilium.io/src-ranges-policy"] == "allow" and
   ([.spec.ports[]?] | length == 1) and
   ([.spec.ports[]? | select(.port == 587 and .protocol == "TCP")] | length == 1) and
   ([.spec.loadBalancerSourceRanges[]?] | any(. == ($printer_ip + "/32"))) and
