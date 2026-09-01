@@ -231,16 +231,20 @@ spec:
       rules:
         - alert: SmtpRelayQueueAgeHigh
           expr: |-
-            max by (cluster, site) (
-              histogram_quantile(
-                1,
-                sum by (cluster, site, le) (
-                  postfix_showq_message_age_seconds_bucket{
-                    queue=~"active|deferred|hold|incoming|maildrop"
-                  }
-                )
+            (
+              sum by (cluster, site) (
+                postfix_showq_message_age_seconds_count{
+                  queue=~"active|deferred|hold|incoming|maildrop"
+                }
               )
-            ) >= 1000
+              -
+              sum by (cluster, site) (
+                postfix_showq_message_age_seconds_bucket{
+                  queue=~"active|deferred|hold|incoming|maildrop",
+                  le="1000"
+                }
+              )
+            ) > 0
           for: 1m
           labels:
             severity: warning
