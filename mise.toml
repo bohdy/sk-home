@@ -13,3 +13,7 @@ run = [
   "python3 scripts/render-dns.py --check",
   "kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null",
 ]
+
+[tasks.smtp-relay-preflight]
+description = "Verify live SMTP relay prerequisites without reading Secret data."
+run = "bash scripts/smtp-relay-preflight.sh"

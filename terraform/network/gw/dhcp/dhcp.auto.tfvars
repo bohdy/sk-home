@@ -184,7 +184,7 @@ dhcp_reservations = {
   }
   brother_printer = {
     server      = "server10"
-    address     = "10.1.10.13"
+    address     = "10.1.10.250"
     mac_address = "3C:2A:F4:F4:B6:7F"
     client_id   = "1:3c:2a:f4:f4:b6:7f"
     comment     = "Brother printer"

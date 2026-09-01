@@ -222,3 +222,47 @@ spec:
           annotations:
             summary: APC UPS runtime is below ten minutes
             description: The USB-connected APC UPS has had less than ten minutes of remaining runtime for two minutes.
+
+    - name: homelab-smtp-relay
+      # The exporter exposes queue state as a bounded histogram. Its first
+      # bucket above the requested fifteen-minute threshold is 1,000 seconds,
+      # so this warning is conservative by at most 100 seconds and cannot fire
+      # early for a message in the 100-second bucket.
+      rules:
+        - alert: SmtpRelayQueueAgeHigh
+          expr: |-
+            max by (cluster, site) (
+              histogram_quantile(
+                1,
+                sum by (cluster, site, le) (
+                  postfix_showq_message_age_seconds_bucket{
+                    queue=~"active|deferred|hold|incoming|maildrop"
+                  }
+                )
+              )
+            ) >= 1000
+          for: 1m
+          labels:
+            severity: warning
+            component: smtp-relay
+          annotations:
+            summary: SMTP relay queue is older than fifteen minutes
+            description: The oldest queued message has crossed the exporter age threshold; inspect the relay queue and upstream delivery health.
+
+        - alert: SmtpRelayPermanentDeliveryFailure
+          expr: sum(increase(postfix_smtp_messages_processed_total{status="bounced"}[5m])) > 0
+          labels:
+            severity: warning
+            component: smtp-relay
+          annotations:
+            summary: SMTP relay reported a permanent delivery failure
+            description: Postfix has reported a permanent upstream delivery failure in the last five minutes.
+
+        - alert: SmtpRelaySubmissionRateHigh
+          expr: sum(increase(postfix_smtpd_messages_processed_total[1h])) > 5
+          labels:
+            severity: warning
+            component: smtp-relay
+          annotations:
+            summary: SMTP relay submission rate is above five messages per hour
+            description: The relay has accepted more than five submissions in the last hour.

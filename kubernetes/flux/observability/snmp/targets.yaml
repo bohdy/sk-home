@@ -91,7 +91,7 @@ targets:
       - collected-by-synology-target
 
   - name: brother-printer
-    address: 10.1.10.13
+    address: 10.1.10.250
     vendor: brother
     modules:
       - system

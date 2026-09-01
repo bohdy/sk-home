@@ -1,0 +1,28 @@
+# Publish only the printer-facing submission port on the reserved private
+# Cilium VIP. Source filtering happens before traffic is proxied to the Pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: smtp-relay
+  namespace: smtp-relay
+  annotations:
+    lbipam.cilium.io/ips: "10.1.30.58"
+    service.cilium.io/src-ranges-policy: allow
+  labels:
+    app.kubernetes.io/name: smtp-relay
+    app.kubernetes.io/component: submission
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  loadBalancerSourceRanges:
+    - 10.1.10.250/32
+  selector:
+    app.kubernetes.io/name: smtp-relay
+  ports:
+    - name: smtp-submission
+      port: 587
+      targetPort: smtp-submission
+      protocol: TCP

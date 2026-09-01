@@ -5,14 +5,31 @@ set -euo pipefail
 # token. Normalize it before bws parses the value, and keep the same behavior
 # for every interactive Bash session in the devcontainer.
 normalize_bws_access_token() {
-  case "${BWS_ACCESS_TOKEN:-}" in
-    \"*\")
-      export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:1:${#BWS_ACCESS_TOKEN}-2}"
+  local token="${BWS_ACCESS_TOKEN:-}"
+  local first_char="${token:0:1}"
+  local last_char="${token: -1}"
+
+  # Strip only a complete matching quote pair. A dangling quote is rejected
+  # instead of silently deleting a real token character and weakening the
+  # fail-closed behavior of every later Bitwarden command.
+  case "${first_char}" in
+    '"')
+      if [[ "${last_char}" != '"' ]]; then
+        printf '%s\n' 'BWS_ACCESS_TOKEN has an unmatched double quote; use the unquoted Docker env-file form.' >&2
+        return 1
+      fi
+      token="${token:1:${#token}-2}"
       ;;
-    \'*\')
-      export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:1:${#BWS_ACCESS_TOKEN}-2}"
+    "'")
+      if [[ "${last_char}" != "'" ]]; then
+        printf '%s\n' 'BWS_ACCESS_TOKEN has an unmatched single quote; use the unquoted Docker env-file form.' >&2
+        return 1
+      fi
+      token="${token:1:${#token}-2}"
       ;;
   esac
+
+  export BWS_ACCESS_TOKEN="${token}"
 }
 
 normalize_bws_access_token
@@ -57,7 +74,9 @@ if ! grep -qxF "${MISE_ACTIVATION}" "${HOME}/.bashrc"; then
 fi
 
 # Install the normalizer once so repeated lifecycle runs do not grow .bashrc.
-BWS_TOKEN_NORMALIZATION_MARKER='# Normalize Docker env-file quoting for BWS_ACCESS_TOKEN.'
+# Version the marker so an existing devcontainer receives the stricter
+# matching-pair implementation on its next lifecycle run.
+BWS_TOKEN_NORMALIZATION_MARKER='# Normalize Docker env-file quoting for BWS_ACCESS_TOKEN (strict matching).'
 if ! grep -qxF "${BWS_TOKEN_NORMALIZATION_MARKER}" "${HOME}/.bashrc"; then
   printf '\n%s\n' "${BWS_TOKEN_NORMALIZATION_MARKER}" >> "${HOME}/.bashrc"
   declare -f normalize_bws_access_token >> "${HOME}/.bashrc"

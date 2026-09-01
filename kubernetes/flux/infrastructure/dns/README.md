@@ -34,13 +34,14 @@ Initial internal records:
 - `blocky.bohdal.name` -> `10.1.30.53`
 - `grafana.bohdal.name` -> `10.1.30.55`
 - `grafana.internal.bohdal.name` -> `10.1.30.55`
+- `smtp.internal.bohdal.name` -> `10.1.30.58`
 - `unifi.bohdal.name` -> `10.1.30.56`
 - `gw.bohdal.name` -> `10.1.100.1`
 - `nas.bohdal.name` -> `10.1.100.10`
 - `pve.bohdal.name` -> `10.1.100.201`
 - `pve.sk.bohdal.name` -> `10.1.100.201` (compatibility alias)
 - `unifi.ap.sk.bohdal.name` -> `10.1.30.1`
-- `printer.sk.bohdal.name` -> `10.1.10.13`
+- `printer.sk.bohdal.name` -> `10.1.10.250`
 
 Reverse records are expected for committed infrastructure records.
 

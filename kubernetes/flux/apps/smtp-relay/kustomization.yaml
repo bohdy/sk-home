@@ -1,0 +1,17 @@
+# Keep the relay's listener, queue, certificate, policy, and scrape contract
+# together so Flux can reconcile the complete outbound-only boundary.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - persistent-volume-claim.yaml
+  - service.yaml
+  - metrics-service.yaml
+  - certificate.yaml
+  - sender-access-configmap.yaml
+  - smtpd-command-filter-configmap.yaml
+  - logrotate-configmap.yaml
+  - deployment.yaml
+  - network-policy.yaml
+  - vm-service-scrape.yaml

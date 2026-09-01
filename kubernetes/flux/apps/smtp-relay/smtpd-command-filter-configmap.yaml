@@ -1,0 +1,13 @@
+# Force accepted printer recipients to request no delivery-status
+# notifications. This keeps temporary queueing and permanent-failure metrics
+# intact while preventing Postfix from returning message content to the
+# unmonitored printer sender address.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smtp-relay-smtpd-command-filter
+  namespace: smtp-relay
+data:
+  smtpd_command_filter: |
+    /^(RCPT[[:space:]]+TO:[[:space:]]*<.*>.*)[[:space:]]+NOTIFY=[^[:space:]]+(.*)/ $1 NOTIFY=NEVER$2
+    /^(RCPT[[:space:]]+TO:.*)/ $1 NOTIFY=NEVER

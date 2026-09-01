@@ -1,0 +1,15 @@
+# Baseline is sufficient for the tightly scoped Postfix image. The image's
+# startup copy and Postfix master are the documented root exceptions; the
+# metrics exporter runs with an explicit non-root identity and no escalation.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smtp-relay
+  annotations:
+    # Removing the relay must not cascade-delete its retained queue claim;
+    # workload resources remain safely prunable by the child Kustomization.
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline
