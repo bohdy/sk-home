@@ -78,6 +78,7 @@ jq -e '
   .status.availableReplicas == 1 and
   .spec.template.spec.serviceAccountName == "smtp-relay" and
   .spec.template.spec.automountServiceAccountToken == false and
+  .spec.template.metadata.labels["vector.dev/exclude"] == "true" and
   .spec.template.metadata.annotations["vector.dev/exclude"] == "true" and
   .spec.template.metadata.annotations["velero.io/exclude-from-backup"] == "true" and
   ([.spec.template.spec.containers[]?] | length == 2) and

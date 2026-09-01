@@ -23,6 +23,8 @@ spec:
       labels:
         app.kubernetes.io/name: smtp-relay
         app.kubernetes.io/component: relay
+        # Exclude transaction logs at Vector's Kubernetes source selector.
+        vector.dev/exclude: "true"
       annotations:
         # Queue contents and transaction logs must not enter VictoriaLogs.
         vector.dev/exclude: "true"
