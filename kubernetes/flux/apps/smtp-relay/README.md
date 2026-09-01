@@ -42,7 +42,7 @@ The Deployment reads the Secret through a file, and the Postfix image consumes i
 
 ## Deployment and validation
 
-Allow the `smtp-relay` Flux Kustomization to reconcile after the external DNS and DHCP prerequisites are complete. Create the `smtp-relay-upstream` Secret after the namespace exists, then run the read-only preflight once the Flux Kustomization is Ready and the Deployment, Service, PVC, and Certificate are visible, before enabling the printer. It verifies the live Cilium pool, VIP availability, retained StorageClass, cert-manager issuer, split DNS, public DMARC, Flux reconciliation, Secret metadata, certificate readiness, and queue snapshot selection without reading Secret data.
+Allow the `smtp-relay` Flux Kustomization to reconcile after the external DNS and DHCP prerequisites are complete. Create the `smtp-relay-upstream` Secret as soon as the `smtp-relay` namespace exists; do not wait for the child Kustomization to report Ready because the Deployment cannot become healthy while its required Secret is absent. After the Secret is present and Flux has reconciled the Deployment, Service, PVC, and Certificate, run the read-only preflight before enabling the printer. It verifies the live Cilium pool, VIP availability, retained StorageClass, cert-manager issuer, split DNS, public DMARC, Flux reconciliation, Secret metadata, certificate readiness, and queue snapshot selection without reading Secret data.
 
 ```bash
 mise run smtp-relay-preflight
