@@ -73,8 +73,14 @@ require_exact_a_record "${smtp_hostname}" "${smtp_vip}" "${smtp_dns}"
 printer_dns="$(dig +short @"${internal_dns_server}" "${printer_hostname}" A)"
 require_exact_a_record "${printer_hostname}" "${printer_ip}" "${printer_dns}"
 dmarc_txt="$(dig +short @"${public_dns_server}" _dmarc.sk.bohdal.net TXT)"
-printf '%s\n' "${dmarc_txt}" | grep -Eiq 'v=DMARC1' || fail 'DMARC TXT record is missing'
-printf '%s\n' "${dmarc_txt}" | grep -Eiq 'p[[:space:]]*=[[:space:]]*none' || fail 'DMARC policy is not p=none'
+# Match complete DMARC tags so a child policy such as `sp=none` cannot satisfy
+# the required organizational policy. DNS tools wrap TXT records in quotes;
+# remove those transport markers before checking the semicolon-delimited tags.
+dmarc_record="$(printf '%s\n' "${dmarc_txt}" | tr -d '"')"
+printf '%s\n' "${dmarc_record}" | grep -Eiq '(^|[;[:space:]])v[[:space:]]*=[[:space:]]*DMARC1([;[:space:]]|$)' \
+  || fail 'DMARC TXT record is missing'
+printf '%s\n' "${dmarc_record}" | grep -Eiq '(^|[;[:space:]])p[[:space:]]*=[[:space:]]*none([;[:space:]]|$)' \
+  || fail 'DMARC policy is not p=none'
 
 # Require the Flux child Kustomization to report Ready so the checks below
 # describe the repository-managed workload rather than an incomplete manual
