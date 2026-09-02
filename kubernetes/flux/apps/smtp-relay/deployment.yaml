@@ -252,8 +252,8 @@ spec:
             - --postfix.logfile_path=/var/log/mail.log
             # rsyslog creates the file on the first mail event; wait for it
             # instead of making the exporter fail before the first scan.
-            - --postfix.logfile_must_exist=false
-            - --postfix.logfile_poll=true
+            - --no-postfix.logfile_must_exist
+            - --postfix.logfile_poll
             - --postfix.showq_path=/var/spool/postfix/public/showq
             # Submission and relay services include their service prefix in
             # syslog tags; map both forms so accepted and delivered messages
