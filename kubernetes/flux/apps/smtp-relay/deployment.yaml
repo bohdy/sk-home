@@ -44,15 +44,15 @@ spec:
           - 4
       initContainers:
         - name: prepare-etc
-          # boky/postfix rewrites /etc/rsyslog.conf and normalizes the scripts
-          # directory during startup. Copy both image trees once into
-          # dedicated volumes so those startup writes do not make the root
-          # filesystem writable.
+          # boky/postfix rewrites /etc/rsyslog.conf, normalizes the scripts
+          # directory, and chowns its daemon directory during startup. Copy
+          # those image trees once into dedicated volumes so those startup
+          # writes do not make the root filesystem writable.
           image: docker.io/boky/postfix:v5.1.0@sha256:aafc772384232497bed875e1eb66b4d3e54ba1ebc86e2e185a6dc1dbc48182ef
           command:
             - /bin/bash
             - -ec
-            - cp -a /etc/. /writable-etc/ && cp -a /scripts/. /writable-scripts/
+            - cp -a /etc/. /writable-etc/ && cp -a /scripts/. /writable-scripts/ && cp -a /usr/lib/postfix/sbin/. /writable-postfix-sbin/
           securityContext:
             runAsUser: 0
             runAsGroup: 0
@@ -74,6 +74,8 @@ spec:
               mountPath: /writable-etc
             - name: scripts
               mountPath: /writable-scripts
+            - name: postfix-sbin
+              mountPath: /writable-postfix-sbin
       containers:
         - name: postfix
           image: docker.io/boky/postfix:v5.1.0@sha256:aafc772384232497bed875e1eb66b4d3e54ba1ebc86e2e185a6dc1dbc48182ef
@@ -215,6 +217,8 @@ spec:
               mountPath: /etc
             - name: scripts
               mountPath: /scripts
+            - name: postfix-sbin
+              mountPath: /usr/lib/postfix/sbin
             - name: postfix-config
               mountPath: /etc/postfix
             - name: postfix-data
@@ -304,6 +308,10 @@ spec:
             medium: Memory
             sizeLimit: 64Mi
         - name: scripts
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Mi
+        - name: postfix-sbin
           emptyDir:
             medium: Memory
             sizeLimit: 8Mi
