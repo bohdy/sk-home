@@ -1,0 +1,357 @@
+# The image is pinned by digest. Postfix's master process must start as UID 0
+# and then launches privilege-separated daemons; standard Postfix rejects a
+# non-root master. This narrow exception is isolated from the non-root metrics
+# sidecar, uses no privileged port, drops unrelated capabilities, and has no
+# Kubernetes API token.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smtp-relay
+  namespace: smtp-relay
+  labels:
+    app.kubernetes.io/name: smtp-relay
+    app.kubernetes.io/component: relay
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smtp-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: smtp-relay
+        app.kubernetes.io/component: relay
+        # Exclude transaction logs at Vector's Kubernetes source selector.
+        vector.dev/exclude: "true"
+      annotations:
+        # Queue contents and transaction logs must not enter VictoriaLogs.
+        vector.dev/exclude: "true"
+        # Velero must not archive the queue through a Pod volume selection.
+        velero.io/exclude-from-backup: "true"
+    spec:
+      serviceAccountName: smtp-relay
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        # Debian's Postfix image uses the postdrop group for the showq socket;
+        # adm also permits the non-root exporter to read the local mail log.
+        fsGroup: 113
+        supplementalGroups:
+          - 4
+      initContainers:
+        - name: prepare-etc
+          # boky/postfix rewrites /etc/rsyslog.conf and normalizes the scripts
+          # directory during startup. Copy both image trees once into
+          # dedicated volumes so those startup writes do not make the root
+          # filesystem writable.
+          image: docker.io/boky/postfix:v5.1.0@sha256:aafc772384232497bed875e1eb66b4d3e54ba1ebc86e2e185a6dc1dbc48182ef
+          command:
+            - /bin/bash
+            - -ec
+            - cp -a /etc/. /writable-etc/ && cp -a /scripts/. /writable-scripts/
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              # Copying the image defaults includes mode-restricted and
+              # non-root-owned files; these capabilities are used only by
+              # this short-lived preparation container.
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+          volumeMounts:
+            - name: etc
+              mountPath: /writable-etc
+            - name: scripts
+              mountPath: /writable-scripts
+      containers:
+        - name: postfix
+          image: docker.io/boky/postfix:v5.1.0@sha256:aafc772384232497bed875e1eb66b4d3e54ba1ebc86e2e185a6dc1dbc48182ef
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            # Required by /usr/sbin/postfix master; child services remain
+            # privilege-separated by the Postfix image and master.cf.
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - SETGID
+                - SETUID
+          ports:
+            - name: smtp-submission
+              containerPort: 587
+              protocol: TCP
+          env:
+            # Disable the image's broad domain allowlist; sender_access below
+            # is the sole authorization path for the exact envelope sender.
+            - name: ALLOW_EMPTY_SENDER_DOMAINS
+              value: "true"
+            - name: ANONYMIZE_EMAILS
+              value: paranoid
+            # Never generate or mount a local DKIM key; Seznam signs upstream.
+            - name: DKIM_AUTOGENERATE
+              value: ""
+            - name: POSTFIX_mynetworks
+              value: 10.1.10.250/32
+            - name: RELAYHOST
+              value: "[smtp.seznam.cz]:587"
+            - name: RELAYHOST_USERNAME
+              value: tiskarna@sk.bohdal.net
+            - name: RELAYHOST_PASSWORD_FILE
+              value: /etc/smtp-secret/password
+            - name: POSTFIX_myhostname
+              value: smtp.internal.bohdal.name
+            - name: POSTFIX_message_size_limit
+              value: "52428800"
+            - name: POSTFIX_smtpd_recipient_limit
+              value: "5"
+            - name: POSTFIX_anvil_rate_time_unit
+              value: 1h
+            - name: POSTFIX_smtpd_client_message_rate_limit
+              value: "20"
+            # The image deletes empty POSTFIX_* values. An unreachable
+            # loopback address makes the exception list non-empty while
+            # preventing the Postfix default ($mynetworks) from exempting the
+            # printer from rate limiting.
+            - name: POSTFIX_smtpd_client_event_limit_exceptions
+              value: 127.0.0.2/32
+            - name: POSTFIX_smtpd_client_restrictions
+              value: permit_mynetworks,reject
+            - name: POSTFIX_smtpd_relay_restrictions
+              value: permit_mynetworks,reject
+            - name: POSTFIX_smtpd_sender_restrictions
+              value: check_sender_access regexp:/etc/smtp-relay/sender_access,reject
+            - name: POSTFIX_smtpd_tls_security_level
+              value: encrypt
+            - name: POSTFIX_smtpd_tls_mandatory_protocols
+              value: ">=TLSv1.2"
+            - name: POSTFIX_smtpd_tls_auth_only
+              value: "yes"
+            - name: POSTFIX_smtpd_sasl_auth_enable
+              value: "no"
+            - name: POSTFIX_smtpd_command_filter
+              value: regexp:/etc/smtp-command-filter/smtpd_command_filter
+            # Keep the image's submission listener on 587 but disable its
+            # default port-25 smtp listener at the Postfix master level.
+            - name: POSTFIX_master_service_disable
+              value: smtp/inet
+            # The cert-manager Secret uses ECDSA, so configure Postfix's
+            # ECDSA certificate pair rather than its RSA-only parameters.
+            - name: POSTFIX_smtpd_tls_eccert_file
+              value: /etc/ssl/smtp/tls.crt
+            - name: POSTFIX_smtpd_tls_eckey_file
+              value: /etc/ssl/smtp/tls.key
+            - name: POSTFIX_smtp_tls_security_level
+              value: verify
+            - name: POSTFIX_smtp_tls_CAfile
+              value: /etc/ssl/certs/ca-certificates.crt
+            - name: POSTFIX_smtp_tls_mandatory_protocols
+              value: ">=TLSv1.2"
+            - name: POSTFIX_maximal_queue_lifetime
+              value: 72h
+            - name: POSTFIX_bounce_queue_lifetime
+              value: 72h
+            # Suppress delayed-warning messages and retain only local resource
+            # and software notices; no external postmaster is configured.
+            - name: POSTFIX_delay_warning_time
+              value: "0"
+            - name: POSTFIX_notify_classes
+              value: resource,software
+            - name: POSTFIX_always_add_missing_headers
+              value: "yes"
+            - name: POSTFIX_disable_vrfy_command
+              value: "yes"
+          readinessProbe:
+            exec:
+              # Run inside the container so node health checks do not require
+              # a second trusted source for the printer-facing SMTP port.
+              command:
+                - /bin/bash
+                - -ec
+                - printf 'EHLO healthcheck\nquit\n' | nc -w 2 127.0.0.1 587 | grep -q '^220.*ESMTP Postfix'
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - printf 'EHLO healthcheck\nquit\n' | nc -w 2 127.0.0.1 587 | grep -q '^220.*ESMTP Postfix'
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - printf 'EHLO healthcheck\nquit\n' | nc -w 2 127.0.0.1 587 | grep -q '^220.*ESMTP Postfix'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
+          volumeMounts:
+            - name: queue
+              mountPath: /var/spool/postfix
+            - name: etc
+              mountPath: /etc
+            - name: scripts
+              mountPath: /scripts
+            - name: postfix-config
+              mountPath: /etc/postfix
+            - name: postfix-data
+              mountPath: /var/lib/postfix
+            - name: postfix-run
+              mountPath: /var/run
+            - name: logs
+              mountPath: /var/log
+            - name: tmp
+              mountPath: /tmp
+            - name: tls
+              mountPath: /etc/ssl/smtp
+              readOnly: true
+            - name: upstream-secret
+              mountPath: /etc/smtp-secret
+              readOnly: true
+            - name: sender-access
+              mountPath: /etc/smtp-relay
+              readOnly: true
+            - name: smtpd-command-filter
+              mountPath: /etc/smtp-command-filter
+              readOnly: true
+            - name: logrotate
+              mountPath: /etc/logrotate.d/smtp-relay
+              subPath: smtp-relay
+              readOnly: true
+        - name: postfix-exporter
+          image: ghcr.io/hsn723/postfix_exporter:0.20.4@sha256:f3abc3f8b892f4f3afc84ce2af4fe06ac6ba018d4f5a78a8196dfce907f844cb
+          imagePullPolicy: IfNotPresent
+          command:
+            - /postfix_exporter
+          args:
+            - --web.listen-address=0.0.0.0:9154
+            - --web.telemetry-path=/metrics
+            - --postfix.logfile_path=/var/log/mail.log
+            # rsyslog creates the file on the first mail event; wait for it
+            # instead of making the exporter fail before the first scan.
+            - --postfix.logfile_must_exist=false
+            - --postfix.logfile_poll=true
+            - --postfix.showq_path=/var/spool/postfix/public/showq
+            # Submission and relay services include their service prefix in
+            # syslog tags; map both forms so accepted and delivered messages
+            # remain visible as aggregate counters.
+            - --postfix.smtpd_service_label=smtpd
+            - --postfix.smtpd_service_label=submission/smtpd
+            - --postfix.smtp_service_label=smtp
+            - --postfix.smtp_service_label=relay/smtp
+          securityContext:
+            # The scratch image has no declared user; this fixed UID keeps the
+            # exporter non-root while fsGroup grants read-only queue/log access.
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: metrics
+              containerPort: 9154
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 30
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: queue
+              mountPath: /var/spool/postfix
+              readOnly: true
+            - name: logs
+              mountPath: /var/log
+              readOnly: true
+            - name: exporter-tmp
+              mountPath: /tmp
+      volumes:
+        - name: etc
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: scripts
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Mi
+        - name: queue
+          persistentVolumeClaim:
+            claimName: smtp-relay-queue
+        - name: postfix-config
+          emptyDir:
+            sizeLimit: 32Mi
+        - name: postfix-data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 32Mi
+        - name: postfix-run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: logs
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: exporter-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        - name: tls
+          secret:
+            secretName: smtp-relay-tls
+            defaultMode: 0400
+        - name: upstream-secret
+          secret:
+            secretName: smtp-relay-upstream
+            defaultMode: 0400
+            items:
+              - key: password
+                path: password
+        - name: sender-access
+          configMap:
+            name: smtp-relay-sender-access
+            defaultMode: 0444
+        - name: smtpd-command-filter
+          configMap:
+            name: smtp-relay-smtpd-command-filter
+            defaultMode: 0444
+        - name: logrotate
+          configMap:
+            name: smtp-relay-logrotate
+            defaultMode: 0444

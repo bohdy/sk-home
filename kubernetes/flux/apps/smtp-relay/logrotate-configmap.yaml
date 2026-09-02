@@ -1,0 +1,18 @@
+# Keep local diagnostic logs for seven rotations without sending transaction
+# records to the cluster log pipeline. The backing /var/log volume is ephemeral.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smtp-relay-logrotate
+  namespace: smtp-relay
+data:
+  smtp-relay: |
+    /var/log/mail.log {
+      daily
+      rotate 7
+      missingok
+      notifempty
+      compress
+      delaycompress
+      copytruncate
+    }

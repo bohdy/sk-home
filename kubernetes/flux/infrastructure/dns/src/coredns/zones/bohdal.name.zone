@@ -1,7 +1,7 @@
 $ORIGIN bohdal.name.
 $TTL 300
 @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
-    2026080301 ; serial
+    2026090101 ; serial
     300        ; refresh
     120        ; retry
     1209600    ; expire
@@ -12,6 +12,8 @@ dns    IN A  10.1.30.53
 blocky IN A  10.1.30.53
 grafana IN A 10.1.30.55
 grafana.internal IN A 10.1.30.55
+; The printer-facing SMTP relay is reachable only through the private Cilium VIP.
+smtp.internal IN A 10.1.30.58
 ; The canonical console hostname resolves directly to the LAN-only HTTPS VIP.
 ; Public resolvers continue returning the proxied Cloudflare Tunnel record.
 unifi IN A 10.1.30.56
@@ -22,7 +24,7 @@ nas    IN A  10.1.100.10
 ; `ap.sk.bohdal.name` as their DHCP search domain.
 unifi.ap.sk IN A 10.1.30.1
 ; The Brother printer receives this address from the MikroTik DHCP reservation.
-printer.sk IN A  10.1.10.13
+printer.sk IN A  10.1.10.250
 ; Proxmox retains its short node name, while this canonical management alias
 ; and the legacy `pve.sk` alias are covered by one browser-trusted ACME certificate.
 pve    IN A  10.1.100.201

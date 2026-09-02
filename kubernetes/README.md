@@ -6,7 +6,7 @@ Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` r
 
 ## Bootstrap order
 
-Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Manager CLI, and `jq`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
+Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Manager CLI, `jq`, and the DNS utility `dig`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
 
 1. Apply the Talos Terraform stack so the cluster starts without the Talos default CNI or kube-proxy.
 2. Retrieve kubeconfig into a local ignored path:
@@ -108,7 +108,7 @@ Use `docs/observability-rollout.md` as the resumable deployment checkpoint and u
 
 ## Applications
 
-Stateful application workloads live in `kubernetes/flux/apps` and reconcile through the separate `apps` cluster tree. The `unifi` component provisions retained iSCSI storage, a pinned controller image, a private Tunnel origin, a LAN-only `10.1.30.56` console VIP, and its separate `10.1.30.1` device-communication VIP. Internal DNS resolves the canonical console name to the LAN VIP; the Cloudflare stack owns the same public hostname's Tunnel route and single-identity Access boundary. Its component README defines the required Bitwarden Secret bootstrap and restore/cutover sequence. The optional `observability/unifi-poller` stage consumes a read-only controller service account from Bitwarden-backed Secret `unifi-poller-auth` and is excluded from the automatic observability parent until its child Flux Kustomization is explicitly applied after Secret bootstrap; once activated, Flux manages the child independently and it exports controller-side metrics without replacing the AP SNMP dashboards.
+Stateful application workloads live in `kubernetes/flux/apps` and reconcile through the separate `apps` cluster tree. The `unifi` component provisions retained iSCSI storage, a pinned controller image, a private Tunnel origin, a LAN-only `10.1.30.56` console VIP, and its separate `10.1.30.1` device-communication VIP. Internal DNS resolves the canonical console name to the LAN VIP; the Cloudflare stack owns the same public hostname's Tunnel route and single-identity Access boundary. Its component README defines the required Bitwarden Secret bootstrap and restore/cutover sequence. The optional `observability/unifi-poller` stage consumes a read-only controller service account from Bitwarden-backed Secret `unifi-poller-auth` and is excluded from the automatic observability parent until its child Flux Kustomization is explicitly applied after Secret bootstrap; once activated, Flux manages the child independently and it exports controller-side metrics without replacing the AP SNMP dashboards. The `smtp-relay` component provides the Brother printer's private, STARTTLS-only outbound Postfix path at `smtp.internal.bohdal.name:587`, uses the retained `synology-iscsi-retain` queue claim, and requires the operator-managed `SK-SMTP-RELAY` Bitwarden bootstrap described in its component README.
 
 ## Storage
 

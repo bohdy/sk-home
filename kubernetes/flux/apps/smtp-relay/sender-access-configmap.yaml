@@ -1,0 +1,12 @@
+# Postfix's regexp map makes the envelope sender an exact allowlist. Header
+# From values are not used for authorization and may not bypass this check.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smtp-relay-sender-access
+  namespace: smtp-relay
+data:
+  sender_access: |
+    /^tiskarna@sk\.bohdal\.net$/ OK
+    /^<>$/ REJECT unauthorized envelope sender
+    /.+/ REJECT unauthorized envelope sender

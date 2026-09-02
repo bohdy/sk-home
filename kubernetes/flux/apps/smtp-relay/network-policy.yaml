@@ -1,0 +1,69 @@
+# The Service source-range rule is the authoritative LAN boundary for the
+# Cilium LoadBalancer proxy. The endpoint policy also retains the exact source
+# CIDR for direct paths and permits only the exporter and node health probes.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: smtp-relay
+  namespace: smtp-relay
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: smtp-relay
+  ingress:
+    - fromCIDR:
+        - 10.1.10.250/32
+      toPorts:
+        - ports:
+            - port: "587"
+              protocol: TCP
+    # Cilium LoadBalancer proxy traffic is represented by the world identity;
+    # loadBalancerSourceRanges has already reduced that path to the printer.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "587"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/name: vmagent
+      toPorts:
+        - ports:
+            - port: "9154"
+              protocol: TCP
+    # The exporter HTTP probes originate from kubelet nodes; they do not grant
+    # those nodes access to the printer-facing SMTP port.
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "9154"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              # Kubernetes ndots search attempts are included so only the
+              # intended upstream name can be resolved by the DNS proxy.
+              - matchName: smtp.seznam.cz
+              - matchName: smtp.seznam.cz.smtp-relay.svc.cluster.local
+              - matchName: smtp.seznam.cz.svc.cluster.local
+              - matchName: smtp.seznam.cz.cluster.local
+    - toFQDNs:
+        - matchName: smtp.seznam.cz
+      toPorts:
+        - ports:
+            - port: "587"
+              protocol: TCP

@@ -45,8 +45,13 @@ jobs:
 
           python3 scripts/render-dns.py --check
           kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null
+          kubectl kustomize kubernetes/flux/apps/smtp-relay >/dev/null
+          kubectl kustomize kubernetes/flux/clusters/sk-talos/apps >/dev/null
+          kubectl kustomize kubernetes/flux/clusters/sk-talos >/dev/null
+          kubectl kustomize kubernetes/flux/observability/alerting >/dev/null
           kubectl kustomize kubernetes/flux/observability/flow-collector >/dev/null
           kubectl kustomize kubernetes/flux/observability/flow-geoip >/dev/null
           kubectl kustomize kubernetes/flux/clusters/sk-talos/observability >/dev/null
+          bash -n .devcontainer/post-create.sh scripts/smtp-relay-preflight.sh
           sh -n kubernetes/flux/observability/flow-geoip/geoip-refresh.sh
           jq empty kubernetes/flux/observability/dashboards/sk-flow.json

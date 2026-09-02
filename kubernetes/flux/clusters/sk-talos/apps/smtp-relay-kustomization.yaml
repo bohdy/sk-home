@@ -1,0 +1,22 @@
+# Reconcile the relay only after its private LB allocator, retained storage,
+# certificate issuer, and VMServiceScrape CRD are available.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: smtp-relay
+  namespace: flux-system
+spec:
+  interval: 30m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./kubernetes/flux/apps/smtp-relay
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: cilium
+    - name: storage-synology-csi
+    - name: certificates
+    - name: observability-metrics

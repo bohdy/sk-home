@@ -1,0 +1,18 @@
+# The printer validates this exact hostname during STARTTLS; the certificate
+# is issued through the repository's existing production DNS-01 issuer.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: smtp-relay
+  namespace: smtp-relay
+spec:
+  secretName: smtp-relay-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - smtp.internal.bohdal.name
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

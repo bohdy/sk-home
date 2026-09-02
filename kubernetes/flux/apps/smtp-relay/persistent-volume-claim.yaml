@@ -1,0 +1,24 @@
+# The queue is intentionally durable across pod recreation but excluded from
+# repository backup selection. Its contents can include message bodies, so no
+# backup or snapshot resource should ever select this claim.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smtp-relay-queue
+  namespace: smtp-relay
+  annotations:
+    # Keep the retained queue claim available for post-rollback investigation
+    # when the relay Kustomization is removed or suspended.
+    kustomize.toolkit.fluxcd.io/prune: disabled
+    velero.io/exclude-from-backup: "true"
+  labels:
+    app.kubernetes.io/name: smtp-relay
+    app.kubernetes.io/component: queue
+    backup.sk.bohdal.net/exclude: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 1Gi

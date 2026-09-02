@@ -1,0 +1,30 @@
+# Scrape only the explicitly approved aggregate exporter families. The metric
+# allowlist is a second privacy boundary if a future exporter version adds a
+# metadata-bearing family such as OpenDKIM's subject-labelled metric.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: smtp-relay
+  namespace: observability
+spec:
+  namespaceSelector:
+    matchNames:
+      - smtp-relay
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smtp-relay
+      app.kubernetes.io/component: metrics
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      sampleLimit: 3000
+      seriesLimit: 3000
+      metricRelabelConfigs:
+        - sourceLabels:
+            - __name__
+          regex: ^postfix_(showq_queue_depth|showq_message_age_seconds(_.*)?|smtp_messages_processed_total|smtpd_messages_processed_total)$
+          action: keep
+        - regex: ^(domain|email|from|to|recipient|sender|subject|message_id|messageid|body|credential|password)$
+          action: labeldrop
