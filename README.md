@@ -40,13 +40,12 @@ The repository keeps the historical `terraform/` directory name and existing `te
 
 ## Local Development
 
-The preferred local development environment is the repository devcontainer. It keeps OpenTofu, CI helper tools, and shell behavior closer to the environment used by automation, so use it for OpenTofu and workflow work unless a task specifically requires running on the host.
+The repository devcontainer is the required local development environment. It keeps OpenTofu, CI helper tools, and shell behavior aligned with automation, so run local development, OpenTofu, workflow, and validation commands inside it. Use the host only to start or enter the devcontainer.
 
 ### Prerequisites
 
 - Dev Containers support, such as VS Code Dev Containers or the `devcontainer` CLI
-- [act](https://github.com/nektos/act) - Run GitHub Actions locally
-- Docker - Required by act
+- Docker - Runs the devcontainer and its Docker-outside-of-Docker feature
 - Bitwarden account with access to repository secrets
 
 ### Devcontainer
@@ -57,7 +56,7 @@ Open the repository in the devcontainer before running OpenTofu, `act`, or repos
 devcontainer up --workspace-folder .
 ```
 
-The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions.
+The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository or workflow tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead.
 
 ### Environment Setup
 
@@ -104,7 +103,7 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 
 ### Running OpenTofu Locally
 
-To run OpenTofu outside GitHub Actions, use the devcontainer or install OpenTofu, the Bitwarden Secrets Manager CLI (`bws`), and `jq` in an isolated local environment. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:
+To run OpenTofu outside GitHub Actions, use the repository devcontainer. Do not install or run OpenTofu, the Bitwarden Secrets Manager CLI (`bws`), or `jq` directly on the host. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:
 
 ```bash
 set -a

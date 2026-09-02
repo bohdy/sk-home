@@ -17,6 +17,8 @@ RUN echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.gpg] https://mis
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     unzip \
+    git \
+    openssh-client \
     gnupg \
     software-properties-common \
     curl \
