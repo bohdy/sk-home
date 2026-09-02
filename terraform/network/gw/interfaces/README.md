@@ -74,6 +74,8 @@ gh workflow run terraform.yaml --ref main -f apply_gateway_bgp=true
 
 Review the uploaded `network-gw-bgp-tofuplan` artifact between the two commands. The SMTP VIP `10.1.30.58/32` is advertised only by the worker hosting the relay when its Service uses `externalTrafficPolicy: Local`, so that worker's RouterOS BGP session must be established before the printer can connect.
 
+RouterOS 7.23 renamed the BGP add-path property exposed by its REST API, while the pinned `terraform-routeros` 1.99.1 provider still sends the obsolete top-level `add-path-out` field. The provider therefore cannot create or update these rows on this gateway. The production-gated apply path performs a narrow, idempotent REST recovery that omits that field, imports every recovered row into OpenTofu state, and then creates and applies a fresh targeted plan. This is temporary migration scaffolding for the provider incompatibility; do not use an ad-hoc REST request outside that workflow.
+
 ## Synology SNMP
 
 The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to Synology at `10.1.100.10`, plus return packets from Synology source port UDP/161 back to that worker VLAN. The reply exception is inserted before the request exception, so both remain ahead of broader inter-VLAN filtering; neither rule exposes DSM management ports or SNMP to other VLANs.
