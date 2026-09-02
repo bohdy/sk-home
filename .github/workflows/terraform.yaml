@@ -744,12 +744,12 @@ jobs:
           nodes=(cp1 cp2 cp3 worker1 worker2 worker3)
           addresses=(10.1.20.41 10.1.20.42 10.1.20.43 10.1.20.44 10.1.20.45 10.1.20.46)
           comments=(
-            sk-talos-cp-1
-            sk-talos-cp-2
-            sk-talos-cp-3
-            sk-talos-worker-1
-            sk-talos-worker-2
-            sk-talos-worker-3
+            "Kubernetes BGP peer sk-talos-cp-1"
+            "Kubernetes BGP peer sk-talos-cp-2"
+            "Kubernetes BGP peer sk-talos-cp-3"
+            "Kubernetes BGP peer sk-talos-worker-1"
+            "Kubernetes BGP peer sk-talos-worker-2"
+            "Kubernetes BGP peer sk-talos-worker-3"
           )
 
           for index in "${!nodes[@]}"; do
