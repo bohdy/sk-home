@@ -65,6 +65,15 @@ The gateway peers with the Talos Kubernetes nodes on VLAN 20:
 - ASN: `65001` on both sides
 - Accepted routes: `/32` LoadBalancer VIP routes inside `10.1.30.0/24`
 
+The gateway peer inventory must include all six Talos nodes. Use the dedicated, mutually exclusive workflow path when a worker peer or its learned VIP route is missing; it targets only the BGP address list, route filter, and peer resources and refuses plans containing deletes or replacements:
+
+```bash
+gh workflow run terraform.yaml --ref main -f plan_gateway_bgp=true
+gh workflow run terraform.yaml --ref main -f apply_gateway_bgp=true
+```
+
+Review the uploaded `network-gw-bgp-tofuplan` artifact between the two commands. The SMTP VIP `10.1.30.58/32` is advertised only by the worker hosting the relay when its Service uses `externalTrafficPolicy: Local`, so that worker's RouterOS BGP session must be established before the printer can connect.
+
 ## Synology SNMP
 
 The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to Synology at `10.1.100.10`, plus return packets from Synology source port UDP/161 back to that worker VLAN. The reply exception is inserted before the request exception, so both remain ahead of broader inter-VLAN filtering; neither rule exposes DSM management ports or SNMP to other VLANs.
@@ -73,10 +82,15 @@ The gateway permits only UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` 
 
 The gateway permits UDP/161 from the Kubernetes worker VLAN `10.1.20.0/24` to the UniFi AP management VLAN `10.1.102.0/24`, plus replies sourced from UDP/161 back to workers. The subnet-level target is intentional: AP addresses are dynamic until the controller migration and DHCP reservations are complete, while the protocol and source VLAN remain constrained.
 
-The BGP sessions use TCP MD5 authentication. Export the shared key from Bitwarden before running `tofu plan` or `tofu apply`:
+The BGP sessions use TCP MD5 authentication. The trusted workflow injects the key from Bitwarden without exposing it in logs. For local diagnostics, invoke `bws` only inside the repository devcontainer and keep its output process-local:
 
 ```bash
-export TF_VAR_kubernetes_bgp_tcp_md5_key="$(bws secret get 2c67255f-36f4-4344-b94d-b459014e9249 -o json | jq -r .value)"
+devcontainer exec --workspace-folder /path/to/sk-home sh -ec '
+  set +x
+  bgp_key="$(bws secret get 2c67255f-36f4-4344-b94d-b459014e9249 -o json | jq -r .value)"
+  # Use "$bgp_key" only in a command running inside this devcontainer.
+  unset bgp_key
+'
 ```
 
-Keep shell tracing disabled while this variable is set. Do not commit the plaintext key, local variable files, or generated OpenTofu plans.
+Keep shell tracing disabled while the value is set. Do not commit the plaintext key, local variable files, or generated OpenTofu plans.
