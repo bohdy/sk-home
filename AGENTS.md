@@ -71,7 +71,8 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not use an imperative workaround merely because it is faster than correcting or extending the declarative ownership path.
 - RouterOS changes that must avoid known provider-broken resources, including Kubernetes BGP peer reconciliation, require a dedicated, mutually exclusive workflow input that plans explicit targets, rejects destructive artifacts where applicable, uploads the immutable plan, and applies only that artifact through the production environment.
 - The Kubernetes BGP workflow documents and confines the RouterOS 7.23 compatibility recovery for the pinned provider: any temporary REST adoption must run only after the production gate, omit the obsolete `add-path-out` field, import the resulting rows into OpenTofu state, and apply a fresh immutable targeted plan.
-- Prefer the repository devcontainer for local development, OpenTofu work, workflow testing, and validation so tool versions and environment behavior stay close to automation.
+- Use the repository devcontainer as the required environment for local development, OpenTofu work, workflow testing, and validation so tool versions and environment behavior stay close to automation; do not run these activities directly on the host.
+- Do not install repository or workflow tools on the host. If a required tool is missing, add it to the devcontainer configuration or the repository's `mise.toml` so it is provisioned inside the devcontainer.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
