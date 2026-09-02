@@ -187,10 +187,11 @@ resource "routeros_routing_bgp_connection" "kubernetes_node" {
   # RouterOS 7.23 returns the default BGP ports as unset, while provider
   # 1.99.1 plans them as 179 and then emits the unsupported add-path-out field
   # during the resulting no-op update. The dedicated recovery workflow imports
-  # rows created without that obsolete field, so keep this provider drift from
-  # triggering a second incompatible update.
+  # rows created without that obsolete field, so keep both provider-only drifts
+  # from triggering a second incompatible update.
   lifecycle {
     ignore_changes = [
+      add_path_out,
       local[0].port,
       remote[0].port,
     ]
