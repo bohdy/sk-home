@@ -768,14 +768,16 @@ jobs:
             peer_id="$(jq -r --arg name "$peer_name" '[.[] | select(.name == $name)] | if length == 1 then .[0][".id"] else "" end' <<<"$connections")"
             if [[ -z "$peer_id" ]]; then
               # RouterOS 7.23 accepts output defaults but rejects the provider's
-              # obsolete top-level add-path-out property. Keep this payload
-              # aligned with the OpenTofu resource and deliberately omit only
-              # that incompatible property; all six rows are reconciled.
+              # obsolete top-level add-path-out property. Its REST payload also
+              # uses afi and requires the native BGP instance name. Keep this
+              # payload aligned with the OpenTofu resource and deliberately omit
+              # only the incompatible property; all six rows are reconciled.
               payload="$(PEER_NAME="$peer_name" PEER_ADDRESS="$peer_address" PEER_COMMENT="$peer_comment" jq -n '
                 {
                   name: $ENV.PEER_NAME,
                   as: "65001",
-                  "address-families": "ip",
+                  afi: "ip",
+                  instance: "bgp-instance",
                   connect: "true",
                   listen: "true",
                   multihop: "false",
