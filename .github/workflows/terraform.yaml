@@ -659,7 +659,9 @@ jobs:
 
   gateway-bgp-apply:
     name: Apply gateway BGP peers
-    # Apply only the immutable BGP artifact reviewed by the preceding job.
+    # The provider cannot write RouterOS 7.23 BGP rows, so this production-gated
+    # job first adopts them through the documented compatibility path, then
+    # applies only a new immutable plan generated from the adopted state.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-bgp-plan]
@@ -669,7 +671,7 @@ jobs:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
       STACK_PATH: network/gw/interfaces
-      TOFU_PLAN_ARTIFACT: network-gw-bgp-tofuplan
+      TOFU_PLAN_ARTIFACT: network-gw-bgp-recovery-tofuplan
 
     steps:
       - name: Checkout repository
@@ -679,12 +681,6 @@ jobs:
         uses: jdx/mise-action@v4.0.1
         with:
           install: true
-
-      - name: Download gateway BGP plan
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.TOFU_PLAN_ARTIFACT }}
-          path: terraform/${{ env.STACK_PATH }}
 
       - name: Get gateway BGP secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -708,8 +704,144 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Apply gateway BGP plan
-        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve bgp-tofuplan
+      - name: Recover and import RouterOS 7.23 BGP peers
+        shell: bash
+        env:
+          ROUTEROS_URL: https://10.1.100.1
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # Use curl's stdin configuration so credentials and the TCP-MD5 key
+          # never appear in process arguments, logs, or repository files.
+          routeros_request() {
+            local method="$1"
+            local url="$2"
+            local payload="${3-}"
+
+            REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
+              jq -nr '
+                "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
+                "url = " + ($ENV.REQUEST_URL | @json),
+                "request = " + ($ENV.REQUEST_METHOD | @json),
+                "insecure",
+                "fail",
+                "silent",
+                "show-error",
+                "header = " + ("Content-Type: application/json" | @json),
+                (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
+              ' | curl --config -
+          }
+
+          ROUTEROS_URL="${ROUTEROS_URL%/}"
+          connections="$(routeros_request GET "${ROUTEROS_URL}/rest/routing/bgp/connection")"
+          nodes=(cp1 cp2 cp3 worker1 worker2 worker3)
+          addresses=(10.1.20.41 10.1.20.42 10.1.20.43 10.1.20.44 10.1.20.45 10.1.20.46)
+          comments=(
+            sk-talos-cp-1
+            sk-talos-cp-2
+            sk-talos-cp-3
+            sk-talos-worker-1
+            sk-talos-worker-2
+            sk-talos-worker-3
+          )
+
+          for index in "${!nodes[@]}"; do
+            node="${nodes[$index]}"
+            peer_name="kubernetes-${node}"
+            peer_address="${addresses[$index]}"
+            peer_comment="${comments[$index]}"
+            resource_address="routeros_routing_bgp_connection.kubernetes_node[\"${node}\"]"
+
+            peer_count="$(jq --arg name "$peer_name" '[.[] | select(.name == $name)] | length' <<<"$connections")"
+            if [[ "$peer_count" -gt 1 ]]; then
+              echo "Multiple RouterOS BGP rows have the expected name ${peer_name}." >&2
+              exit 1
+            fi
+
+            peer_id="$(jq -r --arg name "$peer_name" '[.[] | select(.name == $name)] | if length == 1 then .[0][".id"] else "" end' <<<"$connections")"
+            if [[ -z "$peer_id" ]]; then
+              # RouterOS 7.23 accepts output defaults but rejects the provider's
+              # obsolete top-level add-path-out property. Keep this payload
+              # aligned with the OpenTofu resource and deliberately omit only
+              # that incompatible property; all six rows are reconciled.
+              payload="$(PEER_NAME="$peer_name" PEER_ADDRESS="$peer_address" PEER_COMMENT="$peer_comment" jq -n '
+                {
+                  name: $ENV.PEER_NAME,
+                  as: "65001",
+                  "address-families": "ip",
+                  connect: "true",
+                  listen: "true",
+                  multihop: "false",
+                  "tcp-md5-key": $ENV.KUBERNETES_BGP_TCP_MD5_KEY,
+                  "local.address": "10.1.20.1",
+                  "local.role": "ibgp",
+                  "remote.address": $ENV.PEER_ADDRESS,
+                  "remote.as": "65001",
+                  "input.accept-nlri": "sk-kubernetes-service-vips",
+                  "input.filter": "sk-kubernetes-bgp-in",
+                  "input.limit-process-routes-ipv4": "256",
+                  "output.default-originate": "never",
+                  comment: $ENV.PEER_COMMENT
+                }
+              ')"
+              routeros_request POST "${ROUTEROS_URL}/rest/routing/bgp/connection/add" "$payload" >/dev/null
+              connections="$(routeros_request GET "${ROUTEROS_URL}/rest/routing/bgp/connection")"
+              peer_id="$(jq -er --arg name "$peer_name" '[.[] | select(.name == $name)] | if length == 1 then .[0][".id"] else error("recovered BGP row was not found") end' <<<"$connections")"
+            fi
+
+            # Import is the state-adoption boundary: existing rows are left
+            # untouched, and newly recovered rows become OpenTofu-managed.
+            if ! tofu -chdir=terraform/${{ env.STACK_PATH }} state show "$resource_address" >/dev/null 2>&1; then
+              tofu -chdir=terraform/${{ env.STACK_PATH }} import "$resource_address" "$peer_id"
+            fi
+          done
+
+      - name: Create immutable post-recovery BGP plan
+        run: >-
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=routeros_ip_firewall_addr_list.kubernetes_service_vips
+          -target=routeros_routing_filter_rule.kubernetes_bgp_in
+          -target=routeros_routing_bgp_connection.kubernetes_node
+          -out=${{ env.TOFU_PLAN_ARTIFACT }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Reject destructive recovered BGP plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json "${{ env.TOFU_PLAN_ARTIFACT }}" \
+            | jq -e 'all(.resource_changes[]?.change.actions; index("delete") == null)' >/dev/null; then
+            echo "The recovered BGP plan contains a delete or replacement; refusing to apply it." >&2
+            exit 1
+          fi
+
+      - name: Upload recovered BGP plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/${{ env.TOFU_PLAN_ARTIFACT }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Apply recovered BGP plan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve "${{ env.TOFU_PLAN_ARTIFACT }}"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
