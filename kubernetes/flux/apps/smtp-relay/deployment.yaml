@@ -95,6 +95,10 @@ spec:
                 - CHOWN
                 - DAC_OVERRIDE
                 - FOWNER
+                # The pinned image runs Postfix workers chrooted under the
+                # queue directory; this is the only additional capability
+                # required for that isolation boundary.
+                - SYS_CHROOT
                 - SETGID
                 - SETUID
           ports:
