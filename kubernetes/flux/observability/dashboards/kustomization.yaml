@@ -16,6 +16,7 @@ configMapGenerator:
       - syslog.json
       - sk-flow.json
       - unifi-poller.json
+      - smtp-relay.json
 generatorOptions:
   labels:
     grafana_dashboard: "1"
