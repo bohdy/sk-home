@@ -2,42 +2,78 @@
 
 This stack manages the MikroTik gateway bridge, VLAN interfaces, interface lists, Kubernetes BGP peering, and the declarative IPv4 firewall policy for the homelab gateway.
 
-## Firewall baseline adoption
+## Declarative firewall policy
 
-The first firewall stage adopts verified existing rules without adding a new default-deny policy or reordering the live chains. This keeps the change reviewable and avoids changing behavior before the existing RouterOS policy is represented in OpenTofu state.
+The live baseline was captured by the trusted, read-only inventory run [33643703527](https://github.com/bohdy/sk-home/actions/runs/33643703527) on 2026-09-02. It contained 28 filter rules, two address-list entries, six interface lists, two active WireGuard interfaces, four WireGuard peers, 28 RouterOS services, and three NAT rules. The baseline confirmed `LAN` membership for VLANs 10, 20, and 100 plus the managed physical ports, `WAN` membership for `ether8`, the two WireGuard listeners, the existing IPsec rules, fasttrack, Kubernetes service VIP list, and the active TCP/32400 WAN destination NAT.
 
-The live baseline recorded two active WireGuard interfaces: `wg-roadwarrior` on UDP/51820 with tunnel network `10.1.250.0/24`, and `wireguard1` on UDP/51280 with site-to-site routes for `10.2.0.0/16`. The current peer resources remain outside this issue and are tracked by #302.
+The policy keeps the current OpenTofu resource addresses for the adopted rules. Unsafe broad input exceptions are disabled in place, while the verified site-to-site, known-WAN, and WireGuard forwarding exceptions remain active and are ordered with the new policy. Existing unmanaged RouterOS rules are retained after the managed sequence as a deliberate rollback boundary; they are not used to provide an allow path after the explicit default-deny rules.
 
-The adopted input exceptions are `wireguard` on `wg-roadwarrior`, `SSH LAN IN` on TCP/22, `LAN k3s` from `10.42.0.0/16` to UDP/161, `SNMP LAN IN` on UDP/161 from `LAN`, and `Allow WireGuard roadwarrior` on UDP/51820. The adopted forward exceptions are the existing `10.1.0.0/16` to `10.2.0.0/16` site-to-site path and the `KNOWN WAN` path sourced from the existing `ACCD` address list. The four Kubernetes SNMP exceptions remain separately managed at their existing Terraform resource addresses.
+The input chain is ordered by `routeros_move_items.input_rules` as follows:
 
-The inventory also confirmed the existing RouterOS default input and forward rules, IPsec rules, fasttrack rule, WAN DST-NAT behavior, and interface-list membership. Those rules remain deliberately unmanaged in this adoption stage; the later default-deny design must be based on their verified behavior rather than replacing them implicitly.
+| Order | Rule | Policy |
+| ---: | --- | --- |
+| 1 | `sk-firewall/input/accept-established-related` | Accept established, related, and untracked sessions. |
+| 2 | `sk-firewall/input/drop-invalid` | Drop invalid connection-tracking state. |
+| 3 | `sk-firewall/input/allow-icmp-trusted` | Allow ICMP from the trusted `LAN` interface list. |
+| 4 | `sk-firewall/input/allow-loopback` | Preserve local loopback traffic used by CAPsMAN. |
+| 5 | `sk-firewall/input/allow-dhcp` | Allow trusted VLAN DHCP client traffic from UDP/68 to UDP/67. |
+| 6-7 | `sk-firewall/input/allow-dns-udp`, `sk-firewall/input/allow-dns-tcp` | Allow trusted VLAN clients to use the gateway resolver on port 53. |
+| 8-9 | `sk-firewall/input/allow-ipsec-esp`, `sk-firewall/input/allow-ipsec-handshake` | Preserve IPsec ESP and UDP/500,4500 negotiation. |
+| 10 | `sk-firewall/input/allow-kubernetes-bgp` | Allow TCP/179 only from the six declared Kubernetes node addresses on VLAN 20. |
+| 11 | `sk-firewall/input/allow-snmp-monitoring` | Allow UDP/161 only from the existing `10.0.0.0/8` monitoring boundary. |
+| 12 | `sk-firewall/input/allow-management` | Allow TCP/22 and TCP/443 only from `10.1.100.0/24`. |
+| 13-14 | Verified WireGuard handshakes | Allow UDP/51820 and UDP/51280 only from the `WAN` interface list. |
+| 15 | `sk-firewall/input/drop-unmatched` | Drop every remaining input packet. |
 
-The focused WireGuard contract now owns the two verified listener ports and the peer forwarding boundaries needed by #302: UDP/51820 for `wg-roadwarrior`, UDP/51280 for `wireguard1`, `10.1.250.0/24` from `wg-roadwarrior` to the trusted `LAN` interface list, and `10.2.0.0/16` from `wireguard1` to the trusted `LAN` interface list. This does not create or modify peer keys; peer ownership remains the separate #302 change. The broader default-deny policy remains deferred.
+The forward chain is ordered by `routeros_move_items.forward_rules` as follows:
 
-The peer adoption map covers `SH`, disabled `CK`, `Viktor MacBookPro`, and `ipad` with their verified public keys, allowed addresses, endpoints, and comments. Interface private keys and the existing `SH` preshared key are retained in sensitive provider state through lifecycle ignores; no key values are committed or printed. The temporary import blocks were removed after the dedicated `apply_gateway_wireguard=true` adoption, and the next targeted plan must remain clean.
+| Order | Rule | Policy |
+| ---: | --- | --- |
+| 1 | `sk-firewall/forward/fasttrack-established-related` | Preserve the verified fasttrack behavior for established and related flows. |
+| 2 | `sk-firewall/forward/accept-established-related` | Accept established, related, and untracked sessions. |
+| 3 | `sk-firewall/forward/drop-invalid` | Drop invalid connection-tracking state. |
+| 4-5 | `sk-firewall/forward/allow-ipsec-in`, `sk-firewall/forward/allow-ipsec-out` | Preserve IPsec policy traffic. |
+| 6 | `sk-firewall/forward/allow-trusted-lan-to-wan` | Allow trusted LAN egress to the WAN interface list. |
+| 7-10 | Verified baseline forward rules | Preserve site-to-site `10.1.0.0/16` to `10.2.0.0/16`, `KNOWN WAN` from `ACCD`, and the two exact WireGuard-to-LAN paths. |
+| 11 | `sk-firewall/forward/allow-kubernetes-service-vips` | Allow trusted LAN access to the Kubernetes service VIP address list. |
+| 12-15 | Existing Kubernetes SNMP rules | Preserve the narrow Synology and UniFi request/reply pairs. |
+| 16 | `forward_management` | Empty by default; new inter-VLAN management requires a commented map entry. |
+| 17 | `sk-firewall/forward/allow-wan-dstnat` | Preserve only new WAN flows that matched the active destination NAT rule. |
+| 18 | `sk-firewall/forward/drop-inter-vlan` | Drop unauthorized trusted-LAN to trusted-LAN forwarding. |
+| 19 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
+| 20 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
 
-Capture the live baseline from `main` with the read-only workflow:
+The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32`, and the verified site peer route `10.2.0.0/16`. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
+
+Capture or refresh the live baseline from `main` with the read-only workflow:
 
 ```bash
 gh workflow run routeros-firewall-inventory.yaml --ref main
 ```
 
-The workflow uploads only projected rule, address, interface, route, service, NAT, and WireGuard metadata. It never writes RouterOS state and never includes private keys, preshared keys, passwords, or raw API responses. The resulting artifact is the source for the adoption maps in `firewall_policy`.
+The workflow uploads only projected rule, address, interface, route, service, NAT, and WireGuard metadata. It never writes RouterOS state and never includes private keys, preshared keys, passwords, or raw API responses. Review the artifact against the `firewall_policy` values before applying.
 
-The targeted firewall plan and apply path is mutually exclusive with every other gateway mutation mode:
+Run the mutually exclusive review-only plan first:
 
 ```bash
 gh workflow run terraform.yaml --ref main \
   -f apply_gateway=false \
   -f apply_gateway_snmp=false \
   -f plan_gateway_snmp=false \
-  -f apply_gateway_firewall=true \
+  -f apply_gateway_firewall=false \
+  -f plan_gateway_firewall=true \
   -f apply_gateway_dhcp=false \
   -f apply_gateway_ipfix=false \
   -f apply_cloudflare=false
 ```
 
-The targeted plan imported only the verified baseline exceptions and refused to upload any artifact containing a delete or replacement. The temporary import blocks were removed immediately after that production-gated adoption; the next targeted plan must remain clean. Do not repair the live firewall through an imperative REST workaround.
+The firewall plan targets only the address-list, filter, and ordering resources in this stack, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing the artifact, run the separate production-gated apply dispatch with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`. Re-run the review-only plan afterward and require an empty change set. Do not repair the live firewall through an imperative REST workaround.
+
+### Rollback
+
+If the review plan is wrong, do not apply its artifact. If a live acceptance probe fails after apply, use RouterOS Safe Mode through the VLAN 100 management path or local console and disable only the affected new terminal drop rule identified by its stable `sk-firewall/...` comment. This is a break-glass recovery action, not the normal ownership path: do not use REST, do not change unrelated rules, and record the temporary change. Correct the non-secret `firewall_policy` declaration, run a new reviewed targeted plan, and re-enable the terminal rule through the production-gated apply. A full declaration revert must be a separately reviewed change; the normal no-destroy guard intentionally refuses rollback artifacts that delete managed resources.
+
+Representative acceptance tests must be run from their actual source networks after the policy apply: resolve and reach the gateway DNS service from VLANs 10, 20, and 100; reach TCP/22 and TCP/443 from a VLAN 100 management host; establish both WireGuard listeners from their WAN peers; reach the Kubernetes VIP and both SNMP request/reply paths from the worker VLAN; verify trusted LAN egress and the existing WAN destination-NAT service; and confirm that an unapproved VLAN-to-VLAN connection, a WAN connection without destination NAT, an unknown TCP/179 source, and an unknown WireGuard source are denied. Record only pass/fail, source class, destination class, and the final managed rule order; never record credentials or raw API responses.
 
 ## IPFIX flow collection
 

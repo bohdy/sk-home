@@ -43,10 +43,17 @@ on:
         default: false
         type: boolean
       apply_gateway_firewall:
-        # Firewall adoption gets a dedicated targeted artifact so
+        # Firewall policy gets a dedicated targeted artifact so
         # provider-broken interface, IP-address, and BGP resources are not
         # evaluated together.
-        description: Apply only the reviewed gateway firewall adoption
+        description: Apply only the reviewed gateway firewall policy
+        required: true
+        default: false
+        type: boolean
+      plan_gateway_firewall:
+        # Permit a review-only firewall plan without granting a production
+        # mutation. Applying it remains a separate explicit dispatch.
+        description: Plan only the gateway firewall policy
         required: true
         default: false
         type: boolean
@@ -108,6 +115,7 @@ jobs:
       APPLY_GATEWAY_BGP: ${{ inputs.apply_gateway_bgp || false }}
       PLAN_GATEWAY_BGP: ${{ inputs.plan_gateway_bgp || false }}
       APPLY_GATEWAY_FIREWALL: ${{ inputs.apply_gateway_firewall || false }}
+      PLAN_GATEWAY_FIREWALL: ${{ inputs.plan_gateway_firewall || false }}
       APPLY_GATEWAY_WIREGUARD: ${{ inputs.apply_gateway_wireguard || false }}
       APPLY_GATEWAY_DHCP: ${{ inputs.apply_gateway_dhcp || false }}
       APPLY_GATEWAY_IPFIX: ${{ inputs.apply_gateway_ipfix || false }}
@@ -133,6 +141,7 @@ jobs:
             "${APPLY_GATEWAY_BGP}" \
             "${PLAN_GATEWAY_BGP}" \
             "${APPLY_GATEWAY_FIREWALL}" \
+            "${PLAN_GATEWAY_FIREWALL}" \
             "${APPLY_GATEWAY_WIREGUARD}" \
             "${APPLY_GATEWAY_DHCP}" \
             "${APPLY_GATEWAY_IPFIX}" \
@@ -168,13 +177,13 @@ jobs:
     # Only ordinary main-branch planning may access remote state, provider
     # credentials, or immutable plan artifacts here; targeted modes use their
     # own isolated plan jobs below.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
+    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
     strategy:
       max-parallel: 1
       matrix:
         # Targeted BGP, firewall, and WireGuard dispatches use dedicated jobs
         # and omit the provider-sensitive interface stack from this matrix.
-        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
+        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -373,7 +382,7 @@ jobs:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against
     # main; pull requests and ordinary main pushes remain plan-only.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
@@ -440,7 +449,7 @@ jobs:
     name: Plan gateway SNMP adoption
     # A separate targeted artifact avoids planning the provider-broken IP and
     # BGP updates while retaining reviewable, immutable OpenTofu execution.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -511,7 +520,7 @@ jobs:
 
   gateway-snmp-apply:
     name: Apply gateway SNMP adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-snmp-plan
     environment: production
@@ -576,7 +585,7 @@ jobs:
     name: Plan gateway BGP peers
     # Keep BGP recovery isolated from the provider-sensitive gateway stack and
     # require an explicit review before any worker session is created.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_bgp || inputs.plan_gateway_bgp) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_bgp || inputs.plan_gateway_bgp) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
 
@@ -662,7 +671,7 @@ jobs:
     # The provider cannot write RouterOS 7.23 BGP rows, so this production-gated
     # job first adopts them through the documented compatibility path, then
     # applies only a new immutable plan generated from the adopted state.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-bgp-plan]
     environment: production
@@ -856,10 +865,10 @@ jobs:
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
   gateway-firewall-plan:
-    name: Plan gateway firewall adoption
-    # Keep baseline adoption independent from provider-broken gateway interface,
+    name: Plan gateway firewall policy
+    # Keep firewall policy independent from provider-broken gateway interface,
     # IP-address, and BGP resources while retaining immutable review.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_firewall || inputs.plan_gateway_firewall) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
 
@@ -904,12 +913,42 @@ jobs:
         run: >-
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
           -target=routeros_ip_firewall_addr_list.adopted
+          -target=routeros_ip_firewall_addr_list.kubernetes_bgp_peers
+          -target=routeros_ip_firewall_addr_list.management_sources
+          -target=routeros_ip_firewall_addr_list.kubernetes_service_vips
           -target=routeros_ip_firewall_filter.adopted_input
           -target=routeros_ip_firewall_filter.adopted_forward
+          -target=routeros_ip_firewall_filter.input_accept_established
+          -target=routeros_ip_firewall_filter.input_drop_invalid
+          -target=routeros_ip_firewall_filter.input_allow_icmp_trusted
+          -target=routeros_ip_firewall_filter.input_allow_loopback
+          -target=routeros_ip_firewall_filter.input_allow_dhcp
+          -target=routeros_ip_firewall_filter.input_allow_dns_udp
+          -target=routeros_ip_firewall_filter.input_allow_dns_tcp
+          -target=routeros_ip_firewall_filter.input_allow_ipsec_esp
+          -target=routeros_ip_firewall_filter.input_allow_ipsec_handshake
+          -target=routeros_ip_firewall_filter.input_allow_kubernetes_bgp
+          -target=routeros_ip_firewall_filter.input_allow_snmp_monitoring
+          -target=routeros_ip_firewall_filter.input_allow_management
+          -target=routeros_ip_firewall_filter.input_drop_unmatched
+          -target=routeros_ip_firewall_filter.forward_fasttrack_established
+          -target=routeros_ip_firewall_filter.forward_accept_established
+          -target=routeros_ip_firewall_filter.forward_drop_invalid
+          -target=routeros_ip_firewall_filter.forward_allow_ipsec_in
+          -target=routeros_ip_firewall_filter.forward_allow_ipsec_out
+          -target=routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan
+          -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips
           -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
           -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
           -target=routeros_ip_firewall_filter.allow_unifi_snmp_responses
+          -target=routeros_ip_firewall_filter.forward_management
+          -target=routeros_ip_firewall_filter.forward_allow_wan_dstnat
+          -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
+          -target=routeros_ip_firewall_filter.forward_drop_wan_inbound
+          -target=routeros_ip_firewall_filter.forward_drop_unmatched
+          -target=routeros_move_items.input_rules
+          -target=routeros_move_items.forward_rules
           -out=firewall-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -942,8 +981,8 @@ jobs:
           retention-days: 7
 
   gateway-firewall-apply:
-    name: Apply gateway firewall adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    name: Apply gateway firewall policy
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-firewall-plan]
     environment: production
@@ -1008,7 +1047,7 @@ jobs:
     name: Plan gateway WireGuard adoption
     # Keep peer adoption isolated from provider-broken gateway interface,
     # address, and BGP resources while retaining immutable no-destroy review.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_wireguard && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_wireguard && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
 
@@ -1087,7 +1126,7 @@ jobs:
 
   gateway-wireguard-apply:
     name: Apply gateway WireGuard adoption
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_wireguard && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_wireguard && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-wireguard-plan]
     environment: production
@@ -1152,7 +1191,7 @@ jobs:
     name: Plan gateway DHCP
     # Keep the dedicated DHCP plan isolated from the provider-blocked interface
     # and BGP stack while preserving immutable review before production apply.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -1205,7 +1244,7 @@ jobs:
 
   gateway-dhcp-apply:
     name: Apply gateway DHCP
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-dhcp-plan
     environment: production
@@ -1261,7 +1300,7 @@ jobs:
     # A dedicated targeted artifact adopts only the traffic-flow resources,
     # isolating them from the provider-broken interface and BGP stack while
     # keeping immutable reviewed execution and full mutual exclusion.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
 
     env:
@@ -1328,7 +1367,7 @@ jobs:
 
   gateway-ipfix-apply:
     name: Apply gateway IPFIX resources
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: gateway-ipfix-plan
     environment: production
@@ -1393,7 +1432,7 @@ jobs:
     name: Apply reviewed Cloudflare plan
     # External publication is opt-in and mutually exclusive with every gateway
     # mutation path so one approval always has one operational blast radius.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix
     runs-on: self-hosted
     needs: tofu-plan
     environment: production
