@@ -12,6 +12,7 @@ resources:
   - sender-access-configmap.yaml
   - smtpd-command-filter-configmap.yaml
   - logrotate-configmap.yaml
+  - rsyslog-configmap.yaml
   - deployment.yaml
   - network-policy.yaml
   - vm-service-scrape.yaml

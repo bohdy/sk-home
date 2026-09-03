@@ -250,6 +250,10 @@ spec:
               mountPath: /etc/logrotate.d/smtp-relay
               subPath: smtp-relay
               readOnly: true
+            - name: rsyslog
+              mountPath: /etc/rsyslog.d/smtp-relay.conf
+              subPath: smtp-relay.conf
+              readOnly: true
         - name: postfix-exporter
           image: ghcr.io/hsn723/postfix_exporter:0.20.4@sha256:f3abc3f8b892f4f3afc84ce2af4fe06ac6ba018d4f5a78a8196dfce907f844cb
           imagePullPolicy: IfNotPresent
@@ -367,4 +371,8 @@ spec:
         - name: logrotate
           configMap:
             name: smtp-relay-logrotate
+            defaultMode: 0444
+        - name: rsyslog
+          configMap:
+            name: smtp-relay-rsyslog
             defaultMode: 0444
