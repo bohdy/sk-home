@@ -13,7 +13,7 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
-      "description": "The exporter is healthy only when its anonymized mail log is readable and the Postfix queue probe is available.",
+      "description": "VictoriaMetrics' scrape-generated target health for the relay exporter.",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -72,7 +72,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "max(postfix_up{path=\"/var/log/mail.log\"})",
+          "expr": "max by (cluster, site) (up{job=\"smtp-relay-metrics\"}) or vector(0)",
           "instant": true,
           "legendFormat": "exporter",
           "refId": "A"
