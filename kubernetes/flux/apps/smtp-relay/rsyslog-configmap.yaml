@@ -1,0 +1,15 @@
+# Keep an anonymized, ephemeral mail log for the Postfix exporter. The parent
+# rsyslog configuration sends the same sanitized message to stdout, and this
+# file provides the local input that the exporter needs for aggregate metrics.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smtp-relay-rsyslog
+  namespace: smtp-relay
+data:
+  smtp-relay.conf: |
+    # The parent configuration has already removed health probes and applied
+    # the paranoid email anonymizer before this include is evaluated.
+    if $syslogfacility-text == 'mail' then {
+      action(type="omfile" file="/var/log/mail.log" template="plain")
+    }
