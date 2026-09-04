@@ -285,9 +285,9 @@ variable "firewall_policy" {
       wireguard_roadwarrior_to_trusted_lan = {
         action  = "accept"
         comment = "sk-firewall/forward/allow-wireguard-roadwarrior-to-trusted-lan"
-        # Only the two verified, active peer addresses can cross into trusted
-        # LANs; adding another peer requires an explicit policy review.
-        src_address        = "10.1.250.10/32,10.1.250.11/32"
+        # Only the two verified, contiguous active peer addresses can cross
+        # into trusted LANs; RouterOS accepts this exact pair as one /31.
+        src_address        = "10.1.250.10/31"
         in_interface       = "wg-roadwarrior"
         out_interface_list = "LAN"
       }
