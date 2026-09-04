@@ -132,12 +132,27 @@ variable "snmp_v3_priv_password" {
   }
 }
 
-# Keep the first firewall migration focused on adopting verified live rules.
-# New default-deny policy should not be inferred from names or added until the
-# adopted baseline has a clean no-destroy plan and live acceptance evidence.
+# Keep all non-secret firewall decisions in one structured object so the
+# intended exceptions and the default-deny boundaries can be reviewed together.
 variable "firewall_policy" {
-  description = "Verified non-secret RouterOS firewall rules to adopt."
+  description = "Non-secret RouterOS input and forward firewall policy."
   type = object({
+    trusted_interface_list           = optional(string, "LAN")
+    wan_interface_list               = optional(string, "WAN")
+    kubernetes_bgp_interface         = optional(string, "vlan20")
+    kubernetes_bgp_peer_address_list = optional(string, "sk-kubernetes-bgp-peers")
+    management_address_list          = optional(string, "sk-router-management-sources")
+    management_ports                 = optional(set(string), ["22", "443"])
+    management_sources = optional(map(object({
+      address = string
+      comment = string
+      })), {
+      vlan100 = {
+        address = "10.1.100.0/24"
+        comment = "RouterOS management sources on VLAN 100"
+      }
+    })
+    snmp_source_cidr = optional(string, "10.0.0.0/8")
     address_lists = map(object({
       list    = string
       address = string
@@ -146,8 +161,10 @@ variable "firewall_policy" {
     input_rules = map(object({
       action               = string
       comment              = optional(string, null)
+      disabled             = optional(bool, false)
       connection_state     = optional(string, null)
       connection_nat_state = optional(string, null)
+      ipsec_policy         = optional(string, null)
       src_address          = optional(string, null)
       src_address_list     = optional(string, null)
       dst_address          = optional(string, null)
@@ -163,8 +180,10 @@ variable "firewall_policy" {
     forward_rules = map(object({
       action               = string
       comment              = optional(string, null)
+      disabled             = optional(bool, false)
       connection_state     = optional(string, null)
       connection_nat_state = optional(string, null)
+      ipsec_policy         = optional(string, null)
       src_address          = optional(string, null)
       src_address_list     = optional(string, null)
       dst_address          = optional(string, null)
@@ -177,6 +196,19 @@ variable "firewall_policy" {
       out_interface        = optional(string, null)
       out_interface_list   = optional(string, null)
     }))
+    forward_management_rules = optional(map(object({
+      comment            = string
+      disabled           = optional(bool, false)
+      src_address        = optional(string, null)
+      src_address_list   = optional(string, null)
+      dst_address        = optional(string, null)
+      dst_address_list   = optional(string, null)
+      protocol           = optional(string, null)
+      src_port           = optional(string, null)
+      dst_port           = optional(string, null)
+      in_interface_list  = optional(string, null)
+      out_interface_list = optional(string, null)
+    })), {})
   })
   default = {
     # The public VPN endpoint is already used by the live KNOWN WAN rule; keep
@@ -190,13 +222,18 @@ variable "firewall_policy" {
     }
     input_rules = {
       wireguard_roadwarrior = {
-        action       = "accept"
-        comment      = "wireguard"
-        in_interface = "wg-roadwarrior"
+        # Reuse this adopted state address for the verified WAN handshake, so
+        # the unsafe broad input rule is narrowed without a destroy.
+        action            = "accept"
+        comment           = "wireguard"
+        protocol          = "udp"
+        dst_port          = "51820"
+        in_interface_list = "WAN"
       }
       ssh_lan = {
         action            = "accept"
         comment           = "SSH LAN IN"
+        disabled          = true
         protocol          = "tcp"
         dst_port          = "22"
         in_interface_list = "LAN"
@@ -204,6 +241,7 @@ variable "firewall_policy" {
       kubernetes_snmp = {
         action      = "accept"
         comment     = "LAN k3s"
+        disabled    = true
         src_address = "10.42.0.0/16"
         protocol    = "udp"
         dst_port    = "161"
@@ -211,6 +249,7 @@ variable "firewall_policy" {
       snmp_lan = {
         action            = "accept"
         comment           = "SNMP LAN IN"
+        disabled          = true
         protocol          = "udp"
         dst_port          = "161"
         in_interface_list = "LAN"
@@ -218,6 +257,7 @@ variable "firewall_policy" {
       wireguard_handshake = {
         action   = "accept"
         comment  = "Allow WireGuard roadwarrior"
+        disabled = true
         protocol = "udp"
         dst_port = "51820"
       }
@@ -232,6 +272,7 @@ variable "firewall_policy" {
     forward_rules = {
       site_to_site = {
         action      = "accept"
+        comment     = "sk-firewall/forward/allow-site-to-site"
         src_address = "10.1.0.0/16"
         dst_address = "10.2.0.0/16"
       }
@@ -242,15 +283,17 @@ variable "firewall_policy" {
         in_interface_list = "WAN"
       }
       wireguard_roadwarrior_to_trusted_lan = {
-        action             = "accept"
-        comment            = "Allow WireGuard roadwarrior to trusted LAN"
-        src_address        = "10.1.250.0/24"
+        action  = "accept"
+        comment = "sk-firewall/forward/allow-wireguard-roadwarrior-to-trusted-lan"
+        # Only the two verified, active peer addresses can cross into trusted
+        # LANs; adding another peer requires an explicit policy review.
+        src_address        = "10.1.250.10/32,10.1.250.11/32"
         in_interface       = "wg-roadwarrior"
         out_interface_list = "LAN"
       }
       wireguard_site_to_site_to_trusted_lan = {
         action             = "accept"
-        comment            = "Allow WireGuard site-to-site to trusted LAN"
+        comment            = "sk-firewall/forward/allow-wireguard-site-to-site-to-trusted-lan"
         src_address        = "10.2.0.0/16"
         in_interface       = "wireguard1"
         out_interface_list = "LAN"

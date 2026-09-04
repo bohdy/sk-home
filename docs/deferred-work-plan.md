@@ -11,7 +11,7 @@ This is the execution checklist for work intentionally deferred after the first 
 ## Priority 0
 
 - [ ] Resolve the RouterOS provider incompatibility affecting the worker BGP peer, then apply and verify the declarative peer through the production-gated workflow; do not use an imperative REST workaround. Track implementation in [issue #276](https://github.com/bohdy/sk-home/issues/276).
-- [ ] Complete the focused WireGuard firewall contract, then adopt and verify declarative WireGuard peers in [issue #302](https://github.com/bohdy/sk-home/issues/302). The broader default-deny input and forward policy remains a later stage of [issue #301](https://github.com/bohdy/sk-home/issues/301).
+- [ ] Apply and live-validate the declarative RouterOS firewall policy from [issue #301](https://github.com/bohdy/sk-home/issues/301), including the representative allow and deny paths documented in the gateway stack README, before adopting and verifying declarative WireGuard peers in [issue #302](https://github.com/bohdy/sk-home/issues/302).
 - [x] Separate untrusted pull-request OpenTofu validation from trusted production planning and applying so PRs receive no infrastructure credentials and sensitive binary plans are not retained as ordinary artifacts.
 
 ## Priority 1

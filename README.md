@@ -134,20 +134,21 @@ gh workflow run routeros-firewall-inventory.yaml --ref main
 
 The inventory workflow runs only from `main`, uses Bitwarden-backed RouterOS credentials, projects only non-secret metadata, and uploads no private keys, preshared keys, passwords, or raw API responses. Review its artifact before changing the gateway firewall policy or dispatching the targeted firewall apply.
 
-Apply the reviewed firewall policy through its dedicated immutable artifact path:
+Review the no-destroy firewall plan through its dedicated immutable artifact path:
 
 ```bash
 gh workflow run terraform.yaml --ref main \
   -f apply_gateway=false \
   -f apply_gateway_snmp=false \
   -f plan_gateway_snmp=false \
-  -f apply_gateway_firewall=true \
+  -f apply_gateway_firewall=false \
+  -f plan_gateway_firewall=true \
   -f apply_gateway_dhcp=false \
   -f apply_gateway_ipfix=false \
   -f apply_cloudflare=false
 ```
 
-The first targeted firewall artifact adopted only verified existing rules and failed closed if it contained a delete or replacement. Its temporary import blocks were removed after the adoption apply and a clean follow-up plan is required. Broad default-deny policy and declarative WireGuard peers remain separate follow-up stages.
+The firewall plan targets only the gateway address-list, filter, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The policy details and representative acceptance matrix are documented in `terraform/network/gw/interfaces/README.md`.
 
 Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present:
 
@@ -187,7 +188,7 @@ Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access config
 gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=true
 ```
 
-The six manual mutation inputs and the dedicated SNMP plan-only input are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
+All manual mutation and plan-only inputs are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
 
 The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired or unreachable gateway certificate requires the narrowly scoped bootstrap option; that one-time path uses the gateway's private HTTP REST endpoint, forces the stack-owned leaf import to displace ambiguous legacy certificate names, renames the imported leaf by its public fingerprint, and verifies the bound leaf. The installer writes each temporary file through the RouterOS REST execute endpoint because this device rejects file contents in the REST file-create body; it uploads only the leaf's immediate issuer because RouterOS also rejects the full multi-certificate issuer bundle, while client trust stores provide the remaining root chain. Normal and scheduled runs use HTTPS by DNS name. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection:
 
