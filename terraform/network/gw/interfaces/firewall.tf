@@ -430,7 +430,10 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_synology_snmp" {
   dst_address = "10.1.100.10"
   protocol    = "udp"
   dst_port    = "161"
-  comment     = "Allow Kubernetes worker VLAN to poll Synology SNMP"
+  # Retain the legacy provider placement attribute so this existing rule is
+  # updated in place; routeros_move_items owns the final chain order.
+  place_before = 0
+  comment      = "Allow Kubernetes worker VLAN to poll Synology SNMP"
 }
 
 resource "routeros_ip_firewall_filter" "allow_synology_snmp_responses" {
@@ -441,7 +444,10 @@ resource "routeros_ip_firewall_filter" "allow_synology_snmp_responses" {
   dst_address = "10.1.20.0/24"
   protocol    = "udp"
   src_port    = "161"
-  comment     = "Allow Synology SNMP replies to Kubernetes worker VLAN"
+  # Keep the state shape stable during the move-items migration and avoid a
+  # provider-forced replacement of this existing exception.
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id
+  comment      = "Allow Synology SNMP replies to Kubernetes worker VLAN"
 }
 
 resource "routeros_ip_firewall_filter" "allow_kubernetes_unifi_snmp" {
@@ -452,7 +458,10 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_unifi_snmp" {
   dst_address = "10.1.102.0/24"
   protocol    = "udp"
   dst_port    = "161"
-  comment     = "Allow Kubernetes worker VLAN to poll UniFi SNMP"
+  # Keep the state shape stable during the move-items migration and avoid a
+  # provider-forced replacement of this existing exception.
+  place_before = routeros_ip_firewall_filter.allow_synology_snmp_responses.id
+  comment      = "Allow Kubernetes worker VLAN to poll UniFi SNMP"
 }
 
 resource "routeros_ip_firewall_filter" "allow_unifi_snmp_responses" {
@@ -463,7 +472,10 @@ resource "routeros_ip_firewall_filter" "allow_unifi_snmp_responses" {
   dst_address = "10.1.20.0/24"
   protocol    = "udp"
   src_port    = "161"
-  comment     = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
+  # Keep the state shape stable during the move-items migration and avoid a
+  # provider-forced replacement of this existing exception.
+  place_before = routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id
+  comment      = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
 }
 
 # Management forwarding exceptions stay empty by default. Every entry must
