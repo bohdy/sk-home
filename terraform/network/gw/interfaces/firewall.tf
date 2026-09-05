@@ -86,7 +86,10 @@ locals {
   ]
   forward_unmanaged_rule_ids = [
     for rule in data.routeros_ip_firewall.forward_rules.rules : rule.id
-    if !contains(local.existing_forward_rule_ids, rule.id) &&
+    # RouterOS exposes its fasttrack counter dummy as a dynamic row that
+    # cannot be moved; keep it in place and anchor after the first movable row.
+    if !try(rule.dynamic, false) &&
+    !contains(local.existing_forward_rule_ids, rule.id) &&
     !contains(local.firewall_managed_comments, try(rule.comment, ""))
   ]
   input_anchor   = try(local.input_unmanaged_rule_ids[0], null)
@@ -171,6 +174,17 @@ resource "routeros_ip_firewall_addr_list" "management_sources" {
   comment = each.value.comment
 }
 
+# Keep the two active road-warrior addresses explicit without relying on the
+# provider's fragile CIDR-range serialization for RouterOS firewall fields.
+resource "routeros_ip_firewall_addr_list" "wireguard_roadwarrior_peers" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.wireguard_roadwarrior_peer_addresses
+
+  list    = var.firewall_policy.wireguard_roadwarrior_address_list
+  address = each.value
+  comment = "WireGuard road-warrior peer ${each.value}"
+}
+
 # Map-driven adoption keeps the current resource addresses stable while the
 # policy transitions from the live baseline to the explicit ordered contract.
 resource "routeros_ip_firewall_filter" "adopted_input" {
@@ -220,7 +234,10 @@ resource "routeros_ip_firewall_filter" "adopted_forward" {
   out_interface        = each.value.out_interface
   out_interface_list   = each.value.out_interface_list
 
-  depends_on = [routeros_ip_firewall_addr_list.adopted]
+  depends_on = [
+    routeros_ip_firewall_addr_list.adopted,
+    routeros_ip_firewall_addr_list.wireguard_roadwarrior_peers,
+  ]
 }
 
 # Input policy starts with connection tracking and service-specific allows so
@@ -426,27 +443,31 @@ resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
 # VIP. Keep this path narrow: only the two verified road-warrior addresses may
 # query UDP/TCP 53, and all other WireGuard-to-VLAN traffic remains denied.
 resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_udp" {
-  provider     = routeros.gw
-  action       = "accept"
-  chain        = "forward"
-  src_address  = var.firewall_policy.wireguard_dns_source_cidr
-  dst_address  = var.firewall_policy.wireguard_dns_service_vip
-  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
-  protocol     = "udp"
-  dst_port     = "53"
-  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp"
+  provider         = routeros.gw
+  action           = "accept"
+  chain            = "forward"
+  src_address_list = var.firewall_policy.wireguard_roadwarrior_address_list
+  dst_address      = var.firewall_policy.wireguard_dns_service_vip
+  in_interface     = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol         = "udp"
+  dst_port         = "53"
+  comment          = "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp"
+
+  depends_on = [routeros_ip_firewall_addr_list.wireguard_roadwarrior_peers]
 }
 
 resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_tcp" {
-  provider     = routeros.gw
-  action       = "accept"
-  chain        = "forward"
-  src_address  = var.firewall_policy.wireguard_dns_source_cidr
-  dst_address  = var.firewall_policy.wireguard_dns_service_vip
-  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
-  protocol     = "tcp"
-  dst_port     = "53"
-  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
+  provider         = routeros.gw
+  action           = "accept"
+  chain            = "forward"
+  src_address_list = var.firewall_policy.wireguard_roadwarrior_address_list
+  dst_address      = var.firewall_policy.wireguard_dns_service_vip
+  in_interface     = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol         = "tcp"
+  dst_port         = "53"
+  comment          = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
+
+  depends_on = [routeros_ip_firewall_addr_list.wireguard_roadwarrior_peers]
 }
 
 # The printer's SMTP relay is a routed Kubernetes VIP. Keep this exception
@@ -558,9 +579,12 @@ resource "routeros_ip_firewall_filter" "forward_allow_wan_dstnat" {
 }
 
 resource "routeros_ip_firewall_filter" "forward_drop_inter_vlan" {
+  # Keep the default-deny boundary enabled; its position after the explicit
+  # service exceptions is what permits approved DNS and SMTP paths.
   provider           = routeros.gw
   action             = "drop"
   chain              = "forward"
+  disabled           = false
   in_interface_list  = var.firewall_policy.trusted_interface_list
   out_interface_list = var.firewall_policy.trusted_interface_list
   comment            = "sk-firewall/forward/drop-inter-vlan"
@@ -628,6 +652,7 @@ resource "routeros_move_items" "input_rules" {
 
   depends_on = [
     routeros_ip_firewall_addr_list.kubernetes_bgp_peers,
+    routeros_ip_firewall_addr_list.wireguard_roadwarrior_peers,
     routeros_ip_firewall_addr_list.management_sources,
     routeros_ip_firewall_filter.adopted_input,
     routeros_ip_firewall_filter.input_accept_established,
@@ -691,6 +716,7 @@ resource "routeros_move_items" "forward_rules" {
   depends_on = [
     routeros_ip_firewall_addr_list.adopted,
     routeros_ip_firewall_addr_list.kubernetes_bgp_peers,
+    routeros_ip_firewall_addr_list.wireguard_roadwarrior_peers,
     routeros_ip_firewall_filter.adopted_forward,
     routeros_ip_firewall_filter.forward_fasttrack_established,
     routeros_ip_firewall_filter.forward_accept_established,

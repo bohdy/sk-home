@@ -137,18 +137,22 @@ variable "snmp_v3_priv_password" {
 variable "firewall_policy" {
   description = "Non-secret RouterOS input and forward firewall policy."
   type = object({
-    trusted_interface_list           = optional(string, "LAN")
-    wan_interface_list               = optional(string, "WAN")
-    kubernetes_bgp_interface         = optional(string, "vlan20")
-    kubernetes_bgp_peer_address_list = optional(string, "sk-kubernetes-bgp-peers")
-    wireguard_roadwarrior_interface  = optional(string, "wg-roadwarrior")
-    wireguard_dns_source_cidr        = optional(string, "10.1.250.10/31")
-    wireguard_dns_service_vip        = optional(string, "10.1.30.53")
-    smtp_relay_source_cidr           = optional(string, "10.1.10.250/32")
-    smtp_relay_service_vip           = optional(string, "10.1.30.58")
-    smtp_relay_port                  = optional(string, "587")
-    management_address_list          = optional(string, "sk-router-management-sources")
-    management_ports                 = optional(set(string), ["22", "443"])
+    trusted_interface_list             = optional(string, "LAN")
+    wan_interface_list                 = optional(string, "WAN")
+    kubernetes_bgp_interface           = optional(string, "vlan20")
+    kubernetes_bgp_peer_address_list   = optional(string, "sk-kubernetes-bgp-peers")
+    wireguard_roadwarrior_interface    = optional(string, "wg-roadwarrior")
+    wireguard_roadwarrior_address_list = optional(string, "sk-wireguard-roadwarrior-peers")
+    wireguard_roadwarrior_peer_addresses = optional(set(string), [
+      "10.1.250.10",
+      "10.1.250.11",
+    ])
+    wireguard_dns_service_vip = optional(string, "10.1.30.53")
+    smtp_relay_source_cidr    = optional(string, "10.1.10.250")
+    smtp_relay_service_vip    = optional(string, "10.1.30.58")
+    smtp_relay_port           = optional(string, "587")
+    management_address_list   = optional(string, "sk-router-management-sources")
+    management_ports          = optional(set(string), ["22", "443"])
     management_sources = optional(map(object({
       address = string
       comment = string
@@ -227,6 +231,18 @@ variable "firewall_policy" {
       }
     }
     input_rules = {
+      github_actions_runner_https = {
+        # Keep the trusted self-hosted runner's recovery path narrow: it may
+        # reach only the gateway HTTPS API, not arbitrary router services or
+        # forwarded hosts on the other VLANs.
+        action       = "accept"
+        comment      = "sk-firewall/input/allow-github-actions-runner-https"
+        src_address  = "10.1.20.200"
+        dst_address  = "10.1.100.1"
+        in_interface = "vlan20"
+        protocol     = "tcp"
+        dst_port     = "443"
+      }
       wireguard_roadwarrior = {
         # Reuse this adopted state address for the verified WAN handshake, so
         # the unsafe broad input rule is narrowed without a destroy.
@@ -291,9 +307,9 @@ variable "firewall_policy" {
       wireguard_roadwarrior_to_trusted_lan = {
         action  = "accept"
         comment = "sk-firewall/forward/allow-wireguard-roadwarrior-to-trusted-lan"
-        # Only the two verified, contiguous active peer addresses can cross
-        # into trusted LANs; RouterOS accepts this exact pair as one /31.
-        src_address        = "10.1.250.10/31"
+        # Match only the two verified active peer addresses through a managed
+        # address list so the provider never serializes a malformed range.
+        src_address_list   = "sk-wireguard-roadwarrior-peers"
         in_interface       = "wg-roadwarrior"
         out_interface_list = "LAN"
       }

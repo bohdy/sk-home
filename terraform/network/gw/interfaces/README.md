@@ -8,6 +8,8 @@ The live baseline was captured by the trusted, read-only inventory run [33643703
 
 The policy keeps the current OpenTofu resource addresses for the adopted rules. Unsafe broad input exceptions are disabled in place, while the verified site-to-site, known-WAN, and WireGuard forwarding exceptions remain active and are ordered with the new policy. Existing unmanaged RouterOS rules are retained after the managed sequence as a deliberate rollback boundary; they are not used to provide an allow path after the explicit default-deny rules.
 
+The forward ordering logic leaves RouterOS's dynamic fasttrack-counter dummy row in place because RouterOS does not permit that row to be moved; the managed sequence anchors after the first movable legacy rule.
+
 The input chain is ordered by `routeros_move_items.input_rules` as follows:
 
 | Order | Rule | Policy |
@@ -22,8 +24,9 @@ The input chain is ordered by `routeros_move_items.input_rules` as follows:
 | 10 | `sk-firewall/input/allow-kubernetes-bgp` | Allow TCP/179 only from the six declared Kubernetes node addresses on VLAN 20. |
 | 11 | `sk-firewall/input/allow-snmp-monitoring` | Allow UDP/161 only from the existing `10.0.0.0/8` monitoring boundary. |
 | 12 | `sk-firewall/input/allow-management` | Allow TCP/22 and TCP/443 only from `10.1.100.0/24`. |
-| 13-14 | Verified WireGuard handshakes | Allow UDP/51820 and UDP/51280 only from the `WAN` interface list. |
-| 15 | `sk-firewall/input/drop-unmatched` | Drop every remaining input packet. |
+| 13 | `sk-firewall/input/allow-github-actions-runner-https` | Allow TCP/443 only from runner `10.1.20.200/32` to gateway `10.1.100.1` on VLAN 20. |
+| 14-15 | Verified WireGuard handshakes | Allow UDP/51820 and UDP/51280 only from the `WAN` interface list. |
+| 16 | `sk-firewall/input/drop-unmatched` | Drop every remaining input packet. |
 
 The forward chain is ordered by `routeros_move_items.forward_rules` as follows:
 
@@ -45,7 +48,7 @@ The forward chain is ordered by `routeros_move_items.forward_rules` as follows:
 | 22 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
 | 23 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
 
-The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32`, represented for RouterOS firewall matching as the exact contiguous `10.1.250.10/31` range, and the verified site peer route `10.2.0.0/16`. The road-warrior DNS exception is limited to UDP/TCP 53 at `10.1.30.53`; it does not grant general remote access to Kubernetes or other VLANs. The printer exception is limited to TCP/587 from `10.1.10.250/32` to SMTP relay VIP `10.1.30.58`; it does not grant the printer general access to other VLAN services. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
+The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32` through the managed `sk-wireguard-roadwarrior-peers` address list, plus the verified site peer route `10.2.0.0/16`. The road-warrior DNS exception is limited to UDP/TCP 53 at `10.1.30.53`; it does not grant general remote access to Kubernetes or other VLANs. The printer exception is limited to TCP/587 from `10.1.10.250/32` to SMTP relay VIP `10.1.30.58`; it does not grant the printer general access to other VLAN services. The self-hosted GitHub Actions runner exception is limited to TCP/443 from `10.1.20.200/32` to the gateway address `10.1.100.1`; it is an input-management path and does not bypass the inter-VLAN forwarding deny. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
 
 Capture or refresh the live baseline from `main` with the read-only workflow:
 
@@ -74,6 +77,8 @@ The firewall plan targets only the address-list, filter, and ordering resources 
 ### Rollback
 
 If the review plan is wrong, do not apply its artifact. If a live acceptance probe fails after apply, use RouterOS Safe Mode through the VLAN 100 management path or local console and disable only the affected new terminal drop rule identified by its stable `sk-firewall/...` comment. This is a break-glass recovery action, not the normal ownership path: do not use REST, do not change unrelated rules, and record the temporary change. Correct the non-secret `firewall_policy` declaration, run a new reviewed targeted plan, and re-enable the terminal rule through the production-gated apply. A full declaration revert must be a separately reviewed change; the normal no-destroy guard intentionally refuses rollback artifacts that delete managed resources.
+
+On 2026-09-05, a partial firewall apply temporarily blocked the self-hosted runner's gateway API path. A narrowly scoped `10.1.20.200/32` to `10.1.100.1:443` input rule was added through the gateway API, verified before the input terminal drop, and immediately adopted into OpenTofu state; this records the exceptional recovery and is not an alternative to the reviewed workflow.
 
 Representative acceptance tests must be run from their actual source networks after the policy apply: resolve and reach the gateway DNS service from VLANs 10, 20, and 100; resolve `10.1.30.53` over both UDP and TCP 53 from a verified road-warrior client; reach TCP/22 and TCP/443 from a VLAN 100 management host; establish both WireGuard listeners from their WAN peers; reach the Kubernetes VIP and both SNMP request/reply paths from the worker VLAN; submit SMTP over TCP/587 from printer `10.1.10.250` to relay VIP `10.1.30.58`; verify trusted LAN egress and the existing WAN destination-NAT service; and confirm that other printer-to-VLAN traffic, SMTP relay access from an unapproved source, an unapproved VLAN-to-VLAN connection, a road-warrior connection to a non-DNS Kubernetes VIP, a WAN connection without destination NAT, an unknown TCP/179 source, and an unknown WireGuard source are denied. Record only pass/fail, source class, destination class, and the final managed rule order; never record credentials or raw API responses.
 
