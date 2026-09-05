@@ -34,7 +34,7 @@ Use the repo-local `sk-home-orchestrator` skill for scoped repository changes th
 
 The orchestrator limits automatic repair to three cycles and keeps detailed role reports in Codex threads. It prepares a draft pull request only after the required reviews and repository checks pass. For infrastructure work, it preserves the existing firewall inventory, immutable-plan, and GitHub `production` approval boundaries. It can dispatch an existing production workflow only after the change is merged to `main`, the evidence matches that merge, and the user gives explicit in-chat approval.
 
-Every task starts from a fresh branch based on the exact current `origin/main` commit. The orchestrator MUST use GitHub MCP for GitHub state and operations and Context7 MCP for documentation. It stops when either required MCP dependency or the required Context7 documentation cannot be verified.
+Every task starts from a fresh branch based on the exact current remote `main` commit reported by GitHub MCP. The orchestrator MUST use GitHub MCP for GitHub state and remote operations, including branch, commit, push, pull request, review, issue, and workflow actions; those MCP calls may run outside the devcontainer. If the verified remote commit is not already available in the local checkout, or if MCP cannot publish the exact reviewed tree and required signed commit, the orchestrator stops instead of using stale state or reconstructing an unsigned commit. It MUST use Context7 MCP for documentation. It stops when either required MCP dependency or the required Context7 documentation cannot be verified.
 
 ## Active OpenTofu Stacks
 
@@ -48,7 +48,7 @@ The repository keeps the historical `terraform/` directory name and existing `te
 
 ## Local Development
 
-The repository devcontainer is the mandatory environment for all repository work. Run inspection, file edits, Git operations, local development, OpenTofu, workflow testing, and validation inside it. Use the host only to start or enter the devcontainer. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml`, rebuild or reopen the devcontainer, and retry there.
+The repository devcontainer is the mandatory environment for app/code work. Run inspection, file edits, local development, OpenTofu, workflow testing, validation, and local Git preparation inside it. Use GitHub MCP for all remote GitHub operations; those MCP calls may run outside the devcontainer. Use the host only to start or enter the devcontainer for non-MCP work. If a required app or validation tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml`, rebuild or reopen the devcontainer, and retry there.
 
 ### Prerequisites
 
@@ -64,7 +64,7 @@ Open the repository in the devcontainer before running OpenTofu, `act`, or repos
 devcontainer up --workspace-folder .
 ```
 
-The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository or workflow tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead.
+The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository, application, or workflow-validation tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead. Use GitHub MCP for remote GitHub operations.
 
 ### Environment Setup
 
@@ -90,12 +90,12 @@ act --workflows .github/workflows/terraform-pr-validation.yaml \
 Run the trusted workflow locally only when testing Bitwarden-backed planning behavior:
 
 ```bash
-# Load environment variables and run the trusted OpenTofu workflow
-source .env && act --workflows .github/workflows/terraform.yaml \
+# Load the ignored .env file as act secrets without putting secret values in process arguments
+act --workflows .github/workflows/terraform.yaml \
   -P self-hosted=node:18-bookworm \
   -P ubuntu-latest=node:24-bookworm \
   --container-architecture linux/amd64 \
-  --secret BWS_ACCESS_TOKEN="$BWS_ACCESS_TOKEN"
+  --secret-file .env
 ```
 
 **Important notes:**
@@ -126,83 +126,117 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's and UniFi's public DNS, HTTPS tunnel routes, exact Google identity policies, and the terminal `404` fallback. Both applications rely on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
 
-The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the trusted GitHub Actions Bitwarden integration, manually dispatch the workflow from `main` with the explicit gateway flag:
+The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the trusted GitHub Actions Bitwarden integration, use the GitHub MCP workflow-dispatch operation from `main` with this exact payload. If the connected MCP integration does not expose workflow dispatch, stop instead of using GitHub CLI or a raw API call:
 
-```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=false
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "true"
+  apply_gateway_snmp: "false"
+  plan_gateway_snmp: "false"
+  apply_gateway_dhcp: "false"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "false"
 ```
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same trusted run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
 
-Capture the read-only RouterOS firewall baseline before enabling or reviewing the firewall policy:
-
-```bash
-gh workflow run routeros-firewall-inventory.yaml --ref main
-```
+Capture the read-only RouterOS firewall baseline before enabling or reviewing the firewall policy with the GitHub MCP workflow-dispatch operation using `routeros-firewall-inventory.yaml` and `ref: main`.
 
 The inventory workflow runs only from `main`, uses Bitwarden-backed RouterOS credentials, projects only non-secret metadata, and uploads no private keys, preshared keys, passwords, or raw API responses. Review its artifact before changing the gateway firewall policy or dispatching the targeted firewall apply.
 
-Review the no-destroy firewall plan through its dedicated immutable artifact path:
+Review the no-destroy firewall plan through its dedicated immutable artifact path with the GitHub MCP workflow-dispatch operation using this payload:
 
-```bash
-gh workflow run terraform.yaml --ref main \
-  -f apply_gateway=false \
-  -f apply_gateway_snmp=false \
-  -f plan_gateway_snmp=false \
-  -f apply_gateway_firewall=false \
-  -f plan_gateway_firewall=true \
-  -f apply_gateway_dhcp=false \
-  -f apply_gateway_ipfix=false \
-  -f apply_cloudflare=false
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "false"
+  apply_gateway_snmp: "false"
+  plan_gateway_snmp: "false"
+  apply_gateway_firewall: "false"
+  plan_gateway_firewall: "true"
+  apply_gateway_dhcp: "false"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "false"
 ```
 
-The firewall plan targets only the gateway address-list, filter, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The policy details and representative acceptance matrix are documented in `terraform/network/gw/interfaces/README.md`.
+The firewall plan targets only the gateway address-list, filter, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, use the GitHub MCP workflow-dispatch operation with the same payload but `apply_gateway_firewall: "true"` and `plan_gateway_firewall: "false"`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The policy details and representative acceptance matrix are documented in `terraform/network/gw/interfaces/README.md`.
 
-Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present:
+Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present, using the GitHub MCP workflow-dispatch operation with this payload:
 
-```bash
-gh workflow run terraform.yaml --ref main \
-  -f apply_gateway=false \
-  -f apply_gateway_snmp=false \
-  -f plan_gateway_snmp=false \
-  -f apply_gateway_firewall=false \
-  -f apply_gateway_wireguard=true \
-  -f apply_gateway_dhcp=false \
-  -f apply_gateway_ipfix=false \
-  -f apply_cloudflare=false
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "false"
+  apply_gateway_snmp: "false"
+  plan_gateway_snmp: "false"
+  apply_gateway_firewall: "false"
+  apply_gateway_wireguard: "true"
+  apply_gateway_dhcp: "false"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "false"
 ```
 
 The WireGuard path imported only public peer configuration and interface identity; private and preshared keys remain sensitive state and are ignored during adoption. Its temporary import blocks were removed after the production-gated apply, and a clean follow-up plan is required.
 
-Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
+Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, use the GitHub MCP workflow-dispatch operation from `main` with this payload:
 
-```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=true -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=false
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "false"
+  apply_gateway_snmp: "true"
+  plan_gateway_snmp: "false"
+  apply_gateway_dhcp: "false"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "false"
 ```
 
 The targeted job creates an immutable plan containing only `routeros_snmp_community.observability_v2` and `routeros_snmp_community.observability_v3`, then applies that artifact in the `production` environment.
 
-Apply the reviewed DHCP plan, including DNS servers advertised to LAN clients, through its separate targeted path:
+Apply the reviewed DHCP plan, including DNS servers advertised to LAN clients, through its separate targeted path using the GitHub MCP workflow-dispatch operation with this payload:
 
-```bash
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=true -f apply_gateway_ipfix=false -f apply_cloudflare=false
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "false"
+  apply_gateway_snmp: "false"
+  plan_gateway_snmp: "false"
+  apply_gateway_dhcp: "true"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "false"
 ```
 
 That job applies the immutable full DHCP-stack plan in the `production` environment without evaluating the provider-blocked gateway interface and BGP resources. DHCP leases must already be static before they are added as `routeros_ip_dhcp_server_lease` resources; the repository does not use imperative dynamic-to-static conversion helpers.
 
-Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path:
+Publish or update Grafana's or UniFi's Cloudflare tunnel, DNS, and Access configuration only through the reviewed Cloudflare plan path using the GitHub MCP workflow-dispatch operation with this payload:
 
-```sh
-gh workflow run terraform.yaml --ref main -f apply_gateway=false -f apply_gateway_snmp=false -f plan_gateway_snmp=false -f apply_gateway_dhcp=false -f apply_gateway_ipfix=false -f apply_cloudflare=true
+```yaml
+workflow: terraform.yaml
+ref: main
+inputs:
+  apply_gateway: "false"
+  apply_gateway_snmp: "false"
+  plan_gateway_snmp: "false"
+  apply_gateway_dhcp: "false"
+  apply_gateway_ipfix: "false"
+  apply_cloudflare: "true"
 ```
 
 All manual mutation and plan-only inputs are mutually exclusive; selecting more than one fails before credential retrieval. The Cloudflare job consumes the matrix plan artifact created in the same trusted run and requires the `production` environment before changing public routing or Access.
 
-The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired or unreachable gateway certificate requires the narrowly scoped bootstrap option; that one-time path uses the gateway's private HTTP REST endpoint, forces the stack-owned leaf import to displace ambiguous legacy certificate names, renames the imported leaf by its public fingerprint, and verifies the bound leaf. The installer writes each temporary file through the RouterOS REST execute endpoint because this device rejects file contents in the REST file-create body; it uploads only the leaf's immediate issuer because RouterOS also rejects the full multi-certificate issuer bundle, while client trust stores provide the remaining root chain. Normal and scheduled runs use HTTPS by DNS name. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection:
+The dedicated MikroTik certificate workflow is a production-gated renewal path that runs separately from the general OpenTofu workflow. It uses Cloudflare DNS-01 and retains the ACME account and certificate key only in encrypted R2 state; its plan is deliberately not uploaded as an artifact. The first recovery of the currently expired or unreachable gateway certificate requires the narrowly scoped bootstrap option; that one-time path uses the gateway's private HTTP REST endpoint, forces the stack-owned leaf import to displace ambiguous legacy certificate names, renames the imported leaf by its public fingerprint, and verifies the bound leaf. The installer writes each temporary file through the RouterOS REST execute endpoint because this device rejects file contents in the REST file-create body; it uploads only the leaf's immediate issuer because RouterOS also rejects the full multi-certificate issuer bundle, while client trust stores provide the remaining root chain. Normal and scheduled runs use HTTPS by DNS name. Every weekly run imports a changed ACME leaf when needed and reconciles the addressed RouterOS `www-ssl` listener to the newest unexpired private-key certificate, after which the workflow verifies the RouterOS TLS connection. Use the GitHub MCP workflow-dispatch operation from `main` with this payload for the one-time bootstrap:
 
-```sh
-gh workflow run mikrotik-certificates.yaml --ref main \
-  -f bootstrap_gateway_certificate=true
+```yaml
+workflow: mikrotik-certificates.yaml
+ref: main
+inputs:
+  bootstrap_gateway_certificate: "true"
 ```
 
 Follow the verification commands in `terraform/network/gw/certificates/README.md` immediately after the initial apply. The workflow then checks weekly and renews automatically within the 30-day ACME threshold; the `production` environment remains the final approval boundary.

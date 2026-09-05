@@ -8,10 +8,10 @@ This repository is now an almost-empty learning repo. Agents working here must p
 
 Before starting any new logical task:
 
-0. Start or enter the repository devcontainer. All repository work must run inside it.
-1. Fetch `origin/main` and verify that it is the current remote source of truth.
-2. Return to `main` and fast-forward it to the exact `origin/main` commit.
-3. Create a fresh descriptive branch from the exact `origin/main` commit.
+0. Start or enter the repository devcontainer. All app/code work must run inside it; approved GitHub MCP operations are the exception and may run outside it.
+1. Use GitHub MCP to read and verify the current remote `main` commit before starting work.
+2. Inside the devcontainer, compare the local checkout with that exact MCP-reported commit and fast-forward local `main` only when the commit is already available locally. If it is unavailable, stop and report that the current MCP integration cannot synchronize the checkout; do not substitute a stale commit or use host Git.
+3. Create a fresh descriptive branch from the exact verified commit reported by GitHub MCP.
 4. Use `/compact` to reduce context usage when the environment supports it.
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
@@ -20,9 +20,10 @@ If `/compact` is not supported in the current environment, reduce context load m
 
 - All git commits in this repository MUST be signed.
 - Agents should verify commit signing is enabled before creating commits.
-- Agents should verify local `main` matches `origin/main` before branching for a new logical task.
-- `origin/main` is the ultimate source of truth for repository state and task bases. Do not branch from a stale local branch, an old local `main`, or another feature branch.
-- Every new logical task MUST begin from a new branch based on the exact current `origin/main` commit. Each implementation has its own branch.
+- Agents should verify local `main` matches the current remote `main` commit reported by GitHub MCP before branching for a new logical task.
+- The current remote `main` commit reported by GitHub MCP is the ultimate source of truth for repository state and task bases. Do not branch from a stale local branch, an old local `main`, or another feature branch.
+- Every new logical task MUST begin from a new branch based on the exact current remote `main` commit reported by GitHub MCP. Each implementation has its own branch.
+- Before moving a remote branch ref or opening a pull request, use GitHub MCP to verify that the published commit's tree matches the locally reviewed tree and that the required commit signature verifies. Stop if either check cannot be completed.
 - Branch names should be short, descriptive, and reflect the task being performed.
 
 Future hook or CI enforcement for signed commits is encouraged, but the minimum requirement today is that agents follow the signed-commit rule for every commit they create.
@@ -73,8 +74,8 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not use an imperative workaround merely because it is faster than correcting or extending the declarative ownership path.
 - RouterOS changes that must avoid known provider-broken resources, including Kubernetes BGP peer reconciliation, require a dedicated, mutually exclusive workflow input that plans explicit targets, rejects destructive artifacts where applicable, uploads the immutable plan, and applies only that artifact through the production environment.
 - The Kubernetes BGP workflow documents and confines the RouterOS 7.23 compatibility recovery for the pinned provider: any temporary REST adoption must run only after the production gate, omit the obsolete `add-path-out` field, import the resulting rows into OpenTofu state, and apply a fresh immutable targeted plan.
-- All repository work MUST run inside the repository devcontainer, including inspection, file edits, Git operations, agent orchestration, tests, formatting, OpenTofu work, workflow testing, and validation. The host may only start or enter the devcontainer.
-- Do not install or run repository or workflow tools on the host. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or the repository's `mise.toml`, rebuild or reopen the devcontainer, and retry there.
+- All app/code work MUST run inside the repository devcontainer, including inspection, file edits, agent orchestration, tests, formatting, OpenTofu work, workflow testing, and validation. Local Git commands that inspect or prepare the checkout and its commits must also run inside it. Remote GitHub operations are the exception: they MUST use GitHub MCP and may run outside the devcontainer. The host may only start or enter the devcontainer for non-MCP work.
+- Do not install or run repository, application, or workflow-validation tools on the host. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or the repository's `mise.toml`, rebuild or reopen the devcontainer, and retry there. GitHub MCP calls are the approved exception for remote GitHub operations.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
@@ -86,7 +87,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## MCP requirements
 
 - Use MCP tools whenever they provide the needed capability.
-- GitHub MCP MUST be used for GitHub repository, branch, commit, pull request, review, issue, and workflow operations. If GitHub MCP is unavailable, stop the operation and report the missing dependency rather than replacing it with web search or a raw API call.
+- GitHub MCP MUST be used for GitHub repository, branch, ref, commit, push, pull request, review, issue, and workflow operations. These remote GitHub operations may run outside the devcontainer, but they must not be replaced with shell `git`, GitHub CLI, or raw API calls. If the available MCP operations cannot publish the exact reviewed tree and required signed commit, or cannot verify the published tree and signature afterward, stop instead of reconstructing an unsigned or unverified commit. If GitHub MCP is unavailable, stop the operation and report the missing dependency rather than replacing it with another integration.
 - Context7 MCP MUST be used for documentation work and external technical documentation, including library, provider, API, tool, and platform behavior. If Context7 MCP or the required documentation is unavailable, stop before relying on unverified behavior and report the missing dependency.
 - Never send secrets, private keys, access tokens, or raw infrastructure responses to an MCP tool unless an explicitly documented connector contract requires it and guarantees safe handling.
 

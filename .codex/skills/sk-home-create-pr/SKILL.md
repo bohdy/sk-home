@@ -20,10 +20,10 @@ Treat `main` as the production branch. Open pull requests into `main` and avoid 
 5. Run all relevant lint and validation checks and stop if any fail.
 6. Verify signed-commit behavior before creating commits.
 7. Update `AGENTS.md` and `README.md` when the change affects workflow, repository behavior, setup, usage, configuration, or repo layout.
-8. Review the diff against `origin/main` and write a complete pull request walkthrough.
+8. Review the diff against the current remote `main` commit reported by GitHub MCP and write a complete pull request walkthrough.
 9. Commit intentionally if there are uncommitted changes.
-10. Push the branch to `origin`.
-11. Open or update a pull request into `main`.
+10. Publish the exact reviewed branch commit through GitHub MCP; the remote operation may run outside the devcontainer.
+11. Open or update a pull request into `main` through GitHub MCP.
 
 ## Inspect State
 
@@ -31,9 +31,9 @@ Start by checking:
 
 - `git status --short --branch`
 - current branch name
-- whether `main` matches `origin/main` when a new branch still needs to be created
+- whether local `main` matches the current remote `main` commit reported by GitHub MCP when a new branch still needs to be created
 - whether `git config --get commit.gpgsign` is enabled
-- which files changed against `origin/main`
+- which files changed against the current remote `main` commit reported by GitHub MCP
 
 Read `AGENTS.md` and follow its current workflow rules if they changed since the skill was written.
 
@@ -43,7 +43,7 @@ If the work is already on a non-`main` branch, keep using that branch unless the
 
 If the current branch is `main`:
 
-- If there are no working tree changes, update `main` from `origin/main` if needed, then create a fresh descriptive branch from `main`.
+- If there are no working tree changes, use GitHub MCP to verify the current remote `main` commit, confirm that exact commit is available locally, then fast-forward local `main` and create a fresh descriptive branch from it.
 - If there are local changes or local commits that should become a PR, create a fresh descriptive branch at the current `HEAD` before committing or pushing. Do not leave feature work on `main`.
 
 Keep branch names short and descriptive.
@@ -94,7 +94,7 @@ If signing is disabled, enable the repo-compliant flow before proceeding or stop
 
 ## Pull Request Content
 
-Review the diff against `origin/main` and derive the PR content from the actual change, not from assumptions.
+Review the diff against the current remote `main` commit reported by GitHub MCP and derive the PR content from the actual change, not from assumptions. Use the local commit only after confirming that exact remote baseline is available locally.
 
 The PR body must explain all changed code in the PR. Cover every changed file or every logical change area when several files implement one coherent change. Do not leave changed areas undocumented in the PR body.
 
@@ -121,7 +121,7 @@ Open PRs from the feature branch into `main`.
 
 Do not push directly to `main` as part of this workflow.
 
-Prefer the GitHub connector tools when they are available for opening or updating the pull request. Use `gh` only when connector coverage is insufficient.
+Use GitHub MCP for remote branch, ref, commit, push, and pull request operations. These MCP calls may run outside the devcontainer. Do not substitute shell `git`, `gh`, or raw API calls for those operations. If the available connector cannot publish the exact reviewed tree and required signed commit, stop rather than reconstructing an unsigned or unverified commit.
 
 ## Safety Checks
 
@@ -130,6 +130,7 @@ Before publishing:
 - confirm no secrets or `.tmp/` artifacts are staged
 - confirm the branch is not `main`
 - confirm the PR target is `main`
+- confirm GitHub MCP verified the published commit's tree against the locally reviewed tree and verified the required commit signature
 - confirm the PR summary and description match the actual diff
 - confirm the PR body covers every changed file or logical change area
 - confirm all required formatting, linting, and validation steps passed
