@@ -1,6 +1,6 @@
 # SMTP relay
 
-This component provides the Brother printer's outbound-only Postfix relay at `smtp.internal.bohdal.name:587` on the private Cilium VIP `10.1.30.58`. The LoadBalancer admits only the printer reservation `10.1.10.250/32`; Postfix additionally requires STARTTLS, the exact envelope sender `tiskarna@sk.bohdal.net`, at most five recipients, and at most twenty accepted messages per hour.
+This component provides the Brother printer's outbound-only Postfix relay at `smtp.internal.bohdal.name:587` on the private Cilium VIP `10.1.30.58`. The LoadBalancer admits only the printer reservation `10.1.10.250/32`; the gateway firewall has a matching explicit TCP/587 route exception before its inter-VLAN deny, while other printer-to-VLAN traffic remains blocked. Postfix additionally requires STARTTLS, the exact envelope sender `tiskarna@sk.bohdal.net`, at most five recipients, and at most twenty accepted messages per hour.
 
 The relay forwards through `[smtp.seznam.cz]:587` with certificate-verified STARTTLS and SASL authentication. Seznam supplies the final DKIM signature. The deployment does not provide inbound public SMTP, local delivery, mailboxes, IMAP, webmail, spam filtering, or a general relay.
 

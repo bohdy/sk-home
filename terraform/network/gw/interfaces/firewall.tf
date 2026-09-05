@@ -51,6 +51,7 @@ locals {
     "sk-firewall/forward/allow-kubernetes-service-vips",
     "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp",
     "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp",
+    "sk-firewall/forward/allow-smtp-relay-from-printer",
     "sk-firewall/forward/allow-wan-dstnat",
     "sk-firewall/forward/drop-inter-vlan",
     "sk-firewall/forward/drop-wan-inbound",
@@ -448,6 +449,21 @@ resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_t
   comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
 }
 
+# The printer's SMTP relay is a routed Kubernetes VIP. Keep this exception
+# limited to the verified printer reservation and submission port; the
+# inter-VLAN default deny remains in force for all other printer traffic.
+resource "routeros_ip_firewall_filter" "forward_allow_smtp_relay_from_printer" {
+  provider          = routeros.gw
+  action            = "accept"
+  chain             = "forward"
+  src_address       = var.firewall_policy.smtp_relay_source_cidr
+  dst_address       = var.firewall_policy.smtp_relay_service_vip
+  in_interface_list = var.firewall_policy.trusted_interface_list
+  protocol          = "tcp"
+  dst_port          = var.firewall_policy.smtp_relay_port
+  comment           = "sk-firewall/forward/allow-smtp-relay-from-printer"
+}
+
 # Keep the four existing SNMP resource addresses so their current state can be
 # updated in place while the move-items sequence places them before the VLAN
 # deny rule.
@@ -651,6 +667,7 @@ resource "routeros_move_items" "forward_rules" {
     [
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id,
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id,
+      routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id,
     ],
     [
       routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id,
@@ -684,6 +701,7 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp,
+    routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer,
     routeros_ip_firewall_filter.allow_kubernetes_synology_snmp,
     routeros_ip_firewall_filter.allow_synology_snmp_responses,
     routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp,
