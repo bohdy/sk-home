@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run sk-home implementation team"
+  short_description: "Coordinate scoped sk-home changes through specialized Codex agents."
+  default_prompt: "Use the sk-home orchestration team to plan, implement, review, document, and prepare this scoped repository change."

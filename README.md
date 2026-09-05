@@ -28,6 +28,14 @@ The currently intended committed surface is:
 - Keep production on `main` and publish new work through pull requests from descriptive branches.
 - Do not keep placeholder project directories when they are not actively used.
 
+## Agent orchestration
+
+Use the repo-local `sk-home-orchestrator` skill for scoped repository changes that benefit from a planner, coder, firewaller, reviewer, and documenter working in sequence. The planner reads repository guidance and prepares the plan. The coder implements it. The firewaller reviews every infrastructure change, the reviewer checks the implementation, and the documenter updates system documentation with the `unslop` writing skill before a final review of the complete diff.
+
+The orchestrator limits automatic repair to three cycles and keeps detailed role reports in Codex threads. It prepares a draft pull request only after the required reviews and repository checks pass. For infrastructure work, it preserves the existing firewall inventory, immutable-plan, and GitHub `production` approval boundaries. It can dispatch an existing production workflow only after the change is merged to `main`, the evidence matches that merge, and the user gives explicit in-chat approval.
+
+Every task starts from a fresh branch based on the exact current `origin/main` commit. The orchestrator MUST use GitHub MCP for GitHub state and operations and Context7 MCP for documentation. It stops when either required MCP dependency or the required Context7 documentation cannot be verified.
+
 ## Active OpenTofu Stacks
 
 The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It creates a three-control-plane, three-worker upstream Kubernetes cluster on Proxmox using Talos noCloud images, static VLAN 20 addressing, and OpenTofu-managed Talos bootstrap state.
@@ -40,7 +48,7 @@ The repository keeps the historical `terraform/` directory name and existing `te
 
 ## Local Development
 
-The repository devcontainer is the required local development environment. It keeps OpenTofu, CI helper tools, and shell behavior aligned with automation, so run local development, OpenTofu, workflow, and validation commands inside it. Use the host only to start or enter the devcontainer.
+The repository devcontainer is the mandatory environment for all repository work. Run inspection, file edits, Git operations, local development, OpenTofu, workflow testing, and validation inside it. Use the host only to start or enter the devcontainer. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml`, rebuild or reopen the devcontainer, and retry there.
 
 ### Prerequisites
 
