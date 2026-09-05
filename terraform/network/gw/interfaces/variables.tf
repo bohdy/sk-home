@@ -141,6 +141,9 @@ variable "firewall_policy" {
     wan_interface_list               = optional(string, "WAN")
     kubernetes_bgp_interface         = optional(string, "vlan20")
     kubernetes_bgp_peer_address_list = optional(string, "sk-kubernetes-bgp-peers")
+    wireguard_roadwarrior_interface  = optional(string, "wg-roadwarrior")
+    wireguard_dns_source_cidr        = optional(string, "10.1.250.10/31")
+    wireguard_dns_service_vip        = optional(string, "10.1.30.53")
     management_address_list          = optional(string, "sk-router-management-sources")
     management_ports                 = optional(set(string), ["22", "443"])
     management_sources = optional(map(object({

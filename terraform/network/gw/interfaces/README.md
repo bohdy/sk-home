@@ -36,14 +36,15 @@ The forward chain is ordered by `routeros_move_items.forward_rules` as follows:
 | 6 | `sk-firewall/forward/allow-trusted-lan-to-wan` | Allow trusted LAN egress to the WAN interface list. |
 | 7-10 | Verified baseline forward rules | Preserve site-to-site `10.1.0.0/16` to `10.2.0.0/16`, `KNOWN WAN` from `ACCD`, and the two exact WireGuard-to-LAN paths. |
 | 11 | `sk-firewall/forward/allow-kubernetes-service-vips` | Allow trusted LAN access to the Kubernetes service VIP address list. |
-| 12-15 | Existing Kubernetes SNMP rules | Preserve the narrow Synology and UniFi request/reply pairs. |
-| 16 | `forward_management` | Empty by default; new inter-VLAN management requires a commented map entry. |
-| 17 | `sk-firewall/forward/allow-wan-dstnat` | Preserve only new WAN flows that matched the active destination NAT rule. |
-| 18 | `sk-firewall/forward/drop-inter-vlan` | Drop unauthorized trusted-LAN to trusted-LAN forwarding. |
-| 19 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
-| 20 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
+| 12-13 | `sk-firewall/forward/allow-wireguard-kubernetes-dns-udp`, `sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp` | Allow only the verified road-warrior addresses to use the Kubernetes DNS VIP. |
+| 14-17 | Existing Kubernetes SNMP rules | Preserve the narrow Synology and UniFi request/reply pairs. |
+| 18 | `forward_management` | Empty by default; new inter-VLAN management requires a commented map entry. |
+| 19 | `sk-firewall/forward/allow-wan-dstnat` | Preserve only new WAN flows that matched the active destination NAT rule. |
+| 20 | `sk-firewall/forward/drop-inter-vlan` | Drop unauthorized trusted-LAN to trusted-LAN forwarding. |
+| 21 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
+| 22 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
 
-The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32`, and the verified site peer route `10.2.0.0/16`. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
+The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32`, represented for RouterOS firewall matching as the exact contiguous `10.1.250.10/31` range, and the verified site peer route `10.2.0.0/16`. The road-warrior DNS exception is limited to UDP/TCP 53 at `10.1.30.53`; it does not grant general remote access to Kubernetes or other VLANs. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
 
 Capture or refresh the live baseline from `main` with the read-only workflow:
 
@@ -73,7 +74,7 @@ The firewall plan targets only the address-list, filter, and ordering resources 
 
 If the review plan is wrong, do not apply its artifact. If a live acceptance probe fails after apply, use RouterOS Safe Mode through the VLAN 100 management path or local console and disable only the affected new terminal drop rule identified by its stable `sk-firewall/...` comment. This is a break-glass recovery action, not the normal ownership path: do not use REST, do not change unrelated rules, and record the temporary change. Correct the non-secret `firewall_policy` declaration, run a new reviewed targeted plan, and re-enable the terminal rule through the production-gated apply. A full declaration revert must be a separately reviewed change; the normal no-destroy guard intentionally refuses rollback artifacts that delete managed resources.
 
-Representative acceptance tests must be run from their actual source networks after the policy apply: resolve and reach the gateway DNS service from VLANs 10, 20, and 100; reach TCP/22 and TCP/443 from a VLAN 100 management host; establish both WireGuard listeners from their WAN peers; reach the Kubernetes VIP and both SNMP request/reply paths from the worker VLAN; verify trusted LAN egress and the existing WAN destination-NAT service; and confirm that an unapproved VLAN-to-VLAN connection, a WAN connection without destination NAT, an unknown TCP/179 source, and an unknown WireGuard source are denied. Record only pass/fail, source class, destination class, and the final managed rule order; never record credentials or raw API responses.
+Representative acceptance tests must be run from their actual source networks after the policy apply: resolve and reach the gateway DNS service from VLANs 10, 20, and 100; resolve `10.1.30.53` over both UDP and TCP 53 from a verified road-warrior client; reach TCP/22 and TCP/443 from a VLAN 100 management host; establish both WireGuard listeners from their WAN peers; reach the Kubernetes VIP and both SNMP request/reply paths from the worker VLAN; verify trusted LAN egress and the existing WAN destination-NAT service; and confirm that an unapproved VLAN-to-VLAN connection, a road-warrior connection to a non-DNS Kubernetes VIP, a WAN connection without destination NAT, an unknown TCP/179 source, and an unknown WireGuard source are denied. Record only pass/fail, source class, destination class, and the final managed rule order; never record credentials or raw API responses.
 
 ## IPFIX flow collection
 

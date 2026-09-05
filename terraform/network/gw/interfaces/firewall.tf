@@ -49,6 +49,8 @@ locals {
     "sk-firewall/forward/allow-ipsec-out",
     "sk-firewall/forward/allow-trusted-lan-to-wan",
     "sk-firewall/forward/allow-kubernetes-service-vips",
+    "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp",
+    "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp",
     "sk-firewall/forward/allow-wan-dstnat",
     "sk-firewall/forward/drop-inter-vlan",
     "sk-firewall/forward/drop-wan-inbound",
@@ -419,6 +421,33 @@ resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
   depends_on = [routeros_ip_firewall_addr_list.kubernetes_service_vips]
 }
 
+# The remote-access client is explicitly documented to use the Kubernetes DNS
+# VIP. Keep this path narrow: only the two verified road-warrior addresses may
+# query UDP/TCP 53, and all other WireGuard-to-VLAN traffic remains denied.
+resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_udp" {
+  provider     = routeros.gw
+  action       = "accept"
+  chain        = "forward"
+  src_address  = var.firewall_policy.wireguard_dns_source_cidr
+  dst_address  = var.firewall_policy.wireguard_dns_service_vip
+  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol     = "udp"
+  dst_port     = "53"
+  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp"
+}
+
+resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_tcp" {
+  provider     = routeros.gw
+  action       = "accept"
+  chain        = "forward"
+  src_address  = var.firewall_policy.wireguard_dns_source_cidr
+  dst_address  = var.firewall_policy.wireguard_dns_service_vip
+  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol     = "tcp"
+  dst_port     = "53"
+  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
+}
+
 # Keep the four existing SNMP resource addresses so their current state can be
 # updated in place while the move-items sequence places them before the VLAN
 # deny rule.
@@ -620,6 +649,10 @@ resource "routeros_move_items" "forward_rules" {
     ],
     var.kubernetes_bgp.enabled ? [routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0].id] : [],
     [
+      routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id,
+      routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id,
+    ],
+    [
       routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id,
       routeros_ip_firewall_filter.allow_synology_snmp_responses.id,
       routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id,
@@ -649,6 +682,8 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.forward_allow_ipsec_out,
     routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan,
     routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips,
+    routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp,
+    routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp,
     routeros_ip_firewall_filter.allow_kubernetes_synology_snmp,
     routeros_ip_firewall_filter.allow_synology_snmp_responses,
     routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp,
