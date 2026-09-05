@@ -34,7 +34,7 @@ Use the repo-local `sk-home-orchestrator` skill for scoped repository changes th
 
 The orchestrator limits automatic repair to three cycles and keeps detailed role reports in Codex threads. It prepares a draft pull request only after the required reviews and repository checks pass. For infrastructure work, it preserves the existing firewall inventory, immutable-plan, and GitHub `production` approval boundaries. It can dispatch an existing production workflow only after the change is merged to `main`, the evidence matches that merge, and the user gives explicit in-chat approval.
 
-Every task starts from a fresh branch based on the exact current remote `main` commit reported by GitHub MCP. The orchestrator MUST use GitHub MCP for GitHub state and remote operations, including branch, commit, push, pull request, review, issue, and workflow actions; those MCP calls may run outside the devcontainer. If the verified remote commit is not already available in the local checkout, or if MCP cannot publish the exact reviewed tree and required signed commit, the orchestrator stops instead of using stale state or reconstructing an unsigned commit. It MUST use Context7 MCP for documentation. It stops when either required MCP dependency or the required Context7 documentation cannot be verified.
+Every task starts from a fresh branch based on the exact current remote `main` commit reported by GitHub MCP. The orchestrator prefers GitHub MCP for GitHub state and remote operations, including branch, commit, push, pull request, review, issue, and workflow actions; those MCP calls may run outside the devcontainer. Local Git is allowed for repository state and for publishing the exact signed commit when MCP cannot transfer it. Avoid GitHub CLI when MCP provides the same capability, and use `gh` only as a documented last resort. If the verified remote commit is not available locally, or if the exact reviewed tree or required signed commit cannot be published and verified, the orchestrator stops instead of using stale state or reconstructing an unsigned commit. It MUST use Context7 MCP for documentation. It stops when either required MCP dependency or the required Context7 documentation cannot be verified.
 
 ## Active OpenTofu Stacks
 
@@ -48,7 +48,7 @@ The repository keeps the historical `terraform/` directory name and existing `te
 
 ## Local Development
 
-The repository devcontainer is the mandatory environment for app/code work. Run inspection, file edits, local development, OpenTofu, workflow testing, validation, and local Git preparation inside it. Use GitHub MCP for all remote GitHub operations; those MCP calls may run outside the devcontainer. Use the host only to start or enter the devcontainer for non-MCP work. If a required app or validation tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml`, rebuild or reopen the devcontainer, and retry there.
+The repository devcontainer is the mandatory environment for app/code work. Run inspection, file edits, local development, OpenTofu, workflow testing, and validation inside it. Local Git commands are allowed for repository state, signed commits, and publishing, and may run inside or outside the devcontainer. Prefer GitHub MCP for remote GitHub operations; those MCP calls may also run outside the devcontainer. Avoid GitHub CLI when MCP provides the same capability, and use `gh` only as a documented last resort. If a required app or validation tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml`, rebuild or reopen the devcontainer, and retry there.
 
 ### Prerequisites
 
@@ -64,7 +64,7 @@ Open the repository in the devcontainer before running OpenTofu, `act`, or repos
 devcontainer up --workspace-folder .
 ```
 
-The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository, application, or workflow-validation tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead. Use GitHub MCP for remote GitHub operations.
+The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository, application, or workflow-validation tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead. Use GitHub MCP for remote GitHub operations when it provides the needed capability, and use local Git when it does not.
 
 ### Environment Setup
 
@@ -126,7 +126,7 @@ export AWS_SECRET_ACCESS_KEY="$(bws secret get 31f0524c-b94e-4446-ba46-b43701586
 
 The reusable Cloudflare Tunnel control-plane stack lives in `terraform/cloudflare/tunnel`. It remains plan-only on ordinary pushes and owns Grafana's and UniFi's public DNS, HTTPS tunnel routes, exact Google identity policies, and the terminal `404` fallback. Both applications rely on the owner's Google account for strong authentication instead of adding an independent Cloudflare MFA prompt.
 
-The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the trusted GitHub Actions Bitwarden integration, use the GitHub MCP workflow-dispatch operation from `main` with this exact payload. If the connected MCP integration does not expose workflow dispatch, stop instead of using GitHub CLI or a raw API call:
+The Talos stack applies automatically only after a push to `main`. Gateway and Cloudflare stacks remain plan-only by default. To apply a reviewed gateway change through the trusted GitHub Actions Bitwarden integration, prefer the GitHub MCP workflow-dispatch operation from `main` with this exact payload. If MCP does not expose workflow dispatch, use `gh workflow run` only as a documented last resort and preserve this exact ref, input set, and production gate:
 
 ```yaml
 workflow: terraform.yaml

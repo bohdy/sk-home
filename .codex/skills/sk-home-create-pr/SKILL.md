@@ -22,8 +22,8 @@ Treat `main` as the production branch. Open pull requests into `main` and avoid 
 7. Update `AGENTS.md` and `README.md` when the change affects workflow, repository behavior, setup, usage, configuration, or repo layout.
 8. Review the diff against the current remote `main` commit reported by GitHub MCP and write a complete pull request walkthrough.
 9. Commit intentionally if there are uncommitted changes.
-10. Publish the exact reviewed branch commit through GitHub MCP; the remote operation may run outside the devcontainer.
-11. Open or update a pull request into `main` through GitHub MCP.
+10. Publish the exact reviewed branch commit through GitHub MCP when supported, otherwise use local Git; either operation may run outside the devcontainer.
+11. Open or update a pull request into `main` through GitHub MCP when supported, using `gh` only as a documented last resort.
 
 ## Inspect State
 
@@ -121,7 +121,7 @@ Open PRs from the feature branch into `main`.
 
 Do not push directly to `main` as part of this workflow.
 
-Use GitHub MCP for remote branch, ref, commit, push, and pull request operations. These MCP calls may run outside the devcontainer. Do not substitute shell `git`, `gh`, or raw API calls for those operations. If the available connector cannot publish the exact reviewed tree and required signed commit, stop rather than reconstructing an unsigned or unverified commit.
+Prefer GitHub MCP for remote branch, ref, commit, push, and pull request operations. These MCP calls may run outside the devcontainer. Use local Git when it is needed to publish the exact signed commit, and avoid `gh` when MCP provides the same capability. Use `gh` only as a documented last resort, never raw API calls, and stop rather than reconstructing an unsigned or unverified commit if the exact reviewed tree or required signature cannot be published and verified.
 
 ## Safety Checks
 
