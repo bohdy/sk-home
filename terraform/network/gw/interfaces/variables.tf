@@ -144,6 +144,9 @@ variable "firewall_policy" {
     wireguard_roadwarrior_interface  = optional(string, "wg-roadwarrior")
     wireguard_dns_source_cidr        = optional(string, "10.1.250.10/31")
     wireguard_dns_service_vip        = optional(string, "10.1.30.53")
+    smtp_relay_source_cidr           = optional(string, "10.1.10.250/32")
+    smtp_relay_service_vip           = optional(string, "10.1.30.58")
+    smtp_relay_port                  = optional(string, "587")
     management_address_list          = optional(string, "sk-router-management-sources")
     management_ports                 = optional(set(string), ["22", "443"])
     management_sources = optional(map(object({
