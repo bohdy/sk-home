@@ -83,6 +83,10 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
 - Remove placeholder directories and helper files when they are no longer actively serving the current learning task.
 
+## Agent orchestration budget
+
+The orchestrator must classify each task before delegating and use the smallest workflow that can meet its acceptance criteria. Light, reversible changes such as typos, comments, one- or two-line documentation or policy edits, model-assignment updates, formatting, and focused diagnosis use the root agent alone, with at most one reviewer. A reviewer is mandatory when a light change touches a security-sensitive instruction. After a blocked light review, the root agent may make one focused correction and rerun that reviewer, but must not publish an unreviewed fix; a second block must stop or escalate for a standard review. Standard non-infrastructure changes use planner, coder, and reviewer, adding documenter only when a separate documentation pass is needed. Infrastructure, security, deployment, and external-system changes use the full planner, coder, firewaller, reviewer, documenter, and final-review flow. Use zero automatic coder repair cycles for light work, one for standard work, and at most three for infrastructure, security, deployment, or external-system work. Escalate when risk or scope increases, and record skipped roles.
+
 ## MCP requirements
 
 - Use MCP tools whenever they provide the needed capability.
