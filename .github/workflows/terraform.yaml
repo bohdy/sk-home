@@ -938,6 +938,8 @@ jobs:
           -target=routeros_ip_firewall_filter.forward_allow_ipsec_out
           -target=routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan
           -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips
+          -target=routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp
+          -target=routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp
           -target=routeros_ip_firewall_filter.allow_kubernetes_synology_snmp
           -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
