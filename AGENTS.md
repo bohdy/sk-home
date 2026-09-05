@@ -97,7 +97,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
 - Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
 - The repo-local skill `sk-home-write-comments` defines how agents should add, refresh, and review code comments in this repository when comment quality is part of the task.
-- The repo-local skill `sk-home-orchestrator` coordinates scoped implementation tasks through planner, coder, firewaller, reviewer, and documenter subagents. Its production path requires explicit user approval and preserves existing immutable-plan and GitHub environment gates.
+- The repo-local skill `sk-home-orchestrator` coordinates scoped implementation tasks through planner, coder, firewaller, reviewer, and documenter subagents. Its planner must read and use the authoritative gateway inventory pair in `terraform/network/gw/interfaces/interfaces.auto.tfvars` and `terraform/network/gw/interfaces/vlans.auto.tfvars` before creating or updating any plan, and must also read `terraform/network/gw/dhcp/dhcp.auto.tfvars` for address-allocation work. Its production path requires explicit user approval and preserves existing immutable-plan and GitHub environment gates.
 
 ## Pull Request Workflow
 

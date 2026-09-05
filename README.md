@@ -30,7 +30,7 @@ The currently intended committed surface is:
 
 ## Agent orchestration
 
-Use the repo-local `sk-home-orchestrator` skill for scoped repository changes that benefit from a planner, coder, firewaller, reviewer, and documenter working in sequence. The planner reads repository guidance and prepares the plan. The coder implements it. The firewaller reviews every infrastructure change, the reviewer checks the implementation, and the documenter updates system documentation with the `unslop` writing skill before a final review of the complete diff.
+Use the repo-local `sk-home-orchestrator` skill for scoped repository changes that benefit from a planner, coder, firewaller, reviewer, and documenter working in sequence. The planner first reads and uses the authoritative gateway inventory pair in `terraform/network/gw/interfaces/interfaces.auto.tfvars` and `terraform/network/gw/interfaces/vlans.auto.tfvars`, plus `terraform/network/gw/dhcp/dhcp.auto.tfvars` for address-allocation work, before preparing or updating any plan. The coder implements it. The firewaller reviews every infrastructure change, the reviewer checks the implementation, and the documenter updates system documentation with the `unslop` writing skill before a final review of the complete diff.
 
 The orchestrator limits automatic repair to three cycles and keeps detailed role reports in Codex threads. It prepares a draft pull request only after the required reviews and repository checks pass. For infrastructure work, it preserves the existing firewall inventory, immutable-plan, and GitHub `production` approval boundaries. It can dispatch an existing production workflow only after the change is merged to `main`, the evidence matches that merge, and the user gives explicit in-chat approval.
 

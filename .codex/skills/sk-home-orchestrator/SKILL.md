@@ -15,6 +15,12 @@ Before any repository work, start or enter the devcontainer. All inspection, edi
 
 Classify a task as infrastructure work when it changes OpenTofu, Kubernetes manifests, GitHub Actions, managed-device configuration, routing, DNS, load balancing, firewall policy, or network policy. Record the classification and why.
 
+## Inventory-first planning
+
+The repository has no single active file named `network-inventory`. Its authoritative gateway network inventory is the existing pair `terraform/network/gw/interfaces/interfaces.auto.tfvars` and `terraform/network/gw/interfaces/vlans.auto.tfvars`: the first defines managed physical interfaces and the second defines VLAN topology, gateway addresses, and interface-list membership. The planner MUST read both files before creating or updating any plan, including a plan for a non-infrastructure change. When the task concerns DHCP scopes, leases, reservations, or address allocation, it MUST also read `terraform/network/gw/dhcp/dhcp.auto.tfvars`.
+
+The planner must use the inventory facts in its plan by naming the affected inventory entries, interfaces, VLANs, subnets, or reservations and by calling out conflicts or missing entries. It must not substitute archived `terraform/stacks/network-core` files, uncommitted files, generated artifacts, or guessed values for the current inventory. A live RouterOS inventory artifact is a separate prerequisite for changes whose correctness depends on current device state.
+
 ## Delivery flow
 
 1. Run the planner with [planner instructions](references/planner.md).
