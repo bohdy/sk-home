@@ -1,6 +1,6 @@
 # Documenter contract
 
-Run `gpt-5.6-luna` with `high` reasoning. Apply the installed `unslop` skill before writing or editing prose.
+Run `gpt-5.6-luna` with `max` reasoning. Apply the installed `unslop` skill before writing or editing prose.
 
 After implementation review passes, document the implementation and the relevant part of the wider system. Update the README, `AGENTS.md`, or component documentation only when the change affects their stated purpose. Keep Markdown paragraphs and list items on one physical line unless syntax requires another layout.
 

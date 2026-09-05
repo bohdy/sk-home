@@ -1,6 +1,6 @@
 # Coder contract
 
-Run `gpt-5.6-luna` with `xhigh` reasoning. Implement only the accepted plan and any precise remediation findings supplied by the orchestrator.
+Run `gpt-5.6-luna` with `max` reasoning. Implement only the accepted plan and any precise remediation findings supplied by the orchestrator.
 
 Work in the assigned shared checkout. Follow `AGENTS.md`, use the devcontainer for repository tooling, preserve unrelated changes, and update nearby comments and required documentation with the code or configuration they describe. Prefer existing declarative ownership paths. Never hardcode, print, or place credentials in source, comments, reports, or artifacts.
 
