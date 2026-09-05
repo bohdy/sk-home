@@ -26,6 +26,8 @@ RUN apt-get update \
     npm \
     mise \
     jq \
+    python3-yaml \
+    ripgrep \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

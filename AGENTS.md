@@ -8,9 +8,10 @@ This repository is now an almost-empty learning repo. Agents working here must p
 
 Before starting any new logical task:
 
-1. Verify local `main` is up to date with `origin/main`.
-2. Return to `main`.
-3. Create a fresh descriptive branch from `main`.
+0. Start or enter the repository devcontainer. All repository work must run inside it.
+1. Fetch `origin/main` and verify that it is the current remote source of truth.
+2. Return to `main` and fast-forward it to the exact `origin/main` commit.
+3. Create a fresh descriptive branch from the exact `origin/main` commit.
 4. Use `/compact` to reduce context usage when the environment supports it.
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
@@ -20,7 +21,8 @@ If `/compact` is not supported in the current environment, reduce context load m
 - All git commits in this repository MUST be signed.
 - Agents should verify commit signing is enabled before creating commits.
 - Agents should verify local `main` matches `origin/main` before branching for a new logical task.
-- Every new logical task MUST begin from a new branch based on `main`.
+- `origin/main` is the ultimate source of truth for repository state and task bases. Do not branch from a stale local branch, an old local `main`, or another feature branch.
+- Every new logical task MUST begin from a new branch based on the exact current `origin/main` commit. Each implementation has its own branch.
 - Branch names should be short, descriptive, and reflect the task being performed.
 
 Future hook or CI enforcement for signed commits is encouraged, but the minimum requirement today is that agents follow the signed-commit rule for every commit they create.
@@ -71,8 +73,8 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Do not use an imperative workaround merely because it is faster than correcting or extending the declarative ownership path.
 - RouterOS changes that must avoid known provider-broken resources, including Kubernetes BGP peer reconciliation, require a dedicated, mutually exclusive workflow input that plans explicit targets, rejects destructive artifacts where applicable, uploads the immutable plan, and applies only that artifact through the production environment.
 - The Kubernetes BGP workflow documents and confines the RouterOS 7.23 compatibility recovery for the pinned provider: any temporary REST adoption must run only after the production gate, omit the obsolete `add-path-out` field, import the resulting rows into OpenTofu state, and apply a fresh immutable targeted plan.
-- Use the repository devcontainer as the required environment for local development, OpenTofu work, workflow testing, and validation so tool versions and environment behavior stay close to automation; do not run these activities directly on the host.
-- Do not install repository or workflow tools on the host. If a required tool is missing, add it to the devcontainer configuration or the repository's `mise.toml` so it is provisioned inside the devcontainer.
+- All repository work MUST run inside the repository devcontainer, including inspection, file edits, Git operations, agent orchestration, tests, formatting, OpenTofu work, workflow testing, and validation. The host may only start or enter the devcontainer.
+- Do not install or run repository or workflow tools on the host. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or the repository's `mise.toml`, rebuild or reopen the devcontainer, and retry there.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
@@ -81,6 +83,13 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - The archive refs named in `README.md` are the source of truth for the pre-reset implementation. Do not copy large chunks back into the active tree without first scoping the specific learning goal.
 - Remove placeholder directories and helper files when they are no longer actively serving the current learning task.
 
+## MCP requirements
+
+- Use MCP tools whenever they provide the needed capability.
+- GitHub MCP MUST be used for GitHub repository, branch, commit, pull request, review, issue, and workflow operations. If GitHub MCP is unavailable, stop the operation and report the missing dependency rather than replacing it with web search or a raw API call.
+- Context7 MCP MUST be used for documentation work and external technical documentation, including library, provider, API, tool, and platform behavior. If Context7 MCP or the required documentation is unavailable, stop before relying on unverified behavior and report the missing dependency.
+- Never send secrets, private keys, access tokens, or raw infrastructure responses to an MCP tool unless an explicitly documented connector contract requires it and guarantees safe handling.
+
 ## Repo Skills
 
 - Repo-local Codex skills live under `.codex/skills/`.
@@ -88,6 +97,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
 - Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
 - The repo-local skill `sk-home-write-comments` defines how agents should add, refresh, and review code comments in this repository when comment quality is part of the task.
+- The repo-local skill `sk-home-orchestrator` coordinates scoped implementation tasks through planner, coder, firewaller, reviewer, and documenter subagents. Its production path requires explicit user approval and preserves existing immutable-plan and GitHub environment gates.
 
 ## Pull Request Workflow
 
