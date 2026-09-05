@@ -5,15 +5,21 @@ description: Coordinate planner, coder, firewall, review, and documentation suba
 
 # Sk-home orchestrator
 
-Use this skill to run a bounded, evidence-based implementation workflow in this repository. The orchestrator owns task state, Git operations, validation, pull requests, and any workflow dispatch. Role agents work only in their assigned phase and report through their thread. They never commit, push, merge, dispatch an apply, or retrieve secrets.
+Use this skill to run a bounded, evidence-based implementation workflow in this repository. The orchestrator owns task state, local Git preparation and publishing, validation, preferred GitHub MCP operations, pull requests, and any workflow dispatch. Role agents work only in their assigned phase and report through their thread. They never commit, push, merge, dispatch an apply, or retrieve secrets.
 
 ## Start and scope
 
 Accept a scoped repository implementation, configuration, or documentation task. Decline broad research and external administration. Read `AGENTS.md`, the relevant repository documentation, and applicable local skills before delegating.
 
-Before any repository work, start or enter the devcontainer. All inspection, edits, Git operations, agent orchestration, tests, formatting, and validation must run inside it. If a required tool is missing, add it to `.devcontainer` or `mise.toml`, rebuild or reopen the devcontainer, and retry there. Then fetch and verify `origin/main`, fast-forward local `main` to that exact commit, and create the task branch directly from `origin/main`. Preserve unrelated working-tree changes. MUST use GitHub MCP for GitHub state and operations. MUST use Context7 MCP for documentation and external technical documentation. Stop and report a blocker if either required MCP dependency or its required documentation cannot be verified. Use a fresh, sequential subagent thread for each role in the shared checkout. Do not run two writers at once.
+Before any repository work, start or enter the devcontainer. All app/code inspection, edits, Git preparation, agent orchestration, tests, formatting, and validation must run inside it. Local Git commands are allowed for repository state, signed commits, and publishing, and may run inside or outside the devcontainer. Prefer GitHub MCP for remote GitHub branch, ref, commit, push, pull request, review, issue, and workflow actions; those MCP calls may run outside the devcontainer. Avoid GitHub CLI when MCP provides the same capability, and use `gh` only as a documented last resort. Do not use raw API calls as a substitute. If a required app or validation tool is missing, add it to `.devcontainer` or `mise.toml`, rebuild or reopen the devcontainer, and retry there. Use GitHub MCP to verify the current remote `main` commit, then use local Git to compare and synchronize the checkout to that exact commit. Create the task branch directly from the verified commit and preserve unrelated working-tree changes. If the exact reviewed tree or required signed commit cannot be published and verified, stop instead of reconstructing an unsigned or unverified commit. MUST use Context7 MCP for documentation and external technical documentation. Stop and report a blocker if either required MCP dependency or its required documentation cannot be verified. Use a fresh, sequential subagent thread for each role in the shared checkout. Do not run two writers at once.
 
 Classify a task as infrastructure work when it changes OpenTofu, Kubernetes manifests, GitHub Actions, managed-device configuration, routing, DNS, load balancing, firewall policy, or network policy. Record the classification and why.
+
+## Inventory-first planning
+
+The repository has no single active file named `network-inventory`. Its authoritative gateway network inventory is the existing pair `terraform/network/gw/interfaces/interfaces.auto.tfvars` and `terraform/network/gw/interfaces/vlans.auto.tfvars`: the first defines managed physical interfaces and the second defines VLAN topology, gateway addresses, and interface-list membership. The planner MUST read both files before creating or updating any plan, including a plan for a non-infrastructure change. When the task concerns DHCP scopes, leases, reservations, or address allocation, it MUST also read `terraform/network/gw/dhcp/dhcp.auto.tfvars`.
+
+The planner must use the inventory facts in its plan by naming the affected inventory entries, interfaces, VLANs, subnets, or reservations and by calling out conflicts or missing entries. It must not substitute archived `terraform/stacks/network-core` files, uncommitted files, generated artifacts, or guessed values for the current inventory. A live RouterOS inventory artifact is a separate prerequisite for changes whose correctness depends on current device state.
 
 ## Delivery flow
 
@@ -24,7 +30,8 @@ Classify a task as infrastructure work when it changes OpenTofu, Kubernetes mani
 5. If either review blocks the change, send the exact findings to a new coder thread and repeat the affected reviews. Allow at most three repair cycles. On the fourth unresolved result, stop and present the findings without publishing or deploying.
 6. After implementation review passes, run the documenter with [documenter instructions](references/documenter.md).
 7. Run a final reviewer pass over the complete diff, including documentation. Resolve its blocking findings within the same three-cycle budget.
-8. Run the repository-defined checks that apply to the final diff, inspect the diff for secrets, and prepare a draft pull request according to `AGENTS.md`.
+8. Run the repository-defined checks that apply to the final diff, inspect the diff for secrets, and publish the exact reviewed commit using GitHub MCP when supported, otherwise local Git according to `AGENTS.md`.
+9. Use GitHub MCP to verify that the published commit's tree matches the locally reviewed tree and that its required signature verifies before opening or updating the pull request.
 
 Keep raw reports in the role threads. The pull request and tracked documentation may contain only concise, sanitized findings, validation results, risks, and decisions.
 

@@ -8,10 +8,10 @@ This repository is now an almost-empty learning repo. Agents working here must p
 
 Before starting any new logical task:
 
-0. Start or enter the repository devcontainer. All repository work must run inside it.
-1. Fetch `origin/main` and verify that it is the current remote source of truth.
-2. Return to `main` and fast-forward it to the exact `origin/main` commit.
-3. Create a fresh descriptive branch from the exact `origin/main` commit.
+0. Start or enter the repository devcontainer. All app/code work must run inside it; approved GitHub MCP and local Git operations may run outside it.
+1. Prefer GitHub MCP to read and verify the current remote `main` commit before starting work.
+2. Use local Git commands to fetch, compare, and fast-forward the checkout to that exact MCP-verified commit. Local Git repository-state operations may run outside the devcontainer; do not use a stale commit or bypass the MCP comparison.
+3. Create a fresh descriptive branch from the exact verified commit reported by GitHub MCP.
 4. Use `/compact` to reduce context usage when the environment supports it.
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
@@ -20,9 +20,10 @@ If `/compact` is not supported in the current environment, reduce context load m
 
 - All git commits in this repository MUST be signed.
 - Agents should verify commit signing is enabled before creating commits.
-- Agents should verify local `main` matches `origin/main` before branching for a new logical task.
-- `origin/main` is the ultimate source of truth for repository state and task bases. Do not branch from a stale local branch, an old local `main`, or another feature branch.
-- Every new logical task MUST begin from a new branch based on the exact current `origin/main` commit. Each implementation has its own branch.
+- Agents should verify local `main` matches the current remote `main` commit reported by GitHub MCP before branching for a new logical task.
+- The current remote `main` commit reported by GitHub MCP is the ultimate source of truth for repository state and task bases. Do not branch from a stale local branch, an old local `main`, or another feature branch.
+- Every new logical task MUST begin from a new branch based on the exact current remote `main` commit reported by GitHub MCP. Each implementation has its own branch.
+- Before moving a remote branch ref or opening a pull request, prefer GitHub MCP to verify that the published commit's tree matches the locally reviewed tree and that the required commit signature verifies. Stop if either check cannot be completed.
 - Branch names should be short, descriptive, and reflect the task being performed.
 
 Future hook or CI enforcement for signed commits is encouraged, but the minimum requirement today is that agents follow the signed-commit rule for every commit they create.
@@ -69,12 +70,12 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Verify live infrastructure prerequisites before creating or applying a dependent change; do not infer them from names, archived configuration, unverified references, or a successful OpenTofu plan.
 - Keep edits focused on the current task.
 - Prefer Terraform/OpenTofu for infrastructure and managed-device configuration whenever a suitable provider or existing stack can own the desired state.
-- Direct API, CLI, or UI mutation is a break-glass exception, not an ordinary implementation path. Document the reason before use, minimize its scope, and adopt the resulting state into Terraform/OpenTofu immediately when provider support permits.
+- Direct API, CLI, or UI mutation of infrastructure or managed devices is a break-glass exception, not an ordinary implementation path. Document the reason before use, minimize its scope, and adopt the resulting state into Terraform/OpenTofu immediately when provider support permits.
 - Do not use an imperative workaround merely because it is faster than correcting or extending the declarative ownership path.
 - RouterOS changes that must avoid known provider-broken resources, including Kubernetes BGP peer reconciliation, require a dedicated, mutually exclusive workflow input that plans explicit targets, rejects destructive artifacts where applicable, uploads the immutable plan, and applies only that artifact through the production environment.
 - The Kubernetes BGP workflow documents and confines the RouterOS 7.23 compatibility recovery for the pinned provider: any temporary REST adoption must run only after the production gate, omit the obsolete `add-path-out` field, import the resulting rows into OpenTofu state, and apply a fresh immutable targeted plan.
-- All repository work MUST run inside the repository devcontainer, including inspection, file edits, Git operations, agent orchestration, tests, formatting, OpenTofu work, workflow testing, and validation. The host may only start or enter the devcontainer.
-- Do not install or run repository or workflow tools on the host. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or the repository's `mise.toml`, rebuild or reopen the devcontainer, and retry there.
+- All app/code work MUST run inside the repository devcontainer, including inspection, file edits, agent orchestration, tests, formatting, OpenTofu work, workflow testing, and validation. Local Git commands are allowed for repository state, signed commits, and publishing, and may run inside or outside the devcontainer. GitHub MCP is preferred for remote GitHub operations and may run outside the devcontainer.
+- Do not install or run repository, application, or workflow-validation tools on the host. If a required tool is missing, add it to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or the repository's `mise.toml`, rebuild or reopen the devcontainer, and retry there. GitHub MCP and local Git commands are the approved exceptions for remote or repository-state operations.
 - Prefer smaller, reviewable patches over oversized batch edits when changing code or documentation.
 - Do not revert or overwrite user changes unless explicitly instructed to do so.
 - Prefer maintainable solutions over clever shortcuts.
@@ -86,7 +87,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 ## MCP requirements
 
 - Use MCP tools whenever they provide the needed capability.
-- GitHub MCP MUST be used for GitHub repository, branch, commit, pull request, review, issue, and workflow operations. If GitHub MCP is unavailable, stop the operation and report the missing dependency rather than replacing it with web search or a raw API call.
+- Use MCP tools whenever they provide the needed capability. GitHub MCP is preferred for GitHub repository, branch, ref, commit, push, pull request, review, issue, and workflow operations, and those MCP calls may run outside the devcontainer. Local Git is allowed for repository-state operations and for publishing the exact signed commit when MCP cannot transfer it. Avoid GitHub CLI commands when MCP provides the same capability; use `gh` only as a documented last resort when neither MCP nor local Git can perform the required operation. Do not use raw API calls as a substitute. If the exact reviewed tree or required commit signature cannot be published and verified, stop instead of reconstructing an unsigned or unverified commit.
 - Context7 MCP MUST be used for documentation work and external technical documentation, including library, provider, API, tool, and platform behavior. If Context7 MCP or the required documentation is unavailable, stop before relying on unverified behavior and report the missing dependency.
 - Never send secrets, private keys, access tokens, or raw infrastructure responses to an MCP tool unless an explicitly documented connector contract requires it and guarantees safe handling.
 
@@ -97,7 +98,7 @@ Future hook or CI enforcement for signed commits is encouraged, but the minimum 
 - Keep `AGENTS.md` at the policy and discoverability level; detailed procedures belong in the skill itself.
 - Keep repo-local skills aligned with the current repository workflow whenever they are added or changed.
 - The repo-local skill `sk-home-write-comments` defines how agents should add, refresh, and review code comments in this repository when comment quality is part of the task.
-- The repo-local skill `sk-home-orchestrator` coordinates scoped implementation tasks through planner, coder, firewaller, reviewer, and documenter subagents. Its production path requires explicit user approval and preserves existing immutable-plan and GitHub environment gates.
+- The repo-local skill `sk-home-orchestrator` coordinates scoped implementation tasks through planner, coder, firewaller, reviewer, and documenter subagents. Its planner must read and use the authoritative gateway inventory pair in `terraform/network/gw/interfaces/interfaces.auto.tfvars` and `terraform/network/gw/interfaces/vlans.auto.tfvars` before creating or updating any plan, and must also read `terraform/network/gw/dhcp/dhcp.auto.tfvars` for address-allocation work. Its production path requires explicit user approval and preserves existing immutable-plan and GitHub environment gates.
 
 ## Pull Request Workflow
 
