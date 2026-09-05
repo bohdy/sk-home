@@ -25,6 +25,12 @@ If `/compact` is not supported in the current environment, reduce context load m
 
 Future hook or CI enforcement for signed commits is encouraged, but the minimum requirement today is that agents follow the signed-commit rule for every commit they create.
 
+## GitHub Operations
+
+- Use the connected GitHub MCP tools for GitHub repositories, issues, pull requests, Actions runs, workflow dispatches, runner status, logs, and other GitHub API operations whenever they are available.
+- Use local Git for repository worktree and commit operations, and use the repository devcontainer for OpenTofu and validation commands; GitHub MCP does not replace those local workflows.
+- Use `gh`, `curl`, or another GitHub CLI/API fallback only when the available GitHub MCP tools do not support the required operation, and record the reason in the task summary.
+
 ## Code Standards
 
 - All code MUST be commented.
