@@ -1,5 +1,5 @@
-# Read the live chains so the managed policy can be placed before the first
-# unmanaged rule without relying on volatile numeric positions.
+# Read the live chains so ownership and the initial adoption order are based on
+# the current RouterOS identities instead of volatile numeric positions.
 data "routeros_ip_firewall" "input_rules" {
   provider = routeros.gw
 
@@ -20,77 +20,103 @@ data "routeros_ip_firewall" "forward_rules" {
   }
 }
 
-locals {
-  # Stable comments identify newly managed rules on later plans. Existing
-  # adopted IDs below cover the first cutover, when their old comments have not
-  # yet been replaced by the stable policy comments.
-  firewall_managed_comments = toset(compact(concat([
-    "Allow Kubernetes worker VLAN to poll Synology SNMP",
-    "Allow Synology SNMP replies to Kubernetes worker VLAN",
-    "Allow Kubernetes worker VLAN to poll UniFi SNMP",
-    "Allow UniFi SNMP replies to Kubernetes worker VLAN",
-    "sk-firewall/input/accept-established-related",
-    "sk-firewall/input/drop-invalid",
-    "sk-firewall/input/allow-icmp-trusted",
-    "sk-firewall/input/allow-loopback",
-    "sk-firewall/input/allow-dhcp",
-    "sk-firewall/input/allow-dns-udp",
-    "sk-firewall/input/allow-dns-tcp",
-    "sk-firewall/input/allow-ipsec-esp",
-    "sk-firewall/input/allow-ipsec-handshake",
-    "sk-firewall/input/allow-kubernetes-bgp",
-    "sk-firewall/input/allow-snmp-monitoring",
-    "sk-firewall/input/allow-management",
-    "sk-firewall/input/drop-unmatched",
-    "sk-firewall/forward/fasttrack-established-related",
-    "sk-firewall/forward/accept-established-related",
-    "sk-firewall/forward/drop-invalid",
-    "sk-firewall/forward/allow-ipsec-in",
-    "sk-firewall/forward/allow-ipsec-out",
-    "sk-firewall/forward/allow-trusted-lan-to-wan",
-    "sk-firewall/forward/allow-kubernetes-service-vips",
-    "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp",
-    "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp",
-    "sk-firewall/forward/allow-smtp-relay-from-printer",
-    "sk-firewall/forward/allow-wan-dstnat",
-    "sk-firewall/forward/drop-inter-vlan",
-    "sk-firewall/forward/drop-wan-inbound",
-    "sk-firewall/forward/drop-unmatched",
-    ], [
-    for rule in concat(
-      values(var.firewall_policy.input_rules),
-      values(var.firewall_policy.forward_rules),
-    ) : try(rule.comment, null)
-  ])))
+data "routeros_ip_firewall" "nat_rules" {
+  provider = routeros.gw
 
-  # Existing adopted resources are excluded by ID during the first cutover.
-  # Once their comments are updated, the stable comment filter keeps them out
-  # of the anchor calculation without a dependency on their state IDs.
-  existing_input_rule_ids = [
-    for rule in values(routeros_ip_firewall_filter.adopted_input) : rule.id
-  ]
-  existing_forward_rule_ids = concat(
-    [for rule in values(routeros_ip_firewall_filter.adopted_forward) : rule.id],
-    [
-      routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id,
-      routeros_ip_firewall_filter.allow_synology_snmp_responses.id,
-      routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id,
-      routeros_ip_firewall_filter.allow_unifi_snmp_responses.id,
-    ],
+  nat {}
+}
+
+data "routeros_ip_firewall" "mangle_rules" {
+  provider = routeros.gw
+
+  mangle {}
+}
+
+data "routeros_ipv6_firewall" "rules" {
+  provider = routeros.gw
+
+  rules {}
+  nat {}
+  mangle {}
+}
+
+# Bridge filtering is a separate RouterOS table. The live baseline has no rows,
+# so fail closed if a future bridge rule appears before a reviewed resource is
+# added to this stack.
+data "routeros_interface_bridge_filter" "rules" {
+  provider = routeros.gw
+}
+
+locals {
+  # A live rule is owned only when its RouterOS identity belongs to a managed
+  # resource in state. Matching a comment is deliberately insufficient: an
+  # unimported duplicate or exception must fail the ownership guard.
+  managed_input_rule_ids = concat(
+    [for rule in values(routeros_ip_firewall_filter.adopted_input) : rule.id],
+    compact([
+      try(routeros_ip_firewall_filter.input_accept_established.id, null),
+      try(routeros_ip_firewall_filter.input_drop_invalid.id, null),
+      try(routeros_ip_firewall_filter.input_allow_icmp_trusted.id, null),
+      try(routeros_ip_firewall_filter.input_allow_loopback.id, null),
+      try(routeros_ip_firewall_filter.input_allow_dhcp.id, null),
+      try(routeros_ip_firewall_filter.input_allow_dns_udp.id, null),
+      try(routeros_ip_firewall_filter.input_allow_dns_tcp.id, null),
+      try(routeros_ip_firewall_filter.input_allow_ipsec_esp.id, null),
+      try(routeros_ip_firewall_filter.input_allow_ipsec_handshake.id, null),
+      try(routeros_ip_firewall_filter.input_allow_kubernetes_bgp[0].id, null),
+      try(routeros_ip_firewall_filter.input_allow_snmp_monitoring.id, null),
+      try(routeros_ip_firewall_filter.input_allow_management.id, null),
+      try(routeros_ip_firewall_filter.input_drop_unmatched.id, null),
+    ]),
   )
+  managed_forward_rule_ids = concat(
+    [for rule in values(routeros_ip_firewall_filter.adopted_forward) : rule.id],
+    compact([
+      try(routeros_ip_firewall_filter.forward_fasttrack_established.id, null),
+      try(routeros_ip_firewall_filter.forward_accept_established.id, null),
+      try(routeros_ip_firewall_filter.forward_drop_invalid.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_ipsec_in.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_ipsec_out.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0].id, null),
+      try(routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id, null),
+      try(routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id, null),
+      try(routeros_ip_firewall_filter.allow_synology_snmp_responses.id, null),
+      try(routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id, null),
+      try(routeros_ip_firewall_filter.allow_unifi_snmp_responses.id, null),
+      try(routeros_ip_firewall_filter.forward_allow_wan_dstnat.id, null),
+      try(routeros_ip_firewall_filter.forward_drop_inter_vlan.id, null),
+      try(routeros_ip_firewall_filter.forward_drop_wan_inbound.id, null),
+      try(routeros_ip_firewall_filter.forward_drop_unmatched.id, null),
+    ]),
+    [for rule in values(routeros_ip_firewall_filter.forward_allow_synology_from_vlans) : rule.id],
+    [for rule in values(routeros_ip_firewall_filter.forward_management) : rule.id],
+  )
+
+  # NAT has a separate RouterOS table and therefore needs its own strict
+  # identity check; importing filter rules alone must not hide an unmanaged
+  # masquerade or destination-NAT exception.
+  managed_nat_rule_ids = [for rule in values(routeros_ip_firewall_nat.adopted) : rule.id]
 
   input_unmanaged_rule_ids = [
     for rule in data.routeros_ip_firewall.input_rules.rules : rule.id
-    if !contains(local.existing_input_rule_ids, rule.id) &&
-    !contains(local.firewall_managed_comments, try(rule.comment, ""))
+    if !contains(local.managed_input_rule_ids, rule.id)
   ]
   forward_unmanaged_rule_ids = [
     for rule in data.routeros_ip_firewall.forward_rules.rules : rule.id
-    if !contains(local.existing_forward_rule_ids, rule.id) &&
-    !contains(local.firewall_managed_comments, try(rule.comment, ""))
+    if !contains(local.managed_forward_rule_ids, rule.id)
   ]
-  input_anchor   = try(local.input_unmanaged_rule_ids[0], null)
-  forward_anchor = try(local.forward_unmanaged_rule_ids[0], null)
+  nat_unmanaged_rule_ids = [
+    for rule in data.routeros_ip_firewall.nat_rules.nat : rule.id
+    if !contains(local.managed_nat_rule_ids, rule.id)
+  ]
+  managed_ipv6_filter_rule_ids = [for rule in values(routeros_ipv6_firewall_filter.adopted) : rule.id]
+  ipv6_filter_unmanaged_rule_ids = [
+    for rule in data.routeros_ipv6_firewall.rules.rules : rule.id
+    if !contains(local.managed_ipv6_filter_rule_ids, rule.id)
+  ]
 
   # The Kubernetes BGP node map is the single source of truth for the exact
   # peer addresses allowed to establish TCP/179 sessions.
@@ -104,38 +130,52 @@ locals {
   # future remote-management exception must add an explicit address-list entry.
   management_sources = var.firewall_policy.management_sources
 
-  # The map's disabled flag controls whether an adopted input exception stays
-  # active. Sorting makes additional reviewed exceptions deterministic while
-  # keeping disabled legacy rules behind the terminal deny.
-  active_input_adoption_keys = [
-    for key in sort(keys(var.firewall_policy.input_rules)) : key
-    if !var.firewall_policy.input_rules[key].disabled
+  # VLAN 100 is the Synology layer-2 segment. Derive every other routed VLAN
+  # from the authoritative inventory unless an operator deliberately supplies
+  # a narrower reviewed source set.
+  synology_source_vlan_ids = length(var.firewall_policy.synology_source_vlan_ids) > 0 ? tolist(var.firewall_policy.synology_source_vlan_ids) : [
+    for vlan_id, vlan in var.vlans : tonumber(vlan_id)
+    if tonumber(vlan_id) != var.firewall_policy.synology_vlan_id && vlan.ip_address != null
   ]
-  disabled_input_adoption_keys = [
-    for key in sort(keys(var.firewall_policy.input_rules)) : key
-    if !contains(local.active_input_adoption_keys, key)
+  synology_routed_vlans = {
+    for vlan_id in local.synology_source_vlan_ids : tostring(vlan_id) => {
+      source_subnet = try(cidrsubnet(var.vlans[tostring(vlan_id)].ip_address, 0, 0), null)
+      in_interface  = try(var.vlans[tostring(vlan_id)].interface_name, null)
+    }
+  }
+
+  # All gateway VLANs need access to the Kubernetes service VIPs used by
+  # internal DNS and applications. This explicit address list avoids adding
+  # camera or AP VLANs to the broader LAN interface list.
+  internal_networks = {
+    for vlan_id, vlan in var.vlans : tostring(vlan_id) => {
+      address = cidrsubnet(vlan.ip_address, 0, 0)
+      comment = "Internal VLAN ${vlan_id} network"
+    } if vlan.ip_address != null
+  }
+
+  active_input_adoption_keys = [
+    "github_actions_runner_https",
+    "wireguard_roadwarrior",
+    "wireguard_site_to_site_handshake",
+  ]
+  active_forward_adoption_keys = [
+    "site_to_site",
+    "known_wan",
+    "wireguard_roadwarrior_to_trusted_lan",
+    "wireguard_site_to_site_to_trusted_lan",
   ]
 
-  # Keep the verified forward exceptions in a deliberate order instead of
-  # relying on map iteration order. Additional reviewed exceptions are appended
-  # deterministically after these baseline paths.
-  baseline_forward_adoption_keys = [
-    for key in [
-      "site_to_site",
-      "known_wan",
-      "wireguard_roadwarrior_to_trusted_lan",
-      "wireguard_site_to_site_to_trusted_lan",
-    ] : key if contains(keys(var.firewall_policy.forward_rules), key)
+  # RouterOS creates this FastTrack counter row dynamically. It is represented
+  # in state for complete identity ownership, but must not be passed to the
+  # provider's move endpoint as if it were a normal policy rule.
+  dynamic_forward_adoption_keys = [
+    "special_dummy_fasttrack_counters",
   ]
-  additional_forward_adoption_keys = [
-    for key in sort(keys(var.firewall_policy.forward_rules)) : key
-    if !contains(local.baseline_forward_adoption_keys, key)
-  ]
-  ordered_forward_adoption_keys = concat(
-    local.baseline_forward_adoption_keys,
-    local.additional_forward_adoption_keys,
-  )
-  ordered_forward_management_keys = sort(keys(var.firewall_policy.forward_management_rules))
+
+  nat_rule_order         = var.firewall_policy.nat_rule_order
+  ipv6_filter_rule_order = var.firewall_policy.ipv6_filter_rule_order
+
 }
 
 # Preserve the existing public VPN endpoint address-list entry while bringing
@@ -145,6 +185,18 @@ resource "routeros_ip_firewall_addr_list" "adopted" {
   for_each = var.firewall_policy.address_lists
 
   list    = each.value.list
+  address = each.value.address
+  comment = each.value.comment
+}
+
+# Keep the internal service boundary explicit instead of broadening the LAN
+# interface list. This allows routed VLANs 101 and 102 to use Kubernetes VIPs
+# while their other inter-VLAN and WAN traffic remains denied by policy.
+resource "routeros_ip_firewall_addr_list" "internal_networks" {
+  provider = routeros.gw
+  for_each = local.internal_networks
+
+  list    = var.firewall_policy.internal_network_address_list
   address = each.value.address
   comment = each.value.comment
 }
@@ -223,6 +275,145 @@ resource "routeros_ip_firewall_filter" "adopted_forward" {
   depends_on = [routeros_ip_firewall_addr_list.adopted]
 }
 
+# Adopt every live NAT row with the same complete attribute model used for
+# filter rules. The disabled legacy destination-NAT row remains represented so
+# it cannot become an unreviewed exception later.
+resource "routeros_ip_firewall_nat" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.nat_rules
+
+  action             = each.value.action
+  chain              = each.value.chain
+  comment            = each.value.comment
+  disabled           = each.value.disabled
+  ipsec_policy       = each.value.ipsec_policy
+  src_address        = each.value.src_address
+  src_address_list   = each.value.src_address_list
+  dst_address        = each.value.dst_address
+  dst_address_list   = each.value.dst_address_list
+  protocol           = each.value.protocol
+  src_port           = each.value.src_port
+  dst_port           = each.value.dst_port
+  in_interface       = each.value.in_interface
+  in_interface_list  = each.value.in_interface_list
+  out_interface      = each.value.out_interface
+  out_interface_list = each.value.out_interface_list
+  to_addresses       = each.value.to_addresses
+  to_ports           = each.value.to_ports
+}
+
+# RouterOS creates the raw and IP mangle FastTrack counter rows dynamically.
+# Keep their identities in state so the inventory has no unowned firewall
+# table entries, while avoiding move or policy mutations for generated rows.
+resource "routeros_ip_firewall_raw" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.raw_rules
+
+  action   = each.value.action
+  chain    = each.value.chain
+  comment  = each.value.comment
+  disabled = each.value.disabled
+
+  # These are RouterOS-generated FastTrack counter rows; provider defaults
+  # must never turn an identity adoption into a live-table update.
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "routeros_ip_firewall_mangle" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.ip_mangle_rules
+
+  action      = each.value.action
+  chain       = each.value.chain
+  comment     = each.value.comment
+  disabled    = each.value.disabled
+  passthrough = each.value.passthrough
+
+  # RouterOS supplies generated counter metadata that the provider normalizes
+  # differently across releases. Keep these dynamic rows state-only.
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+# Preserve the RouterOS default bad-address list used by the IPv6 filter
+# policy. These entries are policy dependencies, not a reason to leave the
+# IPv6 firewall tables outside declarative ownership.
+resource "routeros_ipv6_firewall_addr_list" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.ipv6_address_lists
+
+  list     = each.value.list
+  address  = each.value.address
+  comment  = each.value.comment
+  disabled = each.value.disabled
+}
+
+resource "routeros_ipv6_firewall_filter" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.ipv6_filter_rules
+
+  action             = each.value.action
+  chain              = each.value.chain
+  comment            = each.value.comment
+  disabled           = each.value.disabled
+  log                = each.value.log
+  connection_state   = each.value.connection_state
+  ipsec_policy       = each.value.ipsec_policy
+  src_address        = each.value.src_address
+  src_address_list   = each.value.src_address_list
+  dst_address        = each.value.dst_address
+  dst_address_list   = each.value.dst_address_list
+  protocol           = each.value.protocol
+  src_port           = each.value.src_port
+  dst_port           = each.value.dst_port
+  in_interface       = each.value.in_interface
+  in_interface_list  = each.value.in_interface_list
+  out_interface      = each.value.out_interface
+  out_interface_list = each.value.out_interface_list
+  hop_limit          = each.value.hop_limit
+  headers            = each.value.headers
+  reject_with        = each.value.reject_with
+
+  depends_on = [routeros_ipv6_firewall_addr_list.adopted]
+}
+
+resource "routeros_ipv6_firewall_nat" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.ipv6_nat_rules
+
+  action        = each.value.action
+  chain         = each.value.chain
+  comment       = each.value.comment
+  disabled      = each.value.disabled
+  log           = each.value.log
+  src_address   = each.value.src_address
+  dst_address   = each.value.dst_address
+  protocol      = each.value.protocol
+  src_port      = each.value.src_port
+  dst_port      = each.value.dst_port
+  in_interface  = each.value.in_interface
+  out_interface = each.value.out_interface
+  ipsec_policy  = each.value.ipsec_policy
+  to_address    = each.value.to_address
+  to_ports      = each.value.to_ports
+}
+
+resource "routeros_ipv6_firewall_mangle" "adopted" {
+  provider = routeros.gw
+  for_each = var.firewall_policy.ipv6_mangle_rules
+
+  action          = each.value.action
+  chain           = each.value.chain
+  comment         = each.value.comment
+  disabled        = each.value.disabled
+  log             = each.value.log
+  new_packet_mark = each.value.new_packet_mark
+  passthrough     = each.value.passthrough
+}
+
 # Input policy starts with connection tracking and service-specific allows so
 # the final drop cannot expose a newly enabled RouterOS service accidentally.
 resource "routeros_ip_firewall_filter" "input_accept_established" {
@@ -261,14 +452,21 @@ resource "routeros_ip_firewall_filter" "input_allow_loopback" {
 }
 
 resource "routeros_ip_firewall_filter" "input_allow_dhcp" {
-  provider          = routeros.gw
-  action            = "accept"
-  chain             = "input"
-  in_interface_list = var.firewall_policy.trusted_interface_list
+  provider = routeros.gw
+  action   = "accept"
+  chain    = "input"
+  # DHCP is required by every addressed VLAN, including VLANs 101 and 102
+  # that intentionally stay outside the broader LAN policy.
+  in_interface_list = var.firewall_policy.internal_interface_list
   protocol          = "udp"
   src_port          = "68"
   dst_port          = "67"
   comment           = "sk-firewall/input/allow-dhcp"
+
+  depends_on = [
+    routeros_interface_list.lists,
+    routeros_interface_list_member.list_member_internal_vlan,
+  ]
 }
 
 resource "routeros_ip_firewall_filter" "input_allow_dns_udp" {
@@ -349,13 +547,6 @@ resource "routeros_ip_firewall_filter" "input_drop_unmatched" {
   action   = "drop"
   chain    = "input"
   comment  = "sk-firewall/input/drop-unmatched"
-
-  lifecycle {
-    precondition {
-      condition     = local.input_anchor != null || length(local.input_unmanaged_rule_ids) == 0
-      error_message = "Refusing to order input policy without a stable unmanaged-rule anchor."
-    }
-  }
 }
 
 # Forward policy preserves established sessions, IPsec, trusted egress, the
@@ -410,43 +601,79 @@ resource "routeros_ip_firewall_filter" "forward_allow_trusted_lan_to_wan" {
   comment            = "sk-firewall/forward/allow-trusted-lan-to-wan"
 }
 
+# Permit every routed VLAN in the inventory to reach only the static Synology
+# host. VLAN 100 is excluded because its clients use the local layer-2 path.
+resource "routeros_ip_firewall_filter" "forward_allow_synology_from_vlans" {
+  provider = routeros.gw
+  for_each = local.synology_routed_vlans
+
+  action        = "accept"
+  chain         = "forward"
+  src_address   = each.value.source_subnet
+  dst_address   = var.firewall_policy.synology_address
+  in_interface  = each.value.in_interface
+  out_interface = try(var.vlans[tostring(var.firewall_policy.synology_vlan_id)].interface_name, null)
+  comment       = "sk-firewall/forward/allow-synology-vlan-${each.key}"
+
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for vlan_id in local.synology_source_vlan_ids :
+        contains(keys(var.vlans), tostring(vlan_id)) &&
+        vlan_id != var.firewall_policy.synology_vlan_id &&
+        try(var.vlans[tostring(vlan_id)].ip_address, null) != null
+      ]) && contains(keys(var.vlans), tostring(var.firewall_policy.synology_vlan_id))
+      error_message = "Every Synology source VLAN must exist and have a routed address, and the Synology VLAN must exist in the gateway inventory."
+    }
+  }
+}
+
 resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
   provider          = routeros.gw
   count             = var.kubernetes_bgp.enabled ? 1 : 0
   action            = "accept"
   chain             = "forward"
-  in_interface_list = var.firewall_policy.trusted_interface_list
+  in_interface_list = var.firewall_policy.internal_interface_list
+  src_address_list  = var.firewall_policy.internal_network_address_list
   dst_address_list  = var.kubernetes_bgp.service_vip_address_list
-  comment           = "sk-firewall/forward/allow-kubernetes-service-vips"
+  # Keep the printer-only SMTP exception meaningful even though the general
+  # internal service-VIP rule also covers the Kubernetes VIP address list.
+  dst_address = "!${var.firewall_policy.smtp_relay_service_vip}"
+  comment     = "sk-firewall/forward/allow-kubernetes-service-vips"
 
-  depends_on = [routeros_ip_firewall_addr_list.kubernetes_service_vips]
+  depends_on = [
+    routeros_interface_list.lists,
+    routeros_interface_list_member.list_member_internal_vlan,
+    routeros_ip_firewall_addr_list.internal_networks,
+    routeros_ip_firewall_addr_list.kubernetes_service_vips,
+  ]
 }
 
 # The remote-access client is explicitly documented to use the Kubernetes DNS
 # VIP. Keep this path narrow: only the two verified road-warrior addresses may
 # query UDP/TCP 53, and all other WireGuard-to-VLAN traffic remains denied.
 resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_udp" {
-  provider     = routeros.gw
-  action       = "accept"
-  chain        = "forward"
-  src_address  = var.firewall_policy.wireguard_dns_source_cidr
-  dst_address  = var.firewall_policy.wireguard_dns_service_vip
-  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
-  protocol     = "udp"
-  dst_port     = "53"
-  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp"
+  provider         = routeros.gw
+  action           = "accept"
+  chain            = "forward"
+  src_address_list = var.firewall_policy.wireguard_dns_source_address_list
+  dst_address      = var.firewall_policy.wireguard_dns_service_vip
+  in_interface     = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol         = "udp"
+  dst_port         = "53"
+  comment          = "sk-firewall/forward/allow-wireguard-kubernetes-dns-udp"
 }
 
 resource "routeros_ip_firewall_filter" "forward_allow_wireguard_kubernetes_dns_tcp" {
-  provider     = routeros.gw
-  action       = "accept"
-  chain        = "forward"
-  src_address  = var.firewall_policy.wireguard_dns_source_cidr
-  dst_address  = var.firewall_policy.wireguard_dns_service_vip
-  in_interface = var.firewall_policy.wireguard_roadwarrior_interface
-  protocol     = "tcp"
-  dst_port     = "53"
-  comment      = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
+  provider         = routeros.gw
+  action           = "accept"
+  chain            = "forward"
+  src_address_list = var.firewall_policy.wireguard_dns_source_address_list
+  dst_address      = var.firewall_policy.wireguard_dns_service_vip
+  in_interface     = var.firewall_policy.wireguard_roadwarrior_interface
+  protocol         = "tcp"
+  dst_port         = "53"
+  comment          = "sk-firewall/forward/allow-wireguard-kubernetes-dns-tcp"
 }
 
 # The printer's SMTP relay is a routed Kubernetes VIP. Keep this exception
@@ -582,13 +809,6 @@ resource "routeros_ip_firewall_filter" "forward_drop_unmatched" {
   action   = "drop"
   chain    = "forward"
   comment  = "sk-firewall/forward/drop-unmatched"
-
-  lifecycle {
-    precondition {
-      condition     = local.forward_anchor != null || length(local.forward_unmanaged_rule_ids) == 0
-      error_message = "Refusing to order forward policy without a stable unmanaged-rule anchor."
-    }
-  }
 }
 
 # Move-items receives one complete sequence per chain, which makes the policy
@@ -597,15 +817,18 @@ resource "routeros_move_items" "input_rules" {
   provider      = routeros.gw
   resource_name = "routeros_ip_firewall_filter"
   resource_path = "/ip/firewall/filter"
+  # Put connection tracking and the explicit service policy before the terminal
+  # deny. Imported legacy/default rules stay represented but are deliberately
+  # placed after that deny until their counter-backed cleanup is approved.
   sequence = concat(
     [
       routeros_ip_firewall_filter.input_accept_established.id,
       routeros_ip_firewall_filter.input_drop_invalid.id,
-      routeros_ip_firewall_filter.input_allow_icmp_trusted.id,
       routeros_ip_firewall_filter.input_allow_loopback.id,
       routeros_ip_firewall_filter.input_allow_dhcp.id,
       routeros_ip_firewall_filter.input_allow_dns_udp.id,
       routeros_ip_firewall_filter.input_allow_dns_tcp.id,
+      routeros_ip_firewall_filter.input_allow_icmp_trusted.id,
       routeros_ip_firewall_filter.input_allow_ipsec_esp.id,
       routeros_ip_firewall_filter.input_allow_ipsec_handshake.id,
     ],
@@ -614,17 +837,23 @@ resource "routeros_move_items" "input_rules" {
       routeros_ip_firewall_filter.input_allow_snmp_monitoring.id,
       routeros_ip_firewall_filter.input_allow_management.id,
     ],
-    [
-      for key in local.active_input_adoption_keys :
-      routeros_ip_firewall_filter.adopted_input[key].id
-    ],
+    compact([
+      for key in local.active_input_adoption_keys : try(routeros_ip_firewall_filter.adopted_input[key].id, null)
+    ]),
     [routeros_ip_firewall_filter.input_drop_unmatched.id],
     [
-      for key in local.disabled_input_adoption_keys :
+      for key in sort(keys(var.firewall_policy.input_rules)) :
       routeros_ip_firewall_filter.adopted_input[key].id
+      if !contains(local.active_input_adoption_keys, key)
     ],
-    local.input_anchor == null ? [] : [local.input_anchor],
   )
+
+  lifecycle {
+    precondition {
+      condition     = length(local.input_unmanaged_rule_ids) == 0
+      error_message = "Refusing to manage input policy while any live filter rule remains outside OpenTofu ownership."
+    }
+  }
 
   depends_on = [
     routeros_ip_firewall_addr_list.kubernetes_bgp_peers,
@@ -650,47 +879,61 @@ resource "routeros_move_items" "forward_rules" {
   provider      = routeros.gw
   resource_name = "routeros_ip_firewall_filter"
   resource_path = "/ip/firewall/filter"
+  # IPsec policy exceptions must precede FastTrack. FastTrack then handles
+  # eligible established and related flows after their first packet is
+  # admitted, including routed Synology and Kubernetes service flows.
   sequence = concat(
     [
+      routeros_ip_firewall_filter.forward_allow_ipsec_in.id,
+      routeros_ip_firewall_filter.forward_allow_ipsec_out.id,
       routeros_ip_firewall_filter.forward_fasttrack_established.id,
       routeros_ip_firewall_filter.forward_accept_established.id,
       routeros_ip_firewall_filter.forward_drop_invalid.id,
-      routeros_ip_firewall_filter.forward_allow_ipsec_in.id,
-      routeros_ip_firewall_filter.forward_allow_ipsec_out.id,
-      routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan.id,
     ],
     [
-      for key in local.ordered_forward_adoption_keys :
-      routeros_ip_firewall_filter.adopted_forward[key].id
+      for vlan_id in sort(keys(local.synology_routed_vlans)) :
+      routeros_ip_firewall_filter.forward_allow_synology_from_vlans[vlan_id].id
     ],
+    [routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan.id],
+    compact([
+      for key in local.active_forward_adoption_keys : try(routeros_ip_firewall_filter.adopted_forward[key].id, null)
+    ]),
     var.kubernetes_bgp.enabled ? [routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0].id] : [],
     [
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id,
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id,
       routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id,
-    ],
-    [
       routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id,
       routeros_ip_firewall_filter.allow_synology_snmp_responses.id,
       routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id,
       routeros_ip_firewall_filter.allow_unifi_snmp_responses.id,
     ],
-    [
-      for key in local.ordered_forward_management_keys :
-      routeros_ip_firewall_filter.forward_management[key].id
-    ],
+    [for rule in values(routeros_ip_firewall_filter.forward_management) : rule.id],
     [
       routeros_ip_firewall_filter.forward_allow_wan_dstnat.id,
       routeros_ip_firewall_filter.forward_drop_inter_vlan.id,
       routeros_ip_firewall_filter.forward_drop_wan_inbound.id,
       routeros_ip_firewall_filter.forward_drop_unmatched.id,
     ],
-    local.forward_anchor == null ? [] : [local.forward_anchor],
+    [
+      for key in sort(keys(var.firewall_policy.forward_rules)) :
+      routeros_ip_firewall_filter.adopted_forward[key].id
+      if !contains(local.active_forward_adoption_keys, key) &&
+      !contains(local.dynamic_forward_adoption_keys, key)
+    ],
   )
+
+  lifecycle {
+    precondition {
+      condition     = length(local.forward_unmanaged_rule_ids) == 0
+      error_message = "Refusing to manage forward policy while any live filter rule remains outside OpenTofu ownership."
+    }
+  }
 
   depends_on = [
     routeros_ip_firewall_addr_list.adopted,
     routeros_ip_firewall_addr_list.kubernetes_bgp_peers,
+    routeros_ip_firewall_addr_list.internal_networks,
     routeros_ip_firewall_filter.adopted_forward,
     routeros_ip_firewall_filter.forward_fasttrack_established,
     routeros_ip_firewall_filter.forward_accept_established,
@@ -698,6 +941,7 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.forward_allow_ipsec_in,
     routeros_ip_firewall_filter.forward_allow_ipsec_out,
     routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan,
+    routeros_ip_firewall_filter.forward_allow_synology_from_vlans,
     routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp,
@@ -712,4 +956,105 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.forward_drop_wan_inbound,
     routeros_ip_firewall_filter.forward_drop_unmatched,
   ]
+}
+
+# Preserve and declare the current NAT order separately from the filter-chain
+# order. NAT rules are first-match policy, so an imported row must not be left
+# dependent on the provider's map iteration order.
+resource "routeros_move_items" "nat_rules" {
+  provider      = routeros.gw
+  resource_name = "routeros_ip_firewall_nat"
+  resource_path = "/ip/firewall/nat"
+  sequence = [
+    for key in local.nat_rule_order : routeros_ip_firewall_nat.adopted[key].id
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = length(local.nat_unmanaged_rule_ids) == 0
+      error_message = "Refusing to move NAT policy while any live NAT rule remains outside OpenTofu ownership."
+    }
+  }
+
+  depends_on = [routeros_ip_firewall_nat.adopted]
+}
+
+# The provider exposes the IPv4 mangle and IPv6 tables through data sources,
+# so fail closed if their live row counts diverge from the imported maps. The
+# post-import state/live identity audit covers exact IDs for these tables too.
+resource "terraform_data" "ip_mangle_ownership" {
+  input = length(data.routeros_ip_firewall.mangle_rules.mangle)
+
+  lifecycle {
+    precondition {
+      condition     = length(data.routeros_ip_firewall.mangle_rules.mangle) == length(var.firewall_policy.ip_mangle_rules)
+      error_message = "Refusing to manage IP mangle policy while any live rule remains outside OpenTofu ownership."
+    }
+  }
+
+  depends_on = [routeros_ip_firewall_mangle.adopted]
+}
+
+resource "routeros_move_items" "ipv6_filter_rules" {
+  provider      = routeros.gw
+  resource_name = "routeros_ipv6_firewall_filter"
+  resource_path = "/ipv6/firewall/filter"
+  sequence = [
+    for key in local.ipv6_filter_rule_order : routeros_ipv6_firewall_filter.adopted[key].id
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = length(local.ipv6_filter_unmanaged_rule_ids) == 0
+      error_message = "Refusing to move IPv6 filter policy while any live rule remains outside OpenTofu ownership."
+    }
+  }
+
+  depends_on = [routeros_ipv6_firewall_filter.adopted]
+}
+
+resource "terraform_data" "ipv6_nat_ownership" {
+  input = length(data.routeros_ipv6_firewall.rules.nat)
+
+  lifecycle {
+    precondition {
+      condition     = length(data.routeros_ipv6_firewall.rules.nat) == length(var.firewall_policy.ipv6_nat_rules)
+      error_message = "Refusing to manage IPv6 NAT policy while any live rule remains outside OpenTofu ownership."
+    }
+  }
+
+  depends_on = [routeros_ipv6_firewall_nat.adopted]
+}
+
+resource "terraform_data" "ipv6_mangle_ownership" {
+  input = length(data.routeros_ipv6_firewall.rules.mangle)
+
+  lifecycle {
+    precondition {
+      condition     = length(data.routeros_ipv6_firewall.rules.mangle) == length(var.firewall_policy.ipv6_mangle_rules)
+      error_message = "Refusing to manage IPv6 mangle policy while any live rule remains outside OpenTofu ownership."
+    }
+  }
+
+  depends_on = [routeros_ipv6_firewall_mangle.adopted]
+}
+
+# The RouterOS provider has no raw-table data source. Keep the single dynamic
+# raw counter row state-owned and inventory it on every trusted baseline run;
+# unlike normal policy tables, it is intentionally never sent to /move.
+resource "terraform_data" "raw_ownership" {
+  input = sort(keys(var.firewall_policy.raw_rules))
+
+  depends_on = [routeros_ip_firewall_raw.adopted]
+}
+
+resource "terraform_data" "bridge_filter_ownership" {
+  input = length(data.routeros_interface_bridge_filter.rules.filters)
+
+  lifecycle {
+    precondition {
+      condition     = length(data.routeros_interface_bridge_filter.rules.filters) == 0
+      error_message = "Refusing to manage firewall policy while any live bridge-filter rule remains outside OpenTofu ownership."
+    }
+  }
 }

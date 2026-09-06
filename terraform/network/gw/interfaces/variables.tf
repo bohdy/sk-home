@@ -137,22 +137,33 @@ variable "snmp_v3_priv_password" {
 variable "firewall_policy" {
   description = "Non-secret RouterOS input and forward firewall policy."
   type = object({
-    trusted_interface_list           = optional(string, "LAN")
-    wan_interface_list               = optional(string, "WAN")
-    kubernetes_bgp_interface         = optional(string, "vlan20")
-    kubernetes_bgp_peer_address_list = optional(string, "sk-kubernetes-bgp-peers")
-    wireguard_roadwarrior_interface  = optional(string, "wg-roadwarrior")
-    wireguard_dns_source_cidr        = optional(string, "10.1.250.10/31")
-    wireguard_dns_service_vip        = optional(string, "10.1.30.53")
-    smtp_relay_source_cidr           = optional(string, "10.1.10.250/32")
-    smtp_relay_service_vip           = optional(string, "10.1.30.58")
-    smtp_relay_port                  = optional(string, "587")
-    management_address_list          = optional(string, "sk-router-management-sources")
-    management_ports                 = optional(set(string), ["22", "443"])
+    trusted_interface_list            = optional(string, "LAN")
+    wan_interface_list                = optional(string, "WAN")
+    kubernetes_bgp_interface          = optional(string, "vlan20")
+    kubernetes_bgp_peer_address_list  = optional(string, "sk-kubernetes-bgp-peers")
+    wireguard_roadwarrior_interface   = optional(string, "wg-roadwarrior")
+    wireguard_dns_source_address_list = optional(string, "sk-wireguard-roadwarrior-peers")
+    wireguard_dns_service_vip         = optional(string, "10.1.30.53")
+    smtp_relay_source_cidr            = optional(string, "10.1.10.250")
+    smtp_relay_service_vip            = optional(string, "10.1.30.58")
+    smtp_relay_port                   = optional(string, "587")
+    # Keep the static NAS identity and VLAN association explicit while deriving
+    # the routed source VLAN set from the authoritative VLAN inventory.
+    synology_address              = optional(string, "10.1.100.10")
+    synology_vlan_id              = optional(number, 100)
+    synology_source_vlan_ids      = optional(set(number), [])
+    internal_network_address_list = optional(string, "sk-internal-vlan-networks")
+    internal_interface_list       = optional(string, "sk-internal-vlans")
+    management_address_list       = optional(string, "sk-router-management-sources")
+    management_ports              = optional(set(string), ["22", "443"])
     management_sources = optional(map(object({
       address = string
       comment = string
       })), {
+      vlan10 = {
+        address = "10.1.10.0/24"
+        comment = "RouterOS management sources on VLAN 10"
+      }
       vlan100 = {
         address = "10.1.100.0/24"
         comment = "RouterOS management sources on VLAN 100"
@@ -202,6 +213,409 @@ variable "firewall_policy" {
       out_interface        = optional(string, null)
       out_interface_list   = optional(string, null)
     }))
+    nat_rules = optional(map(object({
+      action             = string
+      chain              = string
+      comment            = optional(string, null)
+      disabled           = optional(bool, false)
+      ipsec_policy       = optional(string, null)
+      src_address        = optional(string, null)
+      src_address_list   = optional(string, null)
+      dst_address        = optional(string, null)
+      dst_address_list   = optional(string, null)
+      protocol           = optional(string, null)
+      src_port           = optional(string, null)
+      dst_port           = optional(string, null)
+      in_interface       = optional(string, null)
+      in_interface_list  = optional(string, null)
+      out_interface      = optional(string, null)
+      out_interface_list = optional(string, null)
+      to_addresses       = optional(string, null)
+      to_ports           = optional(string, null)
+      })), {
+      legacy_disabled_media_dstnat = {
+        action       = "dst-nat"
+        chain        = "dstnat"
+        disabled     = true
+        src_address  = "10.1.102.0/24"
+        dst_address  = "10.1.20.222"
+        to_addresses = "10.1.30.10"
+      }
+      masquerade = {
+        action             = "masquerade"
+        chain              = "srcnat"
+        comment            = "defconf: masquerade"
+        ipsec_policy       = "out,none"
+        out_interface_list = "WAN"
+      }
+      media_dstnat = {
+        action            = "dst-nat"
+        chain             = "dstnat"
+        disabled          = false
+        protocol          = "tcp"
+        dst_port          = "32400"
+        in_interface_list = "WAN"
+        to_addresses      = "192.168.100.10"
+        to_ports          = "32400"
+      }
+    })
+    nat_rule_order = optional(list(string), [
+      "legacy_disabled_media_dstnat",
+      "masquerade",
+      "media_dstnat",
+    ])
+    raw_rules = optional(map(object({
+      action   = string
+      chain    = string
+      comment  = optional(string, null)
+      disabled = optional(bool, null)
+      })), {
+      fasttrack_counter = {
+        action  = "passthrough"
+        chain   = "prerouting"
+        comment = "special dummy rule to show fasttrack counters"
+      }
+    })
+    ip_mangle_rules = optional(map(object({
+      action      = string
+      chain       = string
+      comment     = optional(string, null)
+      disabled    = optional(bool, null)
+      passthrough = optional(bool, null)
+      })), {
+      fasttrack_counter_prerouting = {
+        action  = "passthrough"
+        chain   = "prerouting"
+        comment = "special dummy rule to show fasttrack counters"
+      }
+      fasttrack_counter_forward = {
+        action  = "passthrough"
+        chain   = "forward"
+        comment = "special dummy rule to show fasttrack counters"
+      }
+      fasttrack_counter_postrouting = {
+        action  = "passthrough"
+        chain   = "postrouting"
+        comment = "special dummy rule to show fasttrack counters"
+      }
+    })
+    ipv6_filter_rules = optional(map(object({
+      action             = string
+      chain              = string
+      comment            = optional(string, null)
+      disabled           = optional(bool, false)
+      log                = optional(bool, null)
+      connection_state   = optional(string, null)
+      ipsec_policy       = optional(string, null)
+      src_address        = optional(string, null)
+      src_address_list   = optional(string, null)
+      dst_address        = optional(string, null)
+      dst_address_list   = optional(string, null)
+      protocol           = optional(string, null)
+      src_port           = optional(string, null)
+      dst_port           = optional(string, null)
+      in_interface       = optional(string, null)
+      in_interface_list  = optional(string, null)
+      out_interface      = optional(string, null)
+      out_interface_list = optional(string, null)
+      hop_limit          = optional(string, null)
+      headers            = optional(string, null)
+      reject_with        = optional(string, null)
+      })), {
+      custom_input_source = {
+        action      = "accept"
+        chain       = "input"
+        comment     = "SH"
+        log         = false
+        src_address = "2001:718:2:40::70/128"
+      }
+      bgpv6_output_wireguard = {
+        action        = "accept"
+        chain         = "output"
+        comment       = "Allow BGPv6 output to OPNsense over WG"
+        dst_address   = "fd00:12::2/128"
+        dst_port      = "179"
+        out_interface = "wireguard1"
+        protocol      = "tcp"
+      }
+      bgpv6_input_wireguard = {
+        action       = "accept"
+        chain        = "input"
+        comment      = "Allow BGP IPv6 over WG"
+        dst_port     = "179"
+        in_interface = "wireguard1"
+        protocol     = "tcp"
+      }
+      wireguard_ipv6_input = {
+        action       = "accept"
+        chain        = "input"
+        in_interface = "wireguard1"
+        log          = false
+      }
+      ipv6_input_established = {
+        action           = "accept"
+        chain            = "input"
+        comment          = "defconf: accept established,related,untracked"
+        connection_state = "established,related,untracked"
+      }
+      ipv6_input_drop_invalid = {
+        action           = "drop"
+        chain            = "input"
+        comment          = "defconf: drop invalid"
+        connection_state = "invalid"
+      }
+      ipv6_input_icmpv6 = {
+        action   = "accept"
+        chain    = "input"
+        comment  = "defconf: accept ICMPv6"
+        protocol = "icmpv6"
+      }
+      ipv6_input_traceroute = {
+        action   = "accept"
+        chain    = "input"
+        comment  = "defconf: accept UDP traceroute"
+        dst_port = "33434-33534"
+        protocol = "udp"
+      }
+      ipv6_input_dhcpv6 = {
+        action      = "accept"
+        chain       = "input"
+        comment     = "defconf: accept DHCPv6-Client prefix delegation."
+        dst_port    = "546"
+        protocol    = "udp"
+        src_address = "fe80::/10"
+      }
+      ipv6_input_ike = {
+        action   = "accept"
+        chain    = "input"
+        comment  = "defconf: accept IKE"
+        dst_port = "500,4500"
+        protocol = "udp"
+      }
+      ipv6_input_ah = {
+        action   = "accept"
+        chain    = "input"
+        comment  = "defconf: accept ipsec AH"
+        protocol = "ipsec-ah"
+      }
+      ipv6_input_esp = {
+        action   = "accept"
+        chain    = "input"
+        comment  = "defconf: accept ipsec ESP"
+        protocol = "ipsec-esp"
+      }
+      ipv6_input_ipsec = {
+        action       = "accept"
+        chain        = "input"
+        comment      = "defconf: accept all that matches ipsec policy"
+        ipsec_policy = "in,ipsec"
+      }
+      ipv6_input_drop_not_lan = {
+        action            = "drop"
+        chain             = "input"
+        comment           = "defconf: drop everything else not coming from LAN"
+        in_interface_list = "!LAN"
+      }
+      ipv6_forward_established = {
+        action           = "accept"
+        chain            = "forward"
+        comment          = "defconf: accept established,related,untracked"
+        connection_state = "established,related,untracked"
+      }
+      ipv6_forward_drop_invalid = {
+        action           = "drop"
+        chain            = "forward"
+        comment          = "defconf: drop invalid"
+        connection_state = "invalid"
+      }
+      ipv6_forward_drop_bad_src = {
+        action           = "drop"
+        chain            = "forward"
+        comment          = "defconf: drop packets with bad src ipv6"
+        src_address_list = "bad_ipv6"
+      }
+      ipv6_forward_drop_bad_dst = {
+        action           = "drop"
+        chain            = "forward"
+        comment          = "defconf: drop packets with bad dst ipv6"
+        dst_address_list = "bad_ipv6"
+      }
+      ipv6_forward_drop_hop_limit = {
+        action    = "drop"
+        chain     = "forward"
+        comment   = "defconf: rfc4890 drop hop-limit=1"
+        hop_limit = "equal:1"
+        protocol  = "icmpv6"
+      }
+      ipv6_forward_icmpv6 = {
+        action   = "accept"
+        chain    = "forward"
+        comment  = "defconf: accept ICMPv6"
+        protocol = "icmpv6"
+      }
+      ipv6_forward_hip = {
+        action   = "accept"
+        chain    = "forward"
+        comment  = "defconf: accept HIP"
+        protocol = "139"
+      }
+      ipv6_forward_ike = {
+        action   = "accept"
+        chain    = "forward"
+        comment  = "defconf: accept IKE"
+        dst_port = "500,4500"
+        protocol = "udp"
+      }
+      ipv6_forward_ah = {
+        action   = "accept"
+        chain    = "forward"
+        comment  = "defconf: accept ipsec AH"
+        protocol = "ipsec-ah"
+      }
+      ipv6_forward_esp = {
+        action   = "accept"
+        chain    = "forward"
+        comment  = "defconf: accept ipsec ESP"
+        protocol = "ipsec-esp"
+      }
+      ipv6_forward_ipsec = {
+        action       = "accept"
+        chain        = "forward"
+        comment      = "defconf: accept all that matches ipsec policy"
+        ipsec_policy = "in,ipsec"
+      }
+      ipv6_forward_drop_not_lan = {
+        action            = "drop"
+        chain             = "forward"
+        comment           = "defconf: drop everything else not coming from LAN"
+        in_interface_list = "!LAN"
+      }
+    })
+    ipv6_filter_rule_order = optional(list(string), [
+      "custom_input_source",
+      "bgpv6_output_wireguard",
+      "bgpv6_input_wireguard",
+      "wireguard_ipv6_input",
+      "ipv6_input_established",
+      "ipv6_input_drop_invalid",
+      "ipv6_input_icmpv6",
+      "ipv6_input_traceroute",
+      "ipv6_input_dhcpv6",
+      "ipv6_input_ike",
+      "ipv6_input_ah",
+      "ipv6_input_esp",
+      "ipv6_input_ipsec",
+      "ipv6_input_drop_not_lan",
+      "ipv6_forward_established",
+      "ipv6_forward_drop_invalid",
+      "ipv6_forward_drop_bad_src",
+      "ipv6_forward_drop_bad_dst",
+      "ipv6_forward_drop_hop_limit",
+      "ipv6_forward_icmpv6",
+      "ipv6_forward_hip",
+      "ipv6_forward_ike",
+      "ipv6_forward_ah",
+      "ipv6_forward_esp",
+      "ipv6_forward_ipsec",
+      "ipv6_forward_drop_not_lan",
+    ])
+    ipv6_nat_rules = optional(map(object({
+      action        = string
+      chain         = string
+      comment       = optional(string, null)
+      disabled      = optional(bool, false)
+      log           = optional(bool, null)
+      src_address   = optional(string, null)
+      dst_address   = optional(string, null)
+      protocol      = optional(string, null)
+      src_port      = optional(string, null)
+      dst_port      = optional(string, null)
+      in_interface  = optional(string, null)
+      out_interface = optional(string, null)
+      ipsec_policy  = optional(string, null)
+      to_address    = optional(string, null)
+      to_ports      = optional(string, null)
+      })), {
+      legacy_ipv6_srcnat = {
+        action      = "src-nat"
+        chain       = "srcnat"
+        disabled    = true
+        log         = false
+        src_address = "2001:470:59cf::/48"
+        dst_address = "2001:718:2:40::70/128"
+        to_address  = "2a02:768:e900:47f:0:ffff:a15:a28e/128"
+      }
+    })
+    ipv6_mangle_rules = optional(map(object({
+      action          = string
+      chain           = string
+      comment         = optional(string, null)
+      disabled        = optional(bool, false)
+      log             = optional(bool, null)
+      new_packet_mark = optional(string, null)
+      passthrough     = optional(bool, null)
+      })), {
+      ipv6_mark = {
+        action          = "mark-packet"
+        chain           = "output"
+        comment         = "IPv6 mark"
+        log             = false
+        new_packet_mark = "ipv6"
+        passthrough     = true
+      }
+    })
+    ipv6_address_lists = optional(map(object({
+      list     = string
+      address  = string
+      comment  = optional(string, null)
+      disabled = optional(bool, false)
+      })), {
+      unspecified = {
+        list    = "bad_ipv6"
+        address = "::/128"
+        comment = "defconf: unspecified address"
+      }
+      loopback = {
+        list    = "bad_ipv6"
+        address = "::1/128"
+        comment = "defconf: lo"
+      }
+      site_local = {
+        list    = "bad_ipv6"
+        address = "fec0::/10"
+        comment = "defconf: site-local"
+      }
+      ipv4_mapped = {
+        list    = "bad_ipv6"
+        address = "::ffff:0.0.0.0/96"
+        comment = "defconf: ipv4-mapped"
+      }
+      ipv4_compat = {
+        list    = "bad_ipv6"
+        address = "::/96"
+        comment = "defconf: ipv4 compat"
+      }
+      discard_only = {
+        list    = "bad_ipv6"
+        address = "100::/64"
+        comment = "defconf: discard only "
+      }
+      documentation = {
+        list    = "bad_ipv6"
+        address = "2001:db8::/32"
+        comment = "defconf: documentation"
+      }
+      orchid = {
+        list    = "bad_ipv6"
+        address = "2001:10::/28"
+        comment = "defconf: ORCHID"
+      }
+      sixbone = {
+        list    = "bad_ipv6"
+        address = "3ffe::/16"
+        comment = "defconf: 6bone"
+      }
+    })
     forward_management_rules = optional(map(object({
       comment            = string
       disabled           = optional(bool, false)
@@ -225,11 +639,34 @@ variable "firewall_policy" {
         address = "44.237.169.3"
         comment = "VPN-WEST-02"
       }
+      wireguard_roadwarrior_peer_10 = {
+        list    = "sk-wireguard-roadwarrior-peers"
+        address = "10.1.250.10"
+        comment = "WireGuard road-warrior peer 10.1.250.10"
+      }
+      wireguard_roadwarrior_peer_11 = {
+        list    = "sk-wireguard-roadwarrior-peers"
+        address = "10.1.250.11"
+        comment = "WireGuard road-warrior peer 10.1.250.11"
+      }
     }
     input_rules = {
+      vlan10_router_management = {
+        action      = "accept"
+        comment     = "Allow VLAN10 router management"
+        disabled    = true
+        src_address = "10.1.10.0/24"
+        protocol    = "tcp"
+        dst_port    = "22,80,443"
+      }
+      vlan10_router_ping = {
+        action      = "accept"
+        comment     = "Allow VLAN10 router ping"
+        disabled    = true
+        src_address = "10.1.10.0/24"
+        protocol    = "icmp"
+      }
       wireguard_roadwarrior = {
-        # Reuse this adopted state address for the verified WAN handshake, so
-        # the unsafe broad input rule is narrowed without a destroy.
         action            = "accept"
         comment           = "wireguard"
         protocol          = "udp"
@@ -274,8 +711,80 @@ variable "firewall_policy" {
         dst_port          = "51280"
         in_interface_list = "WAN"
       }
+      github_actions_runner_https = {
+        action       = "accept"
+        comment      = "sk-firewall/input/allow-github-actions-runner-https"
+        src_address  = "10.1.20.200"
+        dst_address  = "10.1.100.1"
+        protocol     = "tcp"
+        dst_port     = "443"
+        in_interface = "vlan20"
+      }
+      default_accept_established = {
+        action           = "accept"
+        comment          = "defconf: accept established,related,untracked"
+        connection_state = "established,related,untracked"
+      }
+      default_drop_invalid = {
+        action           = "drop"
+        comment          = "defconf: drop invalid"
+        connection_state = "invalid"
+      }
+      default_accept_icmp = {
+        action   = "accept"
+        comment  = "defconf: accept ICMP"
+        protocol = "icmp"
+      }
+      default_accept_loopback = {
+        action      = "accept"
+        comment     = "defconf: accept to local loopback (for CAPsMAN)"
+        dst_address = "127.0.0.1"
+      }
+      default_drop_not_lan = {
+        action            = "drop"
+        comment           = "defconf: drop all not coming from LAN"
+        in_interface_list = "!LAN"
+      }
+      default_accept_ipsec_esp = {
+        action   = "accept"
+        protocol = "ipsec-esp"
+      }
+      default_accept_ipsec_handshake = {
+        action   = "accept"
+        protocol = "udp"
+        dst_port = "500,4500"
+      }
     }
     forward_rules = {
+      lan_to_nas = {
+        action      = "accept"
+        comment     = "lan-to-nas"
+        disabled    = true
+        dst_address = "10.1.100.10"
+      }
+      vlan10_to_vlan100_management = {
+        action      = "accept"
+        comment     = "Allow VLAN10 to VLAN100 management"
+        disabled    = true
+        src_address = "10.1.10.0/24"
+        dst_address = "10.1.100.0/24"
+        protocol    = "tcp"
+        dst_port    = "22,80,443,445,5000,5001"
+      }
+      vlan10_to_vlan100_ping = {
+        action      = "accept"
+        comment     = "Allow VLAN10 to VLAN100 ping"
+        disabled    = true
+        src_address = "10.1.10.0/24"
+        dst_address = "10.1.100.0/24"
+        protocol    = "icmp"
+      }
+      special_dummy_fasttrack_counters = {
+        # RouterOS generates this dynamic row to expose FastTrack counters.
+        # Keep it adopted for identity ownership, but never move it as policy.
+        action  = "passthrough"
+        comment = "special dummy rule to show fasttrack counters"
+      }
       site_to_site = {
         action      = "accept"
         comment     = "sk-firewall/forward/allow-site-to-site"
@@ -289,11 +798,10 @@ variable "firewall_policy" {
         in_interface_list = "WAN"
       }
       wireguard_roadwarrior_to_trusted_lan = {
-        action  = "accept"
-        comment = "sk-firewall/forward/allow-wireguard-roadwarrior-to-trusted-lan"
-        # Only the two verified, contiguous active peer addresses can cross
-        # into trusted LANs; RouterOS accepts this exact pair as one /31.
-        src_address        = "10.1.250.10/31"
+        action             = "accept"
+        comment            = "sk-firewall/forward/allow-wireguard-roadwarrior-to-trusted-lan"
+        src_address_list   = "sk-wireguard-roadwarrior-peers"
+        dst_address        = "!10.1.30.0/24"
         in_interface       = "wg-roadwarrior"
         out_interface_list = "LAN"
       }
@@ -303,6 +811,38 @@ variable "firewall_policy" {
         src_address        = "10.2.0.0/16"
         in_interface       = "wireguard1"
         out_interface_list = "LAN"
+      }
+      default_accept_ipsec_in = {
+        action       = "accept"
+        comment      = "defconf: accept in ipsec policy"
+        ipsec_policy = "in,ipsec"
+      }
+      default_accept_ipsec_out = {
+        action       = "accept"
+        comment      = "defconf: accept out ipsec policy"
+        ipsec_policy = "out,ipsec"
+      }
+      default_fasttrack = {
+        action           = "fasttrack-connection"
+        comment          = "defconf: fasttrack"
+        connection_state = "established,related"
+      }
+      default_accept_established = {
+        action           = "accept"
+        comment          = "defconf: accept established,related, untracked"
+        connection_state = "established,related,untracked"
+      }
+      default_drop_invalid = {
+        action           = "drop"
+        comment          = "defconf: drop invalid"
+        connection_state = "invalid"
+      }
+      default_drop_wan_not_dstnat = {
+        action               = "drop"
+        comment              = "defconf: drop all from WAN not DSTNATed"
+        connection_state     = "new"
+        connection_nat_state = "!dstnat"
+        in_interface_list    = "WAN"
       }
     }
   }
@@ -406,7 +946,8 @@ variable "vlans" {
   # Each map key is the VLAN ID string and each value describes which bridge
   # members should carry it tagged or expose it untagged.
   type = map(object({
-    name = string
+    name           = string
+    interface_name = string
     # Tagged members should already use RouterOS interface names that exist in
     # the same declarative inventory.
     tagged   = optional(set(string), null)
@@ -415,7 +956,7 @@ variable "vlans" {
     # A VLAN IP makes OpenTofu create a routed SVI-style interface for that
     # network on top of the shared bridge.
     ip_address = optional(string, null)
-    # Optional interface-list membership is applied to the generated vlan<ID>
+    # Optional interface-list membership is applied to the declared VLAN
     # interface after creation.
     iface_list = optional(string, null)
   }))

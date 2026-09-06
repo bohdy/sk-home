@@ -7,7 +7,7 @@ locals {
   traffic_flow_interfaces = concat(
     ["ether8"],
     [
-      for vlan_id in sort(keys(var.vlans)) : "vlan${vlan_id}"
+      for vlan_id in sort(keys(var.vlans)) : var.vlans[vlan_id].interface_name
       if var.vlans[vlan_id].ip_address != null
     ]
   )
