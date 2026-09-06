@@ -75,6 +75,8 @@ jobs:
             dynamic,
             invalid,
             connection_state: .["connection-state"],
+            connection_nat_state: .["connection-nat-state"],
+            ipsec_policy: .["ipsec-policy"],
             src_address: .["src-address"],
             src_address_list: .["src-address-list"],
             dst_address: .["dst-address"],
@@ -85,8 +87,166 @@ jobs:
             in_interface: .["in-interface"],
             in_interface_list: .["in-interface-list"],
             out_interface: .["out-interface"],
-            out_interface_list: .["out-interface-list"]
+            out_interface_list: .["out-interface-list"],
+            log,
+            log_prefix: .["log-prefix"],
+            reject_with: .["reject-with"],
+            packets,
+            bytes
           }]' > "${baseline_dir}/filters.json"
+
+          collect /rest/ip/firewall/raw | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            dynamic,
+            src_address: .["src-address"],
+            dst_address: .["dst-address"],
+            protocol,
+            src_port: .["src-port"],
+            dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
+            in_interface_list: .["in-interface-list"],
+            out_interface: .["out-interface"],
+            out_interface_list: .["out-interface-list"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/ip-raw.json"
+
+          collect /rest/ip/firewall/mangle | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            dynamic,
+            connection_state: .["connection-state"],
+            connection_nat_state: .["connection-nat-state"],
+            src_address: .["src-address"],
+            src_address_list: .["src-address-list"],
+            dst_address: .["dst-address"],
+            dst_address_list: .["dst-address-list"],
+            protocol,
+            src_port: .["src-port"],
+            dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
+            in_interface_list: .["in-interface-list"],
+            out_interface: .["out-interface"],
+            out_interface_list: .["out-interface-list"],
+            new_packet_mark: .["new-packet-mark"],
+            passthrough,
+            log,
+            log_prefix: .["log-prefix"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/ip-mangle.json"
+
+          collect /rest/interface/bridge/filter | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            dynamic,
+            src_address: .["src-address"],
+            dst_address: .["dst-address"],
+            protocol,
+            src_port: .["src-port"],
+            dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
+            in_interface_list: .["in-interface-list"],
+            out_interface: .["out-interface"],
+            out_interface_list: .["out-interface-list"],
+            mac_protocol: .["mac-protocol"],
+            log,
+            log_prefix: .["log-prefix"],
+            packet_mark: .["packet-mark"],
+            new_packet_mark: .["new-packet-mark"],
+            passthrough,
+            vlan_id: .["vlan-id"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/bridge-filters.json"
+
+          collect /rest/ipv6/firewall/filter | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            dynamic,
+            connection_state: .["connection-state"],
+            ipsec_policy: .["ipsec-policy"],
+            src_address: .["src-address"],
+            src_address_list: .["src-address-list"],
+            dst_address: .["dst-address"],
+            dst_address_list: .["dst-address-list"],
+            protocol,
+            src_port: .["src-port"],
+            dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
+            in_interface_list: .["in-interface-list"],
+            out_interface: .["out-interface"],
+            out_interface_list: .["out-interface-list"],
+            hop_limit: .["hop-limit"],
+            headers,
+            log,
+            log_prefix: .["log-prefix"],
+            reject_with: .["reject-with"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/ipv6-filters.json"
+
+          collect /rest/ipv6/firewall/address-list | jq -ce '[.[] | {
+            id: .[".id"],
+            list,
+            address,
+            comment,
+            disabled,
+            dynamic,
+            timeout
+          }]' > "${baseline_dir}/ipv6-address-lists.json"
+
+          collect /rest/ipv6/firewall/nat | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            src_address: .["src-address"],
+            dst_address: .["dst-address"],
+            protocol,
+            src_port: .["src-port"],
+            dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
+            out_interface: .["out-interface"],
+            ipsec_policy: .["ipsec-policy"],
+            to_address: .["to-address"],
+            to_ports: .["to-ports"],
+            dynamic,
+            invalid,
+            log,
+            log_prefix: .["log-prefix"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/ipv6-nat.json"
+
+          collect /rest/ipv6/firewall/mangle | jq -ce '[.[] | {
+            id: .[".id"],
+            chain,
+            action,
+            comment,
+            disabled,
+            dynamic,
+            new_packet_mark: .["new-packet-mark"],
+            passthrough,
+            log,
+            log_prefix: .["log-prefix"],
+            packets,
+            bytes
+          }]' > "${baseline_dir}/ipv6-mangle.json"
 
           collect /rest/ip/firewall/address-list | jq -ce '[.[] | {
             id: .[".id"],
@@ -183,17 +343,37 @@ jobs:
             action,
             comment,
             disabled,
+            ipsec_policy: .["ipsec-policy"],
             src_address: .["src-address"],
             dst_address: .["dst-address"],
+            src_address_list: .["src-address-list"],
+            dst_address_list: .["dst-address-list"],
             protocol,
             src_port: .["src-port"],
             dst_port: .["dst-port"],
+            in_interface: .["in-interface"],
             in_interface_list: .["in-interface-list"],
-            out_interface_list: .["out-interface-list"]
+            out_interface: .["out-interface"],
+            out_interface_list: .["out-interface-list"],
+            to_addresses: .["to-addresses"],
+            to_ports: .["to-ports"],
+            dynamic,
+            invalid,
+            log,
+            log_prefix: .["log-prefix"],
+            packets,
+            bytes
           }]' > "${baseline_dir}/nat.json"
 
           jq -n \
             --slurpfile filters "${baseline_dir}/filters.json" \
+            --slurpfile ip_raw "${baseline_dir}/ip-raw.json" \
+            --slurpfile ip_mangle "${baseline_dir}/ip-mangle.json" \
+            --slurpfile bridge_filters "${baseline_dir}/bridge-filters.json" \
+            --slurpfile ipv6_filters "${baseline_dir}/ipv6-filters.json" \
+            --slurpfile ipv6_address_lists "${baseline_dir}/ipv6-address-lists.json" \
+            --slurpfile ipv6_nat "${baseline_dir}/ipv6-nat.json" \
+            --slurpfile ipv6_mangle "${baseline_dir}/ipv6-mangle.json" \
             --slurpfile address_lists "${baseline_dir}/address-lists.json" \
             --slurpfile interface_lists "${baseline_dir}/interface-lists.json" \
             --slurpfile interface_list_members "${baseline_dir}/interface-list-members.json" \
@@ -206,6 +386,13 @@ jobs:
             --slurpfile nat "${baseline_dir}/nat.json" \
             '{
               filters: $filters[0],
+              ip_raw: $ip_raw[0],
+              ip_mangle: $ip_mangle[0],
+              bridge_filters: $bridge_filters[0],
+              ipv6_filters: $ipv6_filters[0],
+              ipv6_address_lists: $ipv6_address_lists[0],
+              ipv6_nat: $ipv6_nat[0],
+              ipv6_mangle: $ipv6_mangle[0],
               address_lists: $address_lists[0],
               interface_lists: $interface_lists[0],
               interface_list_members: $interface_list_members[0],
@@ -222,6 +409,13 @@ jobs:
             echo "### RouterOS firewall baseline"
             jq -r '
               "- Filter rules: \(.filters | length)",
+              "- IPv4 raw rules: \(.ip_raw | length)",
+              "- IPv4 mangle rules: \(.ip_mangle | length)",
+              "- Bridge filter rules: \(.bridge_filters | length)",
+              "- IPv6 filter rules: \(.ipv6_filters | length)",
+              "- IPv6 firewall address-list entries: \(.ipv6_address_lists | length)",
+              "- IPv6 NAT rules: \(.ipv6_nat | length)",
+              "- IPv6 mangle rules: \(.ipv6_mangle | length)",
               "- Address-list entries: \(.address_lists | length)",
               "- Interface lists: \(.interface_lists | length)",
               "- Interface-list members: \(.interface_list_members | length)",

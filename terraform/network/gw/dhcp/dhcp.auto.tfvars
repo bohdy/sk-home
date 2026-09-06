@@ -31,9 +31,10 @@ dhcp_scopes = {
     lease_time  = "30m"
   }
   server100 = {
-    interface   = "vlan100"
-    pool_name   = "pool-vlan100"
-    range_start = "10.1.100.10"
+    interface = "vlan100"
+    pool_name = "pool-vlan100"
+    # Keep the statically addressed Synology NAS outside the dynamic pool.
+    range_start = "10.1.100.11"
     range_end   = "10.1.100.250"
     subnet      = "10.1.100.0/24"
     gateway     = "10.1.100.1"

@@ -912,12 +912,27 @@ jobs:
       - name: Plan gateway firewall resources
         run: >-
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=routeros_interface_list.lists
+          -target=routeros_interface_list_member.list_member_internal_vlan
           -target=routeros_ip_firewall_addr_list.adopted
+          -target=routeros_ip_firewall_addr_list.internal_networks
           -target=routeros_ip_firewall_addr_list.kubernetes_bgp_peers
           -target=routeros_ip_firewall_addr_list.management_sources
           -target=routeros_ip_firewall_addr_list.kubernetes_service_vips
           -target=routeros_ip_firewall_filter.adopted_input
           -target=routeros_ip_firewall_filter.adopted_forward
+          -target=routeros_ip_firewall_nat.adopted
+          -target=routeros_ip_firewall_raw.adopted
+          -target=routeros_ip_firewall_mangle.adopted
+          -target=routeros_ipv6_firewall_addr_list.adopted
+          -target=routeros_ipv6_firewall_filter.adopted
+          -target=routeros_ipv6_firewall_nat.adopted
+          -target=routeros_ipv6_firewall_mangle.adopted
+          -target=terraform_data.raw_ownership
+          -target=terraform_data.bridge_filter_ownership
+          -target=terraform_data.ip_mangle_ownership
+          -target=terraform_data.ipv6_nat_ownership
+          -target=terraform_data.ipv6_mangle_ownership
           -target=routeros_ip_firewall_filter.input_accept_established
           -target=routeros_ip_firewall_filter.input_drop_invalid
           -target=routeros_ip_firewall_filter.input_allow_icmp_trusted
@@ -937,6 +952,7 @@ jobs:
           -target=routeros_ip_firewall_filter.forward_allow_ipsec_in
           -target=routeros_ip_firewall_filter.forward_allow_ipsec_out
           -target=routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan
+          -target=routeros_ip_firewall_filter.forward_allow_synology_from_vlans
           -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips
           -target=routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp
           -target=routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp
@@ -952,6 +968,8 @@ jobs:
           -target=routeros_ip_firewall_filter.forward_drop_unmatched
           -target=routeros_move_items.input_rules
           -target=routeros_move_items.forward_rules
+          -target=routeros_move_items.nat_rules
+          -target=routeros_move_items.ipv6_filter_rules
           -out=firewall-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}

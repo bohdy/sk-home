@@ -156,7 +156,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-The firewall plan targets only the gateway address-list, filter, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The policy details and representative acceptance matrix are documented in `terraform/network/gw/interfaces/README.md`.
+The firewall plan targets the gateway internal-interface boundary, all audited IPv4/IPv6 firewall-table resources, address-list, ownership, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The baseline ownership and complete rule review are documented in `terraform/network/gw/interfaces/FIREWALL_REVIEW.md`, with the operational runbook in `terraform/network/gw/interfaces/README.md`.
 
 Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present:
 

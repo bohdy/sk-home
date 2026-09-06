@@ -37,10 +37,9 @@ resource "routeros_interface_ethernet" "ethernet" {
 resource "routeros_interface_vlan" "iface_vlan" {
   for_each = var.vlans
   provider = routeros.gw
-  name     = "vlan${each.key}"
+  name     = each.value.interface_name
   // Terminate each VLAN on the shared bridge so Layer 3 services can bind to
   // the logical VLAN interface rather than to a specific access port.
-  // interface = "vlan${each.key}"
   interface = routeros_interface_bridge.bridge.name
   comment   = each.value.name
 }
@@ -78,7 +77,7 @@ resource "routeros_ip_address" "ip_address_vlan" {
   // managed from the same VLAN inventory that drives bridge tagging rules.
   provider  = routeros.gw
   address   = each.value.ip_address
-  interface = "vlan${each.key}"
+  interface = each.value.interface_name
   comment   = each.value.name
 }
 
@@ -88,7 +87,8 @@ locals {
   interface_lists = {
     for name in distinct(concat(
       [for v in var.interfaces : v.iface_list if v.iface_list != null],
-      [for v in var.vlans : v.iface_list if v.iface_list != null]
+      [for v in var.vlans : v.iface_list if v.iface_list != null],
+      [var.firewall_policy.internal_interface_list]
     )) : name => true
   }
 
@@ -121,10 +121,26 @@ resource "routeros_interface_list_member" "list_member_vlan" {
   for_each = {
     for k, v in var.vlans : k => v if v.iface_list != null
   }
-  // VLAN-backed interface lists are derived from the VLAN ID key because the
-  // RouterOS interface name is generated deterministically as vlan<ID>.
-  interface = "vlan${each.key}"
+  // VLAN-backed interface lists use the interface name from the VLAN inventory.
+  interface = each.value.interface_name
   list      = each.value.iface_list
+}
+
+// Keep a dedicated boundary for routed internal services and DHCP. It includes
+// every addressed VLAN without changing the broader LAN policy used for WAN
+// egress, management, or general inter-VLAN access.
+resource "routeros_interface_list_member" "list_member_internal_vlan" {
+  provider = routeros.gw
+  for_each = {
+    for k, v in var.vlans : k => v
+    if v.ip_address != null && v.iface_list != var.firewall_policy.internal_interface_list
+  }
+  interface = each.value.interface_name
+  list      = var.firewall_policy.internal_interface_list
+
+  # The list is created by the for_each resource above; keep this explicit so
+  # a fresh gateway never receives a member before its list exists.
+  depends_on = [routeros_interface_list.lists]
 }
 
 resource "routeros_ip_firewall_addr_list" "kubernetes_service_vips" {
