@@ -1295,9 +1295,9 @@ jobs:
           ' <<<"${rules}" >/dev/null
 
   gateway-ether7-plan:
-    name: Plan Dell Server ether7 VLAN configuration
-    # Keep the physical port comment and bridge VLAN membership isolated from
-    # unrelated gateway resources that are still awaiting their own review.
+    name: Plan Dell Server ether7 and API firewall configuration
+    # Keep the physical port, bridge VLAN membership, and node API paths
+    # isolated from unrelated gateway resources awaiting their own review.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
@@ -1348,6 +1348,8 @@ jobs:
           -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
           -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
           -target=routeros_ip_firewall_filter.allow_kubernetes_dell
+          -target=routeros_ip_firewall_filter.allow_management_proxmox
+          -target=routeros_ip_firewall_filter.allow_management_dell
           -out=ether7-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -1378,34 +1380,55 @@ jobs:
                   "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]",
                   "routeros_interface_bridge_vlan.bridge_vlan[\"20\"]",
                   "routeros_interface_ethernet.ethernet[\"ether7\"]",
-                  "routeros_ip_firewall_filter.allow_kubernetes_dell"
+                  "routeros_ip_firewall_filter.allow_kubernetes_dell",
+                  "routeros_ip_firewall_filter.allow_management_proxmox",
+                  "routeros_ip_firewall_filter.allow_management_dell"
                 ] | sort) as $mandatory
               | ($mandatory + ["routeros_interface_bridge_port.bridge_port_ethernet[\"ether7\"]"] | sort) as $with_port
+              | ([
+                  "routeros_ip_firewall_filter.allow_management_proxmox",
+                  "routeros_ip_firewall_filter.allow_management_dell"
+                ] | sort) as $management_only
               | ($changes | map(.address) | sort) as $addresses
               | ($changes | map(select(.address == "routeros_interface_ethernet.ethernet[\"ether7\"]"))) as $ethernet
               | ($changes | map(select(.address == "routeros_interface_bridge_vlan.bridge_vlan[\"20\"]"))) as $vlan20
               | ($changes | map(select(.address == "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]"))) as $vlan100
               | ($changes | map(select(.address == "routeros_interface_bridge_port.bridge_port_ethernet[\"ether7\"]"))) as $port
-              | ($changes | map(select(.address == "routeros_ip_firewall_filter.allow_kubernetes_dell"))) as $firewall
+              | ($changes | map(select(.address == "routeros_ip_firewall_filter.allow_kubernetes_dell"))) as $dell_firewall
+              | ($changes | map(select(.address == "routeros_ip_firewall_filter.allow_management_proxmox"))) as $proxmox_management_firewall
+              | ($changes | map(select(.address == "routeros_ip_firewall_filter.allow_management_dell"))) as $dell_management_firewall
+              | ($changes | map(select(.address | startswith("routeros_ip_firewall_filter."))) | map(.address) | sort) as $firewall_addresses
               | (
-                  ($addresses == $mandatory or $addresses == $with_port)
-                  and all($changes[]; if .address == "routeros_ip_firewall_filter.allow_kubernetes_dell" then .change.actions == ["create"] else .change.actions == ["update"] end)
-                  and ($ethernet | length) == 1
-                  and $ethernet[0].change.after.comment == "Dell Server"
-                  and ($vlan20 | length) == 1
-                  and set_equal($vlan20[0].change.after.tagged; ["bridge", "ether4", "ether7", "sfp-sfpplus1"])
-                  and set_equal($vlan20[0].change.after.untagged; [])
-                  and ($vlan100 | length) == 1
-                  and set_equal($vlan100[0].change.after.tagged; ["bridge", "ether1", "sfp-sfpplus1"])
-                  and set_equal($vlan100[0].change.after.untagged; ["ether3", "ether4", "ether7"])
+                  ($addresses == $mandatory or $addresses == $with_port or $addresses == $management_only)
+                  and all($changes[]; if (.address | startswith("routeros_ip_firewall_filter.")) then .change.actions == ["create"] else .change.actions == ["update"] end)
+                  and (($ethernet | length) == 0 or ($ethernet[0].change.after.comment == "Dell Server"))
+                  and (($vlan20 | length) == 0 or (set_equal($vlan20[0].change.after.tagged; ["bridge", "ether4", "ether7", "sfp-sfpplus1"])
+                    and set_equal($vlan20[0].change.after.untagged; [])))
+                  and (($vlan100 | length) == 0 or (set_equal($vlan100[0].change.after.tagged; ["bridge", "ether1", "sfp-sfpplus1"])
+                    and set_equal($vlan100[0].change.after.untagged; ["ether3", "ether4", "ether7"])))
                   and (($port | length) == 0 or $port[0].change.after.pvid == 100)
-                  and ($firewall | length) == 1
-                  and $firewall[0].change.after.action == "accept"
-                  and $firewall[0].change.after.chain == "forward"
-                  and $firewall[0].change.after.src_address == "10.1.20.0/24"
-                  and $firewall[0].change.after.dst_address == "10.1.100.202"
-                  and $firewall[0].change.after.protocol == "tcp"
-                  and $firewall[0].change.after.dst_port == "8006"
+                  and ($firewall_addresses == (["routeros_ip_firewall_filter.allow_kubernetes_dell", "routeros_ip_firewall_filter.allow_management_dell", "routeros_ip_firewall_filter.allow_management_proxmox"] | sort) or $firewall_addresses == $management_only)
+                  and ($dell_firewall | length) == (if ($firewall_addresses | index("routeros_ip_firewall_filter.allow_kubernetes_dell")) then 1 else 0 end)
+                  and (($dell_firewall | length) == 0 or ($dell_firewall[0].change.after.action == "accept"
+                    and $dell_firewall[0].change.after.chain == "forward"
+                    and $dell_firewall[0].change.after.src_address == "10.1.20.0/24"
+                    and $dell_firewall[0].change.after.dst_address == "10.1.100.202"
+                    and $dell_firewall[0].change.after.protocol == "tcp"
+                    and $dell_firewall[0].change.after.dst_port == "8006"))
+                  and ($proxmox_management_firewall | length) == (if ($firewall_addresses | index("routeros_ip_firewall_filter.allow_management_proxmox")) then 1 else 0 end)
+                  and (($proxmox_management_firewall | length) == 0 or ($proxmox_management_firewall[0].change.after.action == "accept"
+                    and $proxmox_management_firewall[0].change.after.chain == "forward"
+                    and $proxmox_management_firewall[0].change.after.src_address == "10.1.10.0/24"
+                    and $proxmox_management_firewall[0].change.after.dst_address == "10.1.100.201"
+                    and $proxmox_management_firewall[0].change.after.protocol == "tcp"
+                    and $proxmox_management_firewall[0].change.after.dst_port == "8006"))
+                  and ($dell_management_firewall | length) == (if ($firewall_addresses | index("routeros_ip_firewall_filter.allow_management_dell")) then 1 else 0 end)
+                  and (($dell_management_firewall | length) == 0 or ($dell_management_firewall[0].change.after.action == "accept"
+                    and $dell_management_firewall[0].change.after.chain == "forward"
+                    and $dell_management_firewall[0].change.after.src_address == "10.1.10.0/24"
+                    and $dell_management_firewall[0].change.after.dst_address == "10.1.100.202"
+                    and $dell_management_firewall[0].change.after.protocol == "tcp"
+                    and $dell_management_firewall[0].change.after.dst_port == "8006"))
                 ) as $valid_update_plan
               | if $expect_updates == "true" then
                   $valid_update_plan
@@ -1413,7 +1436,7 @@ jobs:
                   ($changes | length) == 0 or $valid_update_plan
                 end
             ' >/dev/null; then
-            echo "The ether7 plan contains changes outside the reviewed Dell Server comment, PVID, and VLAN membership." >&2
+            echo "The ether7 plan contains changes outside the reviewed Dell Server, VLAN, or Proxmox API access paths." >&2
             exit 1
           fi
 
@@ -1426,7 +1449,7 @@ jobs:
           retention-days: 7
 
   gateway-ether7-apply:
-    name: Apply Dell Server ether7 VLAN configuration
+    name: Apply Dell Server ether7 and API firewall configuration
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-ether7-plan]
@@ -1524,6 +1547,8 @@ jobs:
               | ($bridge_vlans | map(select(.["comment"] == "VLAN Servers" and .["vlan-ids"] == "20"))) as $vlan20
               | ($bridge_vlans | map(select(.["comment"] == "VLAN MGMT" and .["vlan-ids"] == "100"))) as $vlan100
               | ($firewall_rules | map(select(.comment == "sk-firewall/forward/allow-kubernetes-dell"))) as $dell_rule
+              | ($firewall_rules | map(select(.comment == "sk-firewall/forward/allow-management-proxmox"))) as $proxmox_management_rule
+              | ($firewall_rules | map(select(.comment == "sk-firewall/forward/allow-management-dell"))) as $dell_management_rule
               | ($firewall_rules | map(select(.comment == "sk-firewall/forward/drop-inter-vlan"))) as $inter_vlan_drop
               | ($ether7 | length) == 1
                 and $ether7[0].comment == "Dell Server"
@@ -1544,7 +1569,25 @@ jobs:
                 and $dell_rule[0]["dst-address"] == "10.1.100.202"
                 and $dell_rule[0].protocol == "tcp"
                 and $dell_rule[0]["dst-port"] == "8006"
+                and ($proxmox_management_rule | length) == 1
+                and $proxmox_management_rule[0].action == "accept"
+                and $proxmox_management_rule[0].chain == "forward"
+                and $proxmox_management_rule[0]["src-address"] == "10.1.10.0/24"
+                and $proxmox_management_rule[0]["dst-address"] == "10.1.100.201"
+                and $proxmox_management_rule[0].protocol == "tcp"
+                and $proxmox_management_rule[0]["dst-port"] == "8006"
+                and ($dell_management_rule | length) == 1
+                and $dell_management_rule[0].action == "accept"
+                and $dell_management_rule[0].chain == "forward"
+                and $dell_management_rule[0]["src-address"] == "10.1.10.0/24"
+                and $dell_management_rule[0]["dst-address"] == "10.1.100.202"
+                and $dell_management_rule[0].protocol == "tcp"
+                and $dell_management_rule[0]["dst-port"] == "8006"
                 and ($firewall_rules | map(.comment) | index("sk-firewall/forward/allow-kubernetes-dell"))
+                  < ($firewall_rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan"))
+                and ($firewall_rules | map(.comment) | index("sk-firewall/forward/allow-management-proxmox"))
+                  < ($firewall_rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan"))
+                and ($firewall_rules | map(.comment) | index("sk-firewall/forward/allow-management-dell"))
                   < ($firewall_rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan"))
             ' >/dev/null
 
