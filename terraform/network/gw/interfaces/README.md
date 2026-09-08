@@ -2,7 +2,7 @@
 
 This stack manages the MikroTik gateway bridge, VLAN interfaces, interface lists, Kubernetes BGP peering, and the declarative IPv4/IPv6 firewall policy for the homelab gateway.
 
-The Dell Server on `ether7` carries untagged VLAN 100 traffic and tagged VLAN 20 traffic.
+The Dell Server at `10.1.100.202` on `ether7` carries untagged VLAN 100 traffic and tagged VLAN 20 traffic.
 
 ## Declarative firewall policy
 
@@ -10,7 +10,7 @@ The trusted, read-only inventory run [33994757629](https://github.com/bohdy/sk-h
 
 The policy keeps the current OpenTofu resource addresses for the adopted rules. Unsafe broad input and legacy NAS/VLAN exceptions are disabled in place, while the verified site-to-site, known-WAN, and WireGuard forwarding exceptions remain active and are ordered with the new policy. All captured RouterOS firewall-table rows are state-owned; redundant imported IPv4 filter rules remain after the canonical terminal drops as a deliberate counter-backed cleanup boundary and cannot provide an allow path. Generated FastTrack counter rows remain state-owned at RouterOS-generated positions and are never moved.
 
-The pre-apply targeted hardening plan had 24 creates, 10 in-place updates, and 0 deletes or replacements. It includes the dedicated `sk-internal-vlans` interface boundary, five internal-network address-list entries, one missing VLAN 10 management entry, four exact routed Synology rules, the Kubernetes-to-Proxmox exporter exception, ownership checks, and the IPv6 filter/NAT ordering resources; it also updates DHCP, Kubernetes service-VIP matching, the road-warrior destination boundary, and filter ordering. The isolated exporter exception was applied by [run 34215941200](https://github.com/bohdy/sk-home/actions/runs/34215941200); the broader hardening plan remains unapplied. The complete rule-by-rule review is in [FIREWALL_REVIEW.md](./FIREWALL_REVIEW.md).
+The pre-apply targeted hardening plan had 24 creates, 10 in-place updates, and 0 deletes or replacements. It includes the dedicated `sk-internal-vlans` interface boundary, five internal-network address-list entries, one missing VLAN 10 management entry, four exact routed Synology rules, the Kubernetes-to-Proxmox exporter exception for `10.1.100.201`, the matching Dell Server API exception for `10.1.100.202`, ownership checks, and the IPv6 filter/NAT ordering resources; it also updates DHCP, Kubernetes service-VIP matching, the road-warrior destination boundary, and filter ordering. The isolated exporter exception was applied by [run 34215941200](https://github.com/bohdy/sk-home/actions/runs/34215941200); the broader hardening plan remains unapplied. The complete rule-by-rule review is in [FIREWALL_REVIEW.md](./FIREWALL_REVIEW.md).
 
 The input chain is ordered by `routeros_move_items.input_rules` as follows:
 
@@ -45,12 +45,13 @@ The forward chain is ordered by `routeros_move_items.forward_rules` as follows:
 | 18 | `sk-firewall/forward/allow-smtp-relay-from-printer` | Allow only printer `10.1.10.250/32` to submit SMTP over TCP/587 to relay VIP `10.1.30.58`. |
 | 19-22 | Existing Kubernetes SNMP rules | Preserve the narrow Synology and UniFi request and reply paths; the imported Synology reply rule remains enabled until post-apply counter testing proves it redundant. |
 | 23 | `sk-firewall/forward/allow-kubernetes-proxmox` | Allow the Kubernetes worker VLAN to reach the Proxmox API at `10.1.100.201:8006`; this is the exporter’s only routed management exception. |
-| 24 | `forward_management` | Empty by default; new inter-VLAN management requires a commented map entry. |
-| 25 | `sk-firewall/forward/allow-wan-dstnat` | Preserve only new WAN flows that matched the active destination NAT rule. |
-| 26 | `sk-firewall/forward/drop-inter-vlan` | Drop unauthorized trusted-LAN to trusted-LAN forwarding. |
-| 27 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
-| 28 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
-| 29+ | Retired and other imported rollback rules | Remain after the terminal deny and cannot provide an allow path; every captured identity remains state-owned. The generated FastTrack dummy is state-owned separately and is not moved. |
+| 24 | `sk-firewall/forward/allow-kubernetes-dell` | Allow the Kubernetes worker VLAN to reach the Dell Server’s Proxmox-compatible API at `10.1.100.202:8006`, using the same narrow rule as the original node. |
+| 25 | `forward_management` | Empty by default; new inter-VLAN management requires a commented map entry. |
+| 26 | `sk-firewall/forward/allow-wan-dstnat` | Preserve only new WAN flows that matched the active destination NAT rule. |
+| 27 | `sk-firewall/forward/drop-inter-vlan` | Drop unauthorized trusted-LAN to trusted-LAN forwarding. |
+| 28 | `sk-firewall/forward/drop-wan-inbound` | Drop new WAN-to-LAN flows that are not destination-NATed. |
+| 29 | `sk-firewall/forward/drop-unmatched` | Drop every remaining forwarded packet. |
+| 30+ | Retired and other imported rollback rules | Remain after the terminal deny and cannot provide an allow path; every captured identity remains state-owned. The generated FastTrack dummy is state-owned separately and is not moved. |
 
 The WireGuard forwarding policy uses the verified active road-warrior addresses `10.1.250.10/32` and `10.1.250.11/32` through a dedicated RouterOS address list, plus the verified site peer route `10.2.0.0/16`. The road-warrior rule retains its existing broad trusted-LAN access except for Kubernetes VIPs; the dedicated DNS exceptions permit UDP/TCP 53 at `10.1.30.53`. The printer exception is limited to TCP/587 from `10.1.10.250/32` to SMTP relay VIP `10.1.30.58`; it does not grant the printer general access to other VLAN services. Adding a peer or management path requires a non-secret variable change and a new reviewed policy plan; no private key or preshared key is part of this policy.
 
@@ -82,6 +83,14 @@ gh workflow run terraform.yaml --ref main \
 ```
 
 Review `network-gw-proxmox-tofuplan` and require exactly one create for `sk-firewall/forward/allow-kubernetes-proxmox`, with no deletes or replacements, before the first apply. The production-gated job applies the immutable artifact and verifies the rule is before `sk-firewall/forward/drop-inter-vlan`; this procedure was used successfully in [run 34215941200](https://github.com/bohdy/sk-home/actions/runs/34215941200). Re-run the review-only dispatch afterward and require an empty plan; the guard accepts that post-apply state. Do not use the broader firewall apply path for this alert.
+
+For the Dell Server on `ether7`, use the dedicated review-only interface path:
+
+```bash
+gh workflow run terraform.yaml --ref main -f plan_gateway_ether7=true
+```
+
+Review `network-gw-ether7-tofuplan` and require only the Dell Server ether7 comment update, the VLAN 20 tagged and VLAN 100 untagged membership updates, and the matching Kubernetes-to-Dell TCP/8006 firewall rule for `10.1.100.202`, with no deletes or replacements. After review, run a separate dispatch with `-f apply_gateway_ether7=true`; the production-gated job applies the immutable artifact and verifies the live physical comment, bridge PVID, managed VLAN memberships, and firewall rule. Re-run the review-only dispatch afterward and require an empty plan.
 
 Run the mutually exclusive review-only plan first:
 

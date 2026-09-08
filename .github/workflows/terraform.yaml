@@ -71,6 +71,19 @@ on:
         required: true
         default: false
         type: boolean
+      apply_gateway_ether7:
+        # Isolate the Dell Server switchport reconciliation from the broader
+        # gateway stack and its still-pending firewall changes.
+        description: Apply only the reviewed Dell Server ether7 VLAN configuration
+        required: true
+        default: false
+        type: boolean
+      plan_gateway_ether7:
+        # Permit a review-only ether7 plan before the production-gated apply.
+        description: Plan only the Dell Server ether7 VLAN configuration
+        required: true
+        default: false
+        type: boolean
       apply_gateway_wireguard:
         # WireGuard peer adoption gets its own targeted artifact so unrelated
         # provider-broken gateway resources are not evaluated together.
@@ -132,6 +145,8 @@ jobs:
       PLAN_GATEWAY_FIREWALL: ${{ inputs.plan_gateway_firewall || false }}
       APPLY_GATEWAY_PROXMOX: ${{ inputs.apply_gateway_proxmox || false }}
       PLAN_GATEWAY_PROXMOX: ${{ inputs.plan_gateway_proxmox || false }}
+      APPLY_GATEWAY_ETHER7: ${{ inputs.apply_gateway_ether7 || false }}
+      PLAN_GATEWAY_ETHER7: ${{ inputs.plan_gateway_ether7 || false }}
       APPLY_GATEWAY_WIREGUARD: ${{ inputs.apply_gateway_wireguard || false }}
       APPLY_GATEWAY_DHCP: ${{ inputs.apply_gateway_dhcp || false }}
       APPLY_GATEWAY_IPFIX: ${{ inputs.apply_gateway_ipfix || false }}
@@ -160,6 +175,8 @@ jobs:
             "${PLAN_GATEWAY_FIREWALL}" \
             "${APPLY_GATEWAY_PROXMOX}" \
             "${PLAN_GATEWAY_PROXMOX}" \
+            "${APPLY_GATEWAY_ETHER7}" \
+            "${PLAN_GATEWAY_ETHER7}" \
             "${APPLY_GATEWAY_WIREGUARD}" \
             "${APPLY_GATEWAY_DHCP}" \
             "${APPLY_GATEWAY_IPFIX}" \
@@ -195,13 +212,13 @@ jobs:
     # Only ordinary main-branch planning may access remote state, provider
     # credentials, or immutable plan artifacts here; targeted modes use their
     # own isolated plan jobs below.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
+    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
     strategy:
       max-parallel: 1
       matrix:
         # Targeted BGP, firewall, and WireGuard dispatches use dedicated jobs
         # and omit the provider-sensitive interface stack from this matrix.
-        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
+        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -1276,6 +1293,260 @@ jobs:
                   < ($rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan")))
               end
           ' <<<"${rules}" >/dev/null
+
+  gateway-ether7-plan:
+    name: Plan Dell Server ether7 VLAN configuration
+    # Keep the physical port comment and bridge VLAN membership isolated from
+    # unrelated gateway resources that are still awaiting their own review.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: validate-dispatch
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-ether7-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Get gateway ether7 secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Plan Dell Server ether7 VLAN configuration
+        run: >-
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target='routeros_interface_ethernet.ethernet["ether7"]'
+          -target='routeros_interface_bridge_port.bridge_port_ethernet["ether7"]'
+          -target='routeros_interface_bridge_vlan.bridge_vlan["20"]'
+          -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
+          -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
+          -target=routeros_ip_firewall_filter.allow_kubernetes_dell
+          -out=ether7-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Enforce ether7-only update plan
+        shell: bash
+        env:
+          # Apply mode must carry the known drift corrections. Review
+          # mode also accepts an empty plan after those corrections are live.
+          EXPECT_ETHER7_UPDATES: ${{ inputs.apply_gateway_ether7 || false }}
+        run: |
+          set -euo pipefail
+
+          if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json ether7-tofuplan \
+            | jq -e --arg expect_updates "${EXPECT_ETHER7_UPDATES}" '
+              def set_equal($actual; $expected): (($actual // []) | sort) == ($expected | sort);
+
+              [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
+              | ([
+                  "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]",
+                  "routeros_interface_bridge_vlan.bridge_vlan[\"20\"]",
+                  "routeros_interface_ethernet.ethernet[\"ether7\"]",
+                  "routeros_ip_firewall_filter.allow_kubernetes_dell"
+                ] | sort) as $mandatory
+              | ($mandatory + ["routeros_interface_bridge_port.bridge_port_ethernet[\"ether7\"]"] | sort) as $with_port
+              | ($changes | map(.address) | sort) as $addresses
+              | ($changes | map(select(.address == "routeros_interface_ethernet.ethernet[\"ether7\"]"))) as $ethernet
+              | ($changes | map(select(.address == "routeros_interface_bridge_vlan.bridge_vlan[\"20\"]"))) as $vlan20
+              | ($changes | map(select(.address == "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]"))) as $vlan100
+              | ($changes | map(select(.address == "routeros_interface_bridge_port.bridge_port_ethernet[\"ether7\"]"))) as $port
+              | ($changes | map(select(.address == "routeros_ip_firewall_filter.allow_kubernetes_dell"))) as $firewall
+              | (
+                  ($addresses == $mandatory or $addresses == $with_port)
+                  and all($changes[]; if .address == "routeros_ip_firewall_filter.allow_kubernetes_dell" then .change.actions == ["create"] else .change.actions == ["update"] end)
+                  and ($ethernet | length) == 1
+                  and $ethernet[0].change.after.comment == "Dell Server"
+                  and ($vlan20 | length) == 1
+                  and set_equal($vlan20[0].change.after.tagged; ["bridge", "ether4", "ether7", "sfp-sfpplus1"])
+                  and set_equal($vlan20[0].change.after.untagged; [])
+                  and ($vlan100 | length) == 1
+                  and set_equal($vlan100[0].change.after.tagged; ["bridge", "ether1", "sfp-sfpplus1"])
+                  and set_equal($vlan100[0].change.after.untagged; ["ether3", "ether4", "ether7"])
+                  and (($port | length) == 0 or $port[0].change.after.pvid == 100)
+                  and ($firewall | length) == 1
+                  and $firewall[0].change.after.action == "accept"
+                  and $firewall[0].change.after.chain == "forward"
+                  and $firewall[0].change.after.src_address == "10.1.20.0/24"
+                  and $firewall[0].change.after.dst_address == "10.1.100.202"
+                  and $firewall[0].change.after.protocol == "tcp"
+                  and $firewall[0].change.after.dst_port == "8006"
+                ) as $valid_update_plan
+              | if $expect_updates == "true" then
+                  $valid_update_plan
+                else
+                  ($changes | length) == 0 or $valid_update_plan
+                end
+            ' >/dev/null; then
+            echo "The ether7 plan contains changes outside the reviewed Dell Server comment, PVID, and VLAN membership." >&2
+            exit 1
+          fi
+
+      - name: Upload Dell Server ether7 plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/ether7-tofuplan
+          if-no-files-found: error
+          retention-days: 7
+
+  gateway-ether7-apply:
+    name: Apply Dell Server ether7 VLAN configuration
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: [validate-dispatch, gateway-ether7-plan]
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-ether7-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Download Dell Server ether7 plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get gateway ether7 secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Apply Dell Server ether7 plan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve ether7-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Verify live Dell Server ether7 configuration
+        shell: bash
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+        run: |
+          set -euo pipefail
+
+          # Project only the live fields needed for the postcondition; never
+          # print raw RouterOS responses or credential-bearing request data.
+          ethernet="$(curl --fail --silent --show-error --insecure \
+            --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+            "${ROUTEROS_URL}/rest/interface/ethernet")"
+          bridge_ports="$(curl --fail --silent --show-error --insecure \
+            --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+            "${ROUTEROS_URL}/rest/interface/bridge/port")"
+          bridge_vlans="$(curl --fail --silent --show-error --insecure \
+            --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+            "${ROUTEROS_URL}/rest/interface/bridge/vlan")"
+          firewall_rules="$(curl --fail --silent --show-error --insecure \
+            --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+            "${ROUTEROS_URL}/rest/ip/firewall/filter")"
+
+          jq -e -n \
+            --argjson ethernet "${ethernet}" \
+            --argjson bridge_ports "${bridge_ports}" \
+            --argjson bridge_vlans "${bridge_vlans}" \
+            --argjson firewall_rules "${firewall_rules}" '
+              def members: (. // "" | split(",") | map(select(length > 0)) | sort);
+
+              ($ethernet | map(select(.name == "ether7"))) as $ether7
+              | ($bridge_ports | map(select(.interface == "ether7" and .bridge == "bridge"))) as $port
+              | ($bridge_vlans | map(select(.["comment"] == "VLAN Servers" and .["vlan-ids"] == "20"))) as $vlan20
+              | ($bridge_vlans | map(select(.["comment"] == "VLAN MGMT" and .["vlan-ids"] == "100"))) as $vlan100
+              | ($firewall_rules | map(select(.comment == "sk-firewall/forward/allow-kubernetes-dell"))) as $dell_rule
+              | ($firewall_rules | map(select(.comment == "sk-firewall/forward/drop-inter-vlan"))) as $inter_vlan_drop
+              | ($ether7 | length) == 1
+                and $ether7[0].comment == "Dell Server"
+                and $ether7[0].disabled == "false"
+                and ($port | length) == 1
+                and $port[0].pvid == "100"
+                and $port[0].disabled == "false"
+                and ($vlan20 | length) == 1
+                and ($vlan20[0].tagged | members) == (["bridge", "ether4", "ether7", "sfp-sfpplus1"] | sort)
+                and ($vlan20[0].untagged | members) == []
+                and ($vlan100 | length) == 1
+                and ($vlan100[0].tagged | members) == (["bridge", "ether1", "sfp-sfpplus1"] | sort)
+                and ($vlan100[0].untagged | members) == (["ether3", "ether4", "ether7"] | sort)
+                and ($dell_rule | length) == 1
+                and $dell_rule[0].action == "accept"
+                and $dell_rule[0].chain == "forward"
+                and $dell_rule[0]["src-address"] == "10.1.20.0/24"
+                and $dell_rule[0]["dst-address"] == "10.1.100.202"
+                and $dell_rule[0].protocol == "tcp"
+                and $dell_rule[0]["dst-port"] == "8006"
+                and ($firewall_rules | map(.comment) | index("sk-firewall/forward/allow-kubernetes-dell"))
+                  < ($firewall_rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan"))
+            ' >/dev/null
 
   gateway-wireguard-plan:
     name: Plan gateway WireGuard adoption
