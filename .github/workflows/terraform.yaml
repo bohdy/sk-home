@@ -57,6 +57,20 @@ on:
         required: true
         default: false
         type: boolean
+      apply_gateway_proxmox:
+        # The exporter recovery path must not evaluate or apply the broader
+        # firewall hardening plan at the same time.
+        description: Apply only the Kubernetes to Proxmox firewall rule
+        required: true
+        default: false
+        type: boolean
+      plan_gateway_proxmox:
+        # Permit a review-only Proxmox exporter recovery plan before applying
+        # its single firewall exception in a separate production-gated run.
+        description: Plan only the Kubernetes to Proxmox firewall rule
+        required: true
+        default: false
+        type: boolean
       apply_gateway_wireguard:
         # WireGuard peer adoption gets its own targeted artifact so unrelated
         # provider-broken gateway resources are not evaluated together.
@@ -116,6 +130,8 @@ jobs:
       PLAN_GATEWAY_BGP: ${{ inputs.plan_gateway_bgp || false }}
       APPLY_GATEWAY_FIREWALL: ${{ inputs.apply_gateway_firewall || false }}
       PLAN_GATEWAY_FIREWALL: ${{ inputs.plan_gateway_firewall || false }}
+      APPLY_GATEWAY_PROXMOX: ${{ inputs.apply_gateway_proxmox || false }}
+      PLAN_GATEWAY_PROXMOX: ${{ inputs.plan_gateway_proxmox || false }}
       APPLY_GATEWAY_WIREGUARD: ${{ inputs.apply_gateway_wireguard || false }}
       APPLY_GATEWAY_DHCP: ${{ inputs.apply_gateway_dhcp || false }}
       APPLY_GATEWAY_IPFIX: ${{ inputs.apply_gateway_ipfix || false }}
@@ -142,6 +158,8 @@ jobs:
             "${PLAN_GATEWAY_BGP}" \
             "${APPLY_GATEWAY_FIREWALL}" \
             "${PLAN_GATEWAY_FIREWALL}" \
+            "${APPLY_GATEWAY_PROXMOX}" \
+            "${PLAN_GATEWAY_PROXMOX}" \
             "${APPLY_GATEWAY_WIREGUARD}" \
             "${APPLY_GATEWAY_DHCP}" \
             "${APPLY_GATEWAY_IPFIX}" \
@@ -177,13 +195,13 @@ jobs:
     # Only ordinary main-branch planning may access remote state, provider
     # credentials, or immutable plan artifacts here; targeted modes use their
     # own isolated plan jobs below.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
+    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
     strategy:
       max-parallel: 1
       matrix:
         # Targeted BGP, firewall, and WireGuard dispatches use dedicated jobs
         # and omit the provider-sensitive interface stack from this matrix.
-        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
+        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -961,6 +979,7 @@ jobs:
           -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
           -target=routeros_ip_firewall_filter.allow_unifi_snmp_responses
+          -target=routeros_ip_firewall_filter.allow_kubernetes_proxmox
           -target=routeros_ip_firewall_filter.forward_management
           -target=routeros_ip_firewall_filter.forward_allow_wan_dstnat
           -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
@@ -1063,6 +1082,189 @@ jobs:
           TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+  gateway-proxmox-plan:
+    name: Plan Kubernetes to Proxmox firewall rule
+    # This recovery path targets only the exporter exception and its terminal
+    # deny anchor, avoiding the broader pending firewall hardening plan.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: validate-dispatch
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-proxmox-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Get gateway Proxmox secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Plan Kubernetes to Proxmox firewall rule
+        run: >-
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
+          -target=routeros_ip_firewall_filter.allow_kubernetes_proxmox
+          -out=proxmox-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Enforce single-create Proxmox plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The isolated artifact may contain exactly one create for the new
+          # allow rule; every other resource must remain unchanged.
+          if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json proxmox-tofuplan \
+            | jq -e '
+              [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
+              | ($changes | length) == 1
+              and $changes[0].address == "routeros_ip_firewall_filter.allow_kubernetes_proxmox"
+              and $changes[0].change.actions == ["create"]
+            ' >/dev/null; then
+            echo "The Proxmox recovery plan is broader than one firewall-rule create; refusing to upload it." >&2
+            exit 1
+          fi
+
+      - name: Upload Kubernetes to Proxmox plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/proxmox-tofuplan
+          if-no-files-found: error
+          retention-days: 7
+
+  gateway-proxmox-apply:
+    name: Apply Kubernetes to Proxmox firewall rule
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: [validate-dispatch, gateway-proxmox-plan]
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-proxmox-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Download Kubernetes to Proxmox plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get gateway Proxmox secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Apply Kubernetes to Proxmox plan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve proxmox-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Verify Proxmox exporter firewall rule
+        shell: bash
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+        run: |
+          set -euo pipefail
+
+          # Project only the stable comments and rule fields needed to verify
+          # the live postcondition; never print the raw RouterOS response.
+          rules="$(curl --fail --silent --show-error --insecure \
+            --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+            "${ROUTEROS_URL}/rest/ip/firewall/filter")"
+          jq -e '
+            . as $rules
+            | [$rules[] | select(.comment == "sk-firewall/forward/allow-kubernetes-proxmox")] as $allows
+            | [$rules[] | select(.comment == "sk-firewall/forward/drop-inter-vlan")] as $drops
+            | if ($allows | length) != 1 or ($drops | length) != 1 then
+                error("expected one Proxmox allow rule and one inter-VLAN deny")
+              else
+                ($allows[0] | .action == "accept"
+                  and .chain == "forward"
+                  and .["src-address"] == "10.1.20.0/24"
+                  and .["dst-address"] == "10.1.100.201"
+                  and .protocol == "tcp"
+                  and .["dst-port"] == "8006")
+                and (($rules | map(.comment) | index("sk-firewall/forward/allow-kubernetes-proxmox"))
+                  < ($rules | map(.comment) | index("sk-firewall/forward/drop-inter-vlan")))
+              end
+          ' <<<"${rules}" >/dev/null
 
   gateway-wireguard-plan:
     name: Plan gateway WireGuard adoption

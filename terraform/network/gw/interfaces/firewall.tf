@@ -86,6 +86,7 @@ locals {
       try(routeros_ip_firewall_filter.allow_synology_snmp_responses.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id, null),
       try(routeros_ip_firewall_filter.allow_unifi_snmp_responses.id, null),
+      try(routeros_ip_firewall_filter.allow_kubernetes_proxmox.id, null),
       try(routeros_ip_firewall_filter.forward_allow_wan_dstnat.id, null),
       try(routeros_ip_firewall_filter.forward_drop_inter_vlan.id, null),
       try(routeros_ip_firewall_filter.forward_drop_wan_inbound.id, null),
@@ -750,6 +751,22 @@ resource "routeros_ip_firewall_filter" "allow_unifi_snmp_responses" {
   comment      = "Allow UniFi SNMP replies to Kubernetes worker VLAN"
 }
 
+# Permit the Proxmox exporter to reach the management API across the routed
+# worker and management VLANs before the terminal inter-VLAN deny.
+resource "routeros_ip_firewall_filter" "allow_kubernetes_proxmox" {
+  provider    = routeros.gw
+  action      = "accept"
+  chain       = "forward"
+  src_address = "10.1.20.0/24"
+  dst_address = "10.1.100.201"
+  protocol    = "tcp"
+  dst_port    = "8006"
+  # A targeted apply cannot run the full move-items resource, so place this
+  # exception before the terminal inter-VLAN deny when it is created alone.
+  place_before = routeros_ip_firewall_filter.forward_drop_inter_vlan.id
+  comment      = "sk-firewall/forward/allow-kubernetes-proxmox"
+}
+
 # Management forwarding exceptions stay empty by default. Every entry must
 # provide a comment so an inter-VLAN allowance is reviewable on the gateway.
 resource "routeros_ip_firewall_filter" "forward_management" {
@@ -907,6 +924,7 @@ resource "routeros_move_items" "forward_rules" {
       routeros_ip_firewall_filter.allow_synology_snmp_responses.id,
       routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id,
       routeros_ip_firewall_filter.allow_unifi_snmp_responses.id,
+      routeros_ip_firewall_filter.allow_kubernetes_proxmox.id,
     ],
     [for rule in values(routeros_ip_firewall_filter.forward_management) : rule.id],
     [
