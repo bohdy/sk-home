@@ -2,6 +2,8 @@
 
 This stack manages the MikroTik gateway bridge, VLAN interfaces, interface lists, Kubernetes BGP peering, and the declarative IPv4/IPv6 firewall policy for the homelab gateway.
 
+The Dell Server on `ether7` carries untagged VLAN 100 traffic and tagged VLAN 20 traffic.
+
 ## Declarative firewall policy
 
 The trusted, read-only inventory run [33994757629](https://github.com/bohdy/sk-home/actions/runs/33994757629) captured the current live baseline from `main` on 2026-09-05. It contained 61 IPv4 filter rules, 11 IPv4 address-list entries, three IPv4 NAT rules, one IPv4 raw rule, three IPv4 mangle rules, zero bridge-filter rules, 26 IPv6 filter rules, one IPv6 NAT rule, one IPv6 mangle rule, and nine IPv6 firewall address-list entries, plus six interface lists, 12 interface-list members, 22 interfaces, 13 IPv4 addresses, 48 routes, two active WireGuard interfaces, four WireGuard peers, and 31 RouterOS services. The baseline recorded `LAN` membership for VLANs 10, 20, and 100 plus the managed physical ports, `WAN` membership for `ether8`, the two WireGuard listeners, the existing IPsec rules, FastTrack, Kubernetes service VIP list, and the active TCP/32400 WAN destination NAT. It also exposed the broad `lan-to-nas` accept before FastTrack; the implementation disables that legacy rule while adding exact routed Synology policy.

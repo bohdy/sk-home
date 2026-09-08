@@ -10,7 +10,7 @@ vlans = {
   20 = {
     name           = "VLAN Servers",
     interface_name = "vlan20",
-    tagged         = ["sfp-sfpplus1", "ether4"],
+    tagged         = ["sfp-sfpplus1", "ether4", "ether7"],
     untagged       = [],
     ip_address     = "10.1.20.1/24"
     iface_list     = "LAN"
@@ -19,7 +19,7 @@ vlans = {
     name           = "VLAN MGMT",
     interface_name = "vlan100",
     tagged         = ["sfp-sfpplus1", "ether1"],
-    untagged       = ["ether3", "ether4"],
+    untagged       = ["ether3", "ether4", "ether7"],
     ip_address     = "10.1.100.1/24"
     iface_list     = "LAN"
   },

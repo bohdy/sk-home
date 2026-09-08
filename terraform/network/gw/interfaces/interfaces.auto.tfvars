@@ -25,8 +25,8 @@ interfaces = {
   }
   "ether7" = {
     name    = "ether7"
-    comment = "-empty-"
-    pvid    = 102
+    comment = "Dell Server"
+    pvid    = 100
   }
   "ether8" = {
     name       = "ether8"
