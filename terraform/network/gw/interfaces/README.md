@@ -81,7 +81,7 @@ gh workflow run terraform.yaml --ref main \
   -f apply_cloudflare=false
 ```
 
-Review `network-gw-proxmox-tofuplan` and require exactly one create for `sk-firewall/forward/allow-kubernetes-proxmox`, with no deletes or replacements. The production-gated job applies the immutable artifact and verifies the rule is before `sk-firewall/forward/drop-inter-vlan`; this procedure was used successfully in [run 34215941200](https://github.com/bohdy/sk-home/actions/runs/34215941200). Do not use the broader firewall apply path for this alert.
+Review `network-gw-proxmox-tofuplan` and require exactly one create for `sk-firewall/forward/allow-kubernetes-proxmox`, with no deletes or replacements, before the first apply. The production-gated job applies the immutable artifact and verifies the rule is before `sk-firewall/forward/drop-inter-vlan`; this procedure was used successfully in [run 34215941200](https://github.com/bohdy/sk-home/actions/runs/34215941200). Re-run the review-only dispatch afterward and require an empty plan; the guard accepts that post-apply state. Do not use the broader firewall apply path for this alert.
 
 Run the mutually exclusive review-only plan first:
 
