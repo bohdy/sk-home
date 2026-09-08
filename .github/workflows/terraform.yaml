@@ -1147,19 +1147,30 @@ jobs:
 
       - name: Enforce single-create Proxmox plan
         shell: bash
+        env:
+          # Apply mode must carry the one reviewed create. Review-only mode
+          # also accepts an empty plan after that create has been applied.
+          EXPECT_PROXMOX_CREATE: ${{ inputs.apply_gateway_proxmox || false }}
         run: |
           set -euo pipefail
 
-          # The isolated artifact may contain exactly one create for the new
-          # allow rule; every other resource must remain unchanged.
+          # Every non-no-op change must be the single expected create. A
+          # review-only rerun is also valid when the recovery is already live.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json proxmox-tofuplan \
-            | jq -e '
+            | jq -e --arg expect_create "${EXPECT_PROXMOX_CREATE}" '
               [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
-              | ($changes | length) == 1
-              and $changes[0].address == "routeros_ip_firewall_filter.allow_kubernetes_proxmox"
-              and $changes[0].change.actions == ["create"]
+              | if $expect_create == "true" then
+                  ($changes | length) == 1
+                  and $changes[0].address == "routeros_ip_firewall_filter.allow_kubernetes_proxmox"
+                  and $changes[0].change.actions == ["create"]
+                else
+                  ($changes | length) == 0
+                  or (($changes | length) == 1
+                    and $changes[0].address == "routeros_ip_firewall_filter.allow_kubernetes_proxmox"
+                    and $changes[0].change.actions == ["create"])
+                end
             ' >/dev/null; then
-            echo "The Proxmox recovery plan is broader than one firewall-rule create; refusing to upload it." >&2
+            echo "The Proxmox recovery plan is not an empty plan or one firewall-rule create; refusing to upload it." >&2
             exit 1
           fi
 
