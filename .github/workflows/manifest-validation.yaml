@@ -30,6 +30,8 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@v4.0.1
         with:
+          # Pin a published release so validation does not follow a stale latest pointer.
+          version: 2026.9.2
           install: true
 
       - name: Run repository hooks
