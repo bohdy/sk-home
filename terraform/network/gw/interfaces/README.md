@@ -10,7 +10,7 @@ The trusted, read-only inventory run [33994757629](https://github.com/bohdy/sk-h
 
 The policy keeps the current OpenTofu resource addresses for the adopted rules. Unsafe broad input and legacy NAS/VLAN exceptions are disabled in place, while the verified site-to-site, known-WAN, and WireGuard forwarding exceptions remain active and are ordered with the new policy. All captured RouterOS firewall-table rows are state-owned; redundant imported IPv4 filter rules remain after the canonical terminal drops as a deliberate counter-backed cleanup boundary and cannot provide an allow path. Generated FastTrack counter rows remain state-owned at RouterOS-generated positions and are never moved.
 
-The current targeted hardening plan has 23 creates, 10 in-place updates, and 0 deletes or replacements. It creates the dedicated `sk-internal-vlans` interface boundary, five internal-network address-list entries, one missing VLAN 10 management entry, four exact routed Synology rules, ownership checks, and the IPv6 filter/NAT ordering resources; it also updates DHCP, Kubernetes service-VIP matching, the road-warrior destination boundary, and filter ordering. The live gateway has not been changed by this task. The complete rule-by-rule review is in [FIREWALL_REVIEW.md](./FIREWALL_REVIEW.md).
+The current targeted hardening plan has 24 creates, 10 in-place updates, and 0 deletes or replacements. It creates the dedicated `sk-internal-vlans` interface boundary, five internal-network address-list entries, one missing VLAN 10 management entry, four exact routed Synology rules, the Kubernetes-to-Proxmox exporter exception, ownership checks, and the IPv6 filter/NAT ordering resources; it also updates DHCP, Kubernetes service-VIP matching, the road-warrior destination boundary, and filter ordering. The live gateway has not been changed by this task. The complete rule-by-rule review is in [FIREWALL_REVIEW.md](./FIREWALL_REVIEW.md).
 
 The input chain is ordered by `routeros_move_items.input_rules` as follows:
 
@@ -61,6 +61,27 @@ gh workflow run routeros-firewall-inventory.yaml --ref main
 ```
 
 The workflow uploads only projected IPv4/IPv6 filter, raw, mangle, bridge-filter, NAT, address-list, interface, route, service, and WireGuard metadata. It never writes RouterOS state and never includes private keys, preshared keys, passwords, or raw API responses. Review the artifact against the `firewall_policy` values before applying.
+
+For the firing Proxmox exporter target, use the isolated review-only path so the artifact contains only one new TCP/8006 allow rule:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway=false \
+  -f apply_gateway_snmp=false \
+  -f plan_gateway_snmp=false \
+  -f apply_gateway_bgp=false \
+  -f plan_gateway_bgp=false \
+  -f apply_gateway_firewall=false \
+  -f plan_gateway_firewall=false \
+  -f apply_gateway_proxmox=false \
+  -f plan_gateway_proxmox=true \
+  -f apply_gateway_wireguard=false \
+  -f apply_gateway_dhcp=false \
+  -f apply_gateway_ipfix=false \
+  -f apply_cloudflare=false
+```
+
+Review `network-gw-proxmox-tofuplan` and require exactly one create for `sk-firewall/forward/allow-kubernetes-proxmox`, with no deletes or replacements. After review, run the same dispatch with `apply_gateway_proxmox=true` and `plan_gateway_proxmox=false`; the production-gated job applies the immutable artifact and verifies the rule is before `sk-firewall/forward/drop-inter-vlan`. Do not use the broader firewall apply path for this alert.
 
 Run the mutually exclusive review-only plan first:
 

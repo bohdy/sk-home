@@ -86,6 +86,7 @@ locals {
       try(routeros_ip_firewall_filter.allow_synology_snmp_responses.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id, null),
       try(routeros_ip_firewall_filter.allow_unifi_snmp_responses.id, null),
+      try(routeros_ip_firewall_filter.allow_kubernetes_proxmox.id, null),
       try(routeros_ip_firewall_filter.forward_allow_wan_dstnat.id, null),
       try(routeros_ip_firewall_filter.forward_drop_inter_vlan.id, null),
       try(routeros_ip_firewall_filter.forward_drop_wan_inbound.id, null),
@@ -760,7 +761,10 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_proxmox" {
   dst_address = "10.1.100.201"
   protocol    = "tcp"
   dst_port    = "8006"
-  comment     = "sk-firewall/forward/allow-kubernetes-proxmox"
+  # A targeted apply cannot run the full move-items resource, so place this
+  # exception before the terminal inter-VLAN deny when it is created alone.
+  place_before = routeros_ip_firewall_filter.forward_drop_inter_vlan.id
+  comment      = "sk-firewall/forward/allow-kubernetes-proxmox"
 }
 
 # Management forwarding exceptions stay empty by default. Every entry must
