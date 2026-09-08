@@ -961,6 +961,7 @@ jobs:
           -target=routeros_ip_firewall_filter.allow_synology_snmp_responses
           -target=routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp
           -target=routeros_ip_firewall_filter.allow_unifi_snmp_responses
+          -target=routeros_ip_firewall_filter.allow_kubernetes_proxmox
           -target=routeros_ip_firewall_filter.forward_management
           -target=routeros_ip_firewall_filter.forward_allow_wan_dstnat
           -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
