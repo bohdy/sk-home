@@ -961,6 +961,17 @@ variable "qdevice" {
     ])
     error_message = "qdevice.layer_dir and qdevice.tmpdir must be non-empty canonical paths below /usb1 without traversal components."
   }
+
+  validation {
+    # RouterOS creates the per-container root store during /container/add;
+    # keep its requested path relative to the USB filesystem without a
+    # leading slash or traversal components.
+    condition = !var.qdevice.enabled || (
+      can(regex("^usb1/[^/]+(/[^/]+)*$", var.qdevice.root_dir))
+      && !contains(split("/", var.qdevice.root_dir), "..")
+    )
+    error_message = "qdevice.root_dir must be a non-empty relative path below usb1 without traversal components."
+  }
 }
 
 variable "interfaces" {

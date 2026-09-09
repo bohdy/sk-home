@@ -1311,7 +1311,6 @@ jobs:
           qdevice_untagged="$(jq -ce '.container.network.untagged' <<<"${qdevice_desired}")"
           required_paths="$(jq -ce '
             [
-              .container["root-dir"],
               (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
               (.container.container_config.layer_dir | sub("^/+"; "")),
               (.container.container_config.tmpdir | sub("^/+"; "")),
@@ -1425,6 +1424,17 @@ jobs:
               )
           ' <<<"${files}" >/dev/null; then
             echo "One or more qdevice USB prerequisite directories are missing or not directories." >&2
+            exit 1
+          fi
+
+          if ! jq -e --arg root_dir "${qdevice_root_dir}" '
+            [ .[] | select(.name == $root_dir) ] as $roots
+            | (($roots | length) == 0)
+              or (($roots | length) == 1
+                and $roots[0].type == "directory"
+                and ([ .[] | select((.name // "") | startswith($root_dir + "/")) ] | length) == 0)
+          ' <<<"${files}" >/dev/null; then
+            echo "The qdevice root-dir placeholder must be absent or an empty directory." >&2
             exit 1
           fi
 
