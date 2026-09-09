@@ -628,7 +628,9 @@ if ! verify_authorized_key; then
 fi
 
 if [[ "$container_status_lower" != running ]]; then
-  start_payload=$(jq -cn --arg number "$container_id" '{number:$number}')
+  # RouterOS's `/container/start` selector is the plural `numbers` argument,
+  # even when one container ID is supplied.
+  start_payload=$(jq -cn --arg numbers "$container_id" '{numbers:$numbers}')
   routeros_request POST "$ROUTEROS_URL/rest/container/start" "$start_payload" >/dev/null
 fi
 
