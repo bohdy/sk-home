@@ -178,6 +178,10 @@ if ! jq -e '
     if type != "string" then false
     else test("^/usb1/[^/]+(/[^/]+)*$") and ((split("/") | index("..")) == null)
     end;
+  def safe_root_path:
+    if type != "string" then false
+    else test("^usb1/[^/]+(/[^/]+)*$") and ((split("/") | index("..")) == null)
+    end;
   .mounts as $mounts
   | .container as $container
   | if ($mounts | type) != "object"
@@ -200,7 +204,7 @@ if ! jq -e '
     or (($container["remote-image"] | type) != "string")
     or (($container["remote-image"] | length) == 0)
     or (($container.interface | type) != "string")
-    or (($container["root-dir"] | type) != "string")
+    or (($container["root-dir"] | safe_root_path) | not)
     or (($container.comment | type) != "string")
     or (($container["start-on-boot"] // false) != true)
     or (($container.logging // false) != true)
@@ -359,7 +363,6 @@ verify_state_identity 'routeros_interface_bridge_vlan.bridge_vlan["100"]' "$vlan
 
 required_paths="$(jq -ce '
   [
-    .container["root-dir"],
     (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
     (.container.container_config.layer_dir | sub("^/+"; "")),
     (.container.container_config.tmpdir | sub("^/+"; "")),
@@ -398,6 +401,33 @@ if ! jq -e '
 ' <<<"$container_config" >/dev/null; then
   echo "RouterOS global container registry configuration is malformed or not Docker Hub." >&2
   exit 1
+fi
+
+# RouterOS creates the root-dir store during /container/add. A prior failed
+# attempt or manual preparation may leave the exact empty placeholder behind;
+# remove only that placeholder and refuse any directory containing data.
+root_dir_matches="$(jq -c --arg root_dir "$(jq -er '.root-dir' <<<"$container_spec")" '[.[] | select(.name == $root_dir)]' <<<"$files")"
+root_dir_count="$(jq -er 'length' <<<"$root_dir_matches")"
+if [[ "$root_dir_count" -gt 1 ]] ||
+   [[ "$root_dir_count" == 1 && "$(jq -er '.[0].type' <<<"$root_dir_matches")" != directory ]]; then
+  echo "The reviewed RouterOS qnetd root-dir path is not a single directory." >&2
+  exit 1
+fi
+root_dir="$(jq -er '.root-dir' <<<"$container_spec")"
+root_dir_children="$(jq -er --arg root_dir "$root_dir" '[.[] | select((.name // "") | startswith($root_dir + "/"))] | length' <<<"$files")"
+if [[ "$root_dir_children" != 0 ]]; then
+  echo "The reviewed RouterOS qnetd root-dir placeholder contains data; refusing to remove it." >&2
+  exit 1
+fi
+if [[ "$root_dir_count" == 1 ]]; then
+  root_dir_id="$(jq -er '.[0][".id"]' <<<"$root_dir_matches")"
+  routeros_request DELETE "$ROUTEROS_URL/rest/file/$root_dir_id" >/dev/null
+  files=$(routeros_request GET "$ROUTEROS_URL/rest/file")
+  if ! jq -e --arg root_dir "$root_dir" 'all(.[]; .name != $root_dir and (((.name // "") | startswith($root_dir + "/")) | not))' <<<"$files" >/dev/null; then
+    echo "RouterOS did not remove the exact empty qnetd root-dir placeholder." >&2
+    exit 1
+  fi
+  echo "Removed the exact empty RouterOS qnetd root-dir placeholder before container creation."
 fi
 
 # Existing mount rows may be absent or an exact subset of the desired set so
