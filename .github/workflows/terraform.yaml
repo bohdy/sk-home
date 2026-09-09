@@ -1340,7 +1340,7 @@ jobs:
           ' <<<"${containers}" >/dev/null; then
             echo "Existing RouterOS containers are not exactly the qnetd declaration." >&2
             exit 1
-          }
+          fi
 
           if ! jq -e '
             . as $mounts
