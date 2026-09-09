@@ -5,42 +5,102 @@
 # reviewed provider plan before invoking this script so the state-only desired
 # records and provider-managed prerequisites already exist.
 set -euo pipefail
+umask 077
 
 : "$MIKROTIK_USERNAME"
 : "$MIKROTIK_PASSWORD"
 : "$ROUTEROS_URL"
 : "$STACK_PATH"
 
+# Keep the single raw response file private and remove it on every exit path,
+# including cancellation while curl is receiving an HTTP error response.
+routeros_response_dir="$(mktemp -d)"
+routeros_response_file="${routeros_response_dir}/response.json"
+cleanup_routeros_response() {
+  rm -f -- "$routeros_response_file"
+  rmdir -- "$routeros_response_dir"
+}
+trap cleanup_routeros_response EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
+
 # Use curl's stdin configuration so credentials never appear in process
-# arguments, logs, or repository files. Responses are piped directly to jq or
-# discarded; this helper never prints a RouterOS response.
+# arguments, logs, or repository files. Responses are kept in a temporary file
+# so HTTP failures can be classified without printing a potentially sensitive
+# RouterOS error body.
+routeros_error_class() {
+  local response_file="$1"
+
+  jq -r '
+    if type != "object" then
+      "unstructured"
+    else
+      [ .message, .detail ]
+      | map(select(type == "string"))
+      | join(" ") as $detail
+      | if ($detail | length) == 0 then
+          "none"
+        elif ($detail | test("unknown parameter|unknown property|no such command|invalid parameter"; "i")) then
+          "parameter"
+        elif ($detail | test("remote-image|image|registry|manifest|repository|pull|resolve|architecture"; "i")) then
+          "image-or-registry"
+        elif ($detail | test("root-dir|root directory|layer-dir|tmpdir|storage|disk|directory|path|space"; "i")) then
+          "storage-path"
+        elif ($detail | test("mountlists|mount list|mount|list"; "i")) then
+          "mount-list"
+        elif ($detail | test("interface|veth|network"; "i")) then
+          "network"
+        elif ($detail | test("name|tag"; "i")) then
+          "name"
+        elif ($detail | test("permission|denied|not permitted|authoriz"; "i")) then
+          "permission"
+        else
+          "other"
+        end
+    end
+  ' "$response_file" 2>/dev/null || printf '%s\n' 'unstructured'
+}
+
 routeros_request() {
   local method="$1"
   local url="$2"
   local payload=${3-}
   local endpoint="${url#"$ROUTEROS_URL"}"
+  local http_code
   local response
 
   # Keep the response private while identifying the endpoint on transport or
   # HTTP failure; raw RouterOS errors may contain configuration data.
-  if ! response="$(
+  if ! http_code="$(
     REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
       jq -nr '
         "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
         "url = " + ($ENV.REQUEST_URL | @json),
         "request = " + ($ENV.REQUEST_METHOD | @json),
         "insecure",
-        "fail",
         "silent",
         "show-error",
         "header = " + ("Content-Type: application/json" | @json),
         (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
-      ' | curl --config -
+      ' | curl --config - --output "$routeros_response_file" --write-out '%{http_code}'
   )"; then
+    rm -f -- "$routeros_response_file"
     echo "RouterOS request failed: ${method} ${endpoint:-/}." >&2
     return 1
   fi
 
+  if [[ ! "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    local error_class
+    error_class="$(routeros_error_class "$routeros_response_file")"
+    rm -f -- "$routeros_response_file"
+    echo "RouterOS request failed: ${method} ${endpoint:-/} (HTTP ${http_code}; error-class=${error_class})." >&2
+    return 1
+  fi
+
+  response="$(<"$routeros_response_file")"
+  rm -f -- "$routeros_response_file"
   printf '%s\n' "$response"
 }
 
@@ -186,6 +246,31 @@ qdevice_container_name="$(jq -er '.name' <<<"$container_spec")"
 qdevice_image="$(jq -er '."remote-image"' <<<"$container_spec")"
 qdevice_layer_dir="$(jq -er '.layer_dir' <<<"$container_config_spec")"
 qdevice_tmpdir="$(jq -er '.tmpdir' <<<"$container_config_spec")"
+
+# RouterOS 7.23 exposes runtime state as the string/boolean `.running` field;
+# retain compatibility with installations that expose a human-readable
+# `.status` field instead.
+container_runtime_status() {
+  local container_id="$1"
+
+  jq -r --arg id "$container_id" '
+    [ .[] | select(.[".id"] == $id) ]
+    | if length != 1 then
+        ""
+      else
+        .[0] as $container
+        | if (($container.status // "") | tostring | length) > 0 then
+            ($container.status | tostring | ascii_downcase)
+          elif (($container.running | tostring | ascii_downcase) == "true") then
+            "running"
+          elif (($container.running | tostring | ascii_downcase) == "false") then
+            "stopped"
+          else
+            ""
+          end
+      end
+  '
+}
 
 veths=$(routeros_request GET "$ROUTEROS_URL/rest/interface/veth")
 ports=$(routeros_request GET "$ROUTEROS_URL/rest/interface/bridge/port")
@@ -460,7 +545,7 @@ for attempt in $(seq 1 60); do
     exit 1
   fi
   container_id=$(jq -r --arg image "$qdevice_image" --arg name "$qdevice_container_name" '[.[] | select(((.["remote-image"] // "") == $image) and ((.name // "") == $name))] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")
-  container_status=$(jq -r --arg id "$container_id" '[.[] | select(.[".id"] == $id)] | if length == 1 then (.[0].status // "") else "" end' <<<"$containers")
+  container_status="$(container_runtime_status "$container_id" <<<"$containers")"
   if [[ -n "$container_id" ]] && [[ "$container_status" =~ ^(stopped|running)$ ]]; then
     break
   fi
@@ -471,7 +556,7 @@ for attempt in $(seq 1 60); do
   sleep 5
 done
 
-container_status_lower=$(printf '%s' "$container_status" | tr '[:upper:]' '[:lower:]')
+container_status_lower="$container_status"
 
 public_key_file="terraform/$STACK_PATH/qdevice-authorized.pub"
 expected_key_content="$(printf '%s\n' "$(tr -d '\r\n' < "$public_key_file")")"
@@ -507,8 +592,8 @@ for attempt in $(seq 1 24); do
     echo "RouterOS returned a malformed container collection while starting qnetd." >&2
     exit 1
   fi
-  container_status=$(jq -r --arg id "$container_id" '[.[] | select(.[".id"] == $id)] | if length == 1 then (.[0].status // "") else "" end' <<<"$containers")
-  container_status_lower=$(printf '%s' "$container_status" | tr '[:upper:]' '[:lower:]')
+  container_status="$(container_runtime_status "$container_id" <<<"$containers")"
+  container_status_lower="$container_status"
   if [[ "$container_status_lower" == running ]]; then
     break
   fi
@@ -540,6 +625,16 @@ if ! jq -e --argjson wanted "$container_spec" '
     end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
+  def runtime_state:
+    if ((.status // "") | tostring | length) > 0 then
+      (.status | tostring | ascii_downcase)
+    elif ((.running | tostring | ascii_downcase) == "true") then
+      "running"
+    elif ((.running | tostring | ascii_downcase) == "false") then
+      "stopped"
+    else
+      ""
+    end;
   (type == "array")
   and (length == 1)
   and (.[0] as $actual
@@ -551,7 +646,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       and (($actual["start-on-boot"] // false) | truthy)
       and (($actual.logging // false) | truthy)
       and ($actual.comment // "") == $wanted.comment
-      and (($actual.status // "") | ascii_downcase) == "running")
+      and (($actual | runtime_state) == "running"))
 ' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container")" >/dev/null; then
   echo "The recovered RouterOS container does not match the reviewed qnetd declaration." >&2
   exit 1
