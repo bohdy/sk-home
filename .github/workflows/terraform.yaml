@@ -1461,6 +1461,8 @@ jobs:
           fi
 
           if ! jq -e --argjson required "${qdevice_mount_specs}" '
+            def canonical_native_src:
+              if type == "string" and startswith("/usb1/") then .[1:] else . end;
             . as $mounts
             | ($mounts | type) == "array"
               and all($mounts[];
@@ -1474,7 +1476,7 @@ jobs:
                   and (($actual.dst | length) > 0)
                   and any($required[];
                     .list == $actual.list
-                    and .src == $actual.src
+                    and .src == ($actual.src | canonical_native_src)
                     and .dst == $actual.dst
                   )
               )
@@ -1484,6 +1486,8 @@ jobs:
             # mount-list identifiers and counts aid diagnosis, while source/
             # destination paths and all other infrastructure fields stay out of logs.
             mount_summary="$(jq -c --argjson required "${qdevice_mount_specs}" '
+              def canonical_native_src:
+                if type == "string" and startswith("/usb1/") then .[1:] else . end;
               if type != "array" then
                 {type: type}
               else
@@ -1500,7 +1504,7 @@ jobs:
                       empty
                     elif any($required[];
                       .list == $actual.list
-                      and .src == $actual.src
+                      and .src == ($actual.src | canonical_native_src)
                       and .dst == $actual.dst
                     ) then
                       $actual
@@ -2011,10 +2015,12 @@ jobs:
             and .tmpdir == $tmpdir
           ' >/dev/null
           routeros_request GET "$ROUTEROS_URL/rest/container/mounts" | jq -e --argjson required "$mount_specs" '
+            def canonical_native_src:
+              if type == "string" and startswith("/usb1/") then .[1:] else . end;
             (type == "array")
             and (length == 3)
             and (all(.[]; type == "object" and (.list | type) == "string" and (.src | type) == "string" and (.dst | type) == "string"))
-            and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
+            and (map({list:.list,src:(.src | canonical_native_src),dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
           ' >/dev/null
           routeros_request GET "$ROUTEROS_URL/rest/container" | jq -e --argjson wanted "$container_spec" '
             def values:

@@ -314,8 +314,12 @@ fi
 
 # Existing mount rows may be absent or an exact subset of the desired set so
 # an interrupted recovery can resume. Any unrelated, duplicate, or mismatched
-# row is a conflict and is never overwritten.
+# row is a conflict and is never overwritten. RouterOS reports native USB
+# mount sources with one leading slash; canonicalize only that representation
+# for comparison while leaving the reviewed payload unchanged.
 if ! jq -e --argjson required "$mount_specs" '
+  def canonical_native_src:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   . as $mounts
   | (type == "array")
     and all($mounts[];
@@ -329,7 +333,7 @@ if ! jq -e --argjson required "$mount_specs" '
         and (($actual.dst | length) > 0)
         and any($required[];
           .list == $actual.list
-          and .src == $actual.src
+          and .src == ($actual.src | canonical_native_src)
           and .dst == $actual.dst
         )
     )
@@ -382,7 +386,15 @@ while IFS= read -r mount_spec; do
       echo "RouterOS returned a malformed mount collection after creation." >&2
       exit 1
     fi
-  elif [[ "$mount_count" != 1 ]] || ! jq -e --argjson wanted "$mount_spec" 'any(.[]; .list == $wanted.list and .src == $wanted.src and .dst == $wanted.dst)' <<<"$mounts" >/dev/null; then
+  elif [[ "$mount_count" != 1 ]] || ! jq -e --argjson wanted "$mount_spec" '
+    def canonical_native_src:
+      if type == "string" and startswith("/usb1/") then .[1:] else . end;
+    any(.[];
+      .list == $wanted.list
+      and ($wanted.src == (.src | canonical_native_src))
+      and .dst == $wanted.dst
+    )
+  ' <<<"$mounts" >/dev/null; then
     echo "The RouterOS mount $mount_list is conflicting or duplicated." >&2
     exit 1
   fi
@@ -503,10 +515,12 @@ done
 
 # Verify exact native objects before creating the fresh immutable plan.
 if ! jq -e --argjson required "$mount_specs" '
+  def canonical_native_src:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   (type == "array")
   and (length == 3)
   and (all(.[]; type == "object" and (.list | type) == "string" and (.src | type) == "string" and (.dst | type) == "string"))
-  and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
+  and (map({list:.list,src:(.src | canonical_native_src),dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
 ' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container/mounts")" >/dev/null; then
   echo "The recovered RouterOS mount set does not match the reviewed qnetd declaration." >&2
   exit 1
