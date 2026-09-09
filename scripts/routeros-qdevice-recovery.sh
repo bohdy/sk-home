@@ -603,17 +603,19 @@ done
 container_status_lower="$container_status"
 
 public_key_file="terraform/$STACK_PATH/qdevice-authorized.pub"
-expected_key_content="$(printf '%s\n' "$(tr -d '\r\n' < "$public_key_file")")"
+# Command substitution strips trailing newlines, so retain the key line and
+# add the required single newline inside jq when comparing RouterOS contents.
+expected_key_line="$(tr -d '\r\n' < "$public_key_file")"
 key_path="$(jq -er '.container.container_config.authorized_key_path' <<<"$qdevice_desired")"
 
 verify_authorized_key() {
   routeros_request GET "$ROUTEROS_URL/rest/file?.proplist=name,type,size,contents" |
-    jq -e --arg key_path "$key_path" --arg expected_content "$expected_key_content" '
+    jq -e --arg key_path "$key_path" --arg expected_key_line "$expected_key_line" '
       (type == "array")
       and ([.[] | select(.name == $key_path)] | length == 1)
       and ([.[] | select(.name == $key_path)][0].type == "file")
       and (([.[] | select(.name == $key_path)][0].size // "0" | tonumber) > 0)
-      and ([.[] | select(.name == $key_path)][0].contents == $expected_content)
+      and ([.[] | select(.name == $key_path)][0].contents == ($expected_key_line + "\n"))
     ' >/dev/null
 }
 
