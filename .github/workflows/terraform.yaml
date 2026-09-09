@@ -1157,31 +1157,19 @@ jobs:
             1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
             12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
             90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
-            a64de379-c939-4d47-841e-b41b00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
-      - name: Derive qdevice authorized public key
+      - name: Set qdevice authorized public key
         shell: bash
-        env:
-          PROXMOX_SSH_PRIVATE_KEY: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
 
-          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
-          pubfile="${RUNNER_TEMP}/proxmox-qdevice-key.pub"
-          cleanup_on_failure() {
-            status=$?
-            if (( status != 0 )); then
-              rm -f "${keyfile}" "${pubfile}"
-            fi
-            exit "${status}"
-          }
-          trap cleanup_on_failure EXIT
-          umask 077
-          printf '%s\n' "${PROXMOX_SSH_PRIVATE_KEY}" > "${keyfile}"
-          ssh-keygen -y -f "${keyfile}" > "${pubfile}"
-          qdevice_json="$(jq -cn --arg key "$(<"${pubfile}")" '{enabled:true,ssh_public_key:$key}')"
+          public_key_file="terraform/${STACK_PATH}/qdevice-authorized.pub"
+          expected_fingerprint="SHA256:9x+cumin8611j5uKUYwq2kTRI6nVbTtxF9GoeISjeF8"
+          public_key="$(tr -d '\r\n' < "${public_key_file}")"
+          actual_fingerprint="$(ssh-keygen -lf "${public_key_file}" | awk '{print $2}')"
+          [[ "${actual_fingerprint}" == "${expected_fingerprint}" ]]
+          qdevice_json="$(jq -cn --arg key "${public_key}" '{enabled:true,ssh_public_key:$key}')"
           printf 'TF_VAR_qdevice=%s\n' "${qdevice_json}" >> "${GITHUB_ENV}"
-          rm -f "${keyfile}" "${pubfile}"
 
       - name: OpenTofu init
         run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
@@ -1409,29 +1397,18 @@ jobs:
             1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
             12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
             90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
-            a64de379-c939-4d47-841e-b41b00c8641d > PROXMOX_SSH_PRIVATE_KEY
 
-      - name: Derive qdevice authorized public key
+      - name: Set qdevice authorized public key
         shell: bash
-        env:
-          PROXMOX_SSH_PRIVATE_KEY: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
 
-          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
-          pubfile="${RUNNER_TEMP}/proxmox-qdevice-key.pub"
-          cleanup_on_failure() {
-            status=$?
-            if (( status != 0 )); then
-              rm -f "${keyfile}" "${pubfile}"
-            fi
-            exit "${status}"
-          }
-          trap cleanup_on_failure EXIT
-          umask 077
-          printf '%s\n' "${PROXMOX_SSH_PRIVATE_KEY}" > "${keyfile}"
-          ssh-keygen -y -f "${keyfile}" > "${pubfile}"
-          qdevice_json="$(jq -cn --arg key "$(<"${pubfile}")" '{enabled:true,ssh_public_key:$key}')"
+          public_key_file="terraform/${STACK_PATH}/qdevice-authorized.pub"
+          expected_fingerprint="SHA256:9x+cumin8611j5uKUYwq2kTRI6nVbTtxF9GoeISjeF8"
+          public_key="$(tr -d '\r\n' < "${public_key_file}")"
+          actual_fingerprint="$(ssh-keygen -lf "${public_key_file}" | awk '{print $2}')"
+          [[ "${actual_fingerprint}" == "${expected_fingerprint}" ]]
+          qdevice_json="$(jq -cn --arg key "${public_key}" '{enabled:true,ssh_public_key:$key}')"
           printf 'TF_VAR_qdevice=%s\n' "${qdevice_json}" >> "${GITHUB_ENV}"
 
       - name: OpenTofu init
@@ -1461,12 +1438,6 @@ jobs:
           ROUTEROS_URL: https://10.1.100.1
         run: |
           set -euo pipefail
-
-          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
-          cleanup() {
-            rm -f "${keyfile}"
-          }
-          trap cleanup EXIT
 
           api_get() {
             curl --fail --silent --show-error --insecure \
@@ -1522,14 +1493,6 @@ jobs:
             any(.[]; .name == "usb1/qnetd/ssh-authorized-keys/authorized_keys" and .type == "file" and ((.size // "0") | tonumber) > 0)
           ' >/dev/null
 
-          if [[ ! -s "${keyfile}" ]]; then
-            echo "The temporary Proxmox SSH key is missing." >&2
-            exit 1
-          fi
-          ssh -i "${keyfile}" -o BatchMode=yes -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 \
-            root@10.1.100.252 true >/dev/null
-
           if (command -v nc >/dev/null 2>&1 && nc -z -w 8 10.1.100.252 5403 >/dev/null 2>&1) ||
              (timeout 8 bash -c '</dev/tcp/10.1.100.252/5403' >/dev/null 2>&1); then
             printf 'qnetd=reachable\n'
@@ -1537,13 +1500,6 @@ jobs:
             echo "qnetd TCP/5403 is unreachable." >&2
             exit 1
           fi
-
-      - name: Clean up qdevice bootstrap key
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f "${RUNNER_TEMP}/proxmox-qdevice-key" "${RUNNER_TEMP}/proxmox-qdevice-key.pub"
 
   gateway-proxmox-plan:
     name: Plan Kubernetes to Proxmox firewall rule
