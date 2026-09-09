@@ -2060,6 +2060,10 @@ jobs:
                 "running"
               elif ((.running | tostring | ascii_downcase) == "false") then
                 "stopped"
+              elif ((.stopped | tostring | ascii_downcase) == "true") then
+                "stopped"
+              elif ((.stopped | tostring | ascii_downcase) == "false") then
+                "running"
               else
                 ""
               end;

@@ -251,9 +251,9 @@ qdevice_image="$(jq -er '."remote-image"' <<<"$container_spec")"
 qdevice_layer_dir="$(jq -er '.layer_dir' <<<"$container_config_spec")"
 qdevice_tmpdir="$(jq -er '.tmpdir' <<<"$container_config_spec")"
 
-# RouterOS 7.23 exposes runtime state as the string/boolean `.running` field;
-# retain compatibility with installations that expose a human-readable
-# `.status` field instead.
+# RouterOS 7.23 exposes runtime state as the string `.stopped` field in the
+# REST container collection; retain compatibility with versions that expose
+# `.running` or a human-readable `.status` field instead.
 container_runtime_status() {
   local container_id="$1"
 
@@ -269,6 +269,10 @@ container_runtime_status() {
             "running"
           elif (($container.running | tostring | ascii_downcase) == "false") then
             "stopped"
+          elif (($container.stopped | tostring | ascii_downcase) == "true") then
+            "stopped"
+          elif (($container.stopped | tostring | ascii_downcase) == "false") then
+            "running"
           else
             ""
           end
@@ -668,6 +672,10 @@ if ! jq -e --argjson wanted "$container_spec" '
       "running"
     elif ((.running | tostring | ascii_downcase) == "false") then
       "stopped"
+    elif ((.stopped | tostring | ascii_downcase) == "true") then
+      "stopped"
+    elif ((.stopped | tostring | ascii_downcase) == "false") then
+      "running"
     else
       ""
     end;
