@@ -111,6 +111,7 @@ The orchestrator must classify each task before delegating and use the smallest 
 - New work should be published through pull requests that target `main`.
 - Do not keep feature work on `main`; create or move it onto a descriptive branch before pushing.
 - When creating pull requests, prefer a draft PR by default unless the user explicitly asks for ready review.
+- Before merging, check whether Codex Review is available for the pull request or already running; when it is available or running, wait for it to complete and resolve any blocking findings before merging. If no Codex Review is available, continue with the other required checks.
 - Do not merge a pull request until every applicable CI check has completed successfully; inspect and resolve any failure before retrying the checks.
 - Before creating or updating a pull request, run all repo-defined formatting, linting, and validation steps that apply to the changed code and stop if any of them fail.
 - Do not create or update a pull request when the repo does not yet define the required checks for the changed code; add or document those checks first.
