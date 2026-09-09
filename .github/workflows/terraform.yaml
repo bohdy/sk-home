@@ -1120,9 +1120,9 @@ jobs:
 
   gateway-qdevice-plan:
     name: Plan RouterOS qnetd quorum device
-    # Keep the USB-backed container and its management attachment isolated
-    # from provider-sensitive gateway resources. The qdevice flag is mutually
-    # exclusive with every other trusted mutation mode above.
+    # Keep the USB-backed qnetd attachment isolated from provider-sensitive
+    # gateway resources. This initial plan is read-only on RouterOS; an apply
+    # dispatch continues through the separately gated native recovery job.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
@@ -1193,26 +1193,65 @@ jobs:
         run: |
           set -euo pipefail
 
-          api_get() {
-            curl --fail --silent --show-error --insecure \
-              --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
-              "${ROUTEROS_URL}${1}"
+          # Use curl's stdin configuration so credentials never appear in
+          # process arguments, logs, or repository files.
+          routeros_request() {
+            local method="$1"
+            local url="$2"
+            local payload="${3-}"
+
+            REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
+              jq -nr '
+                "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
+                "url = " + ($ENV.REQUEST_URL | @json),
+                "request = " + ($ENV.REQUEST_METHOD | @json),
+                "insecure",
+                "fail",
+                "silent",
+                "show-error",
+                "header = " + ("Content-Type: application/json" | @json),
+                (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
+              ' | curl --config -
           }
+
+          state_list="$(tofu -chdir=terraform/${STACK_PATH} state list)"
+          if legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
+            echo "Legacy provider-managed qdevice mount/container state must be removed by a reviewed migration." >&2
+            exit 1
+          fi
 
           import_if_missing() {
             local address="$1"
             local import_id="$2"
-            if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null 2>&1; then
+
+            if grep -Fqx -- "${address}" <<<"${state_list}"; then
+              if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null; then
+                echo "State lists ${address}, but state show failed; refusing to import or continue." >&2
+                exit 1
+              fi
+            else
               tofu -chdir=terraform/${STACK_PATH} import -input=false "${address}" "${import_id}" >/dev/null
             fi
           }
 
-          veths="$(api_get /rest/interface/veth)"
-          ports="$(api_get /rest/interface/bridge/port)"
-          vlans="$(api_get /rest/interface/bridge/vlan)"
-          files="$(api_get /rest/file)"
-          containers="$(api_get /rest/container)"
-          container_config="$(api_get /rest/container/config)"
+          veths="$(routeros_request GET "${ROUTEROS_URL}/rest/interface/veth")"
+          ports="$(routeros_request GET "${ROUTEROS_URL}/rest/interface/bridge/port")"
+          vlans="$(routeros_request GET "${ROUTEROS_URL}/rest/interface/bridge/vlan")"
+          files="$(routeros_request GET "${ROUTEROS_URL}/rest/file")"
+          mounts="$(routeros_request GET "${ROUTEROS_URL}/rest/container/mounts")"
+          containers="$(routeros_request GET "${ROUTEROS_URL}/rest/container")"
+          container_config="$(routeros_request GET "${ROUTEROS_URL}/rest/container/config")"
+
+          if ! jq -e 'type == "array"' <<<"${veths}" >/dev/null ||
+             ! jq -e 'type == "array"' <<<"${ports}" >/dev/null ||
+             ! jq -e 'type == "array"' <<<"${vlans}" >/dev/null ||
+             ! jq -e 'type == "array"' <<<"${files}" >/dev/null ||
+             ! jq -e 'type == "array"' <<<"${mounts}" >/dev/null ||
+             ! jq -e 'type == "array"' <<<"${containers}" >/dev/null ||
+             ! jq -e 'type == "object"' <<<"${container_config}" >/dev/null; then
+            echo "RouterOS returned a malformed qdevice collection or configuration response." >&2
+            exit 1
+          fi
 
           if ! jq -e '
             [.[] | select(.name == "veth-qnetd")] as $matches
@@ -1236,10 +1275,23 @@ jobs:
           fi
 
           if ! jq -e '
-            [.[] | select(."vlan-ids" == "100" and .bridge == "bridge")] as $matches
+            def members($value):
+              if $value == null then []
+              elif ($value | type) == "array" then $value
+              elif ($value | type) == "string" then ($value | split(",") | map(select(length > 0)))
+              else []
+              end;
+            def occurrences($value; $member):
+              [members($value)[] | select(. == $member)] | length;
+            . as $all
+            | [.[] | select(."vlan-ids" == "100" and .bridge == "bridge")] as $matches
+            | ([ $all[] | occurrences(.untagged; "veth-qnetd") ] | add // 0) as $untagged_occurrences
+            | ([ $all[] | occurrences(.tagged; "veth-qnetd") ] | add // 0) as $tagged_occurrences
             | ($matches | length == 1)
-              and (($matches[0].untagged // "") | split(",") | index("veth-qnetd"))
-              and (((($matches[0].tagged // "") | split(",") | index("veth-qnetd"))) | not)
+              and (occurrences($matches[0].untagged; "veth-qnetd") == 1)
+              and (occurrences($matches[0].tagged; "veth-qnetd") == 0)
+              and ($untagged_occurrences == 1)
+              and ($tagged_occurrences == 0)
           ' <<<"${vlans}" >/dev/null; then
             echo "The live VLAN 100 row does not contain exactly one safe qdevice attachment." >&2
             exit 1
@@ -1262,8 +1314,57 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e 'length == 0' <<<"${containers}" >/dev/null; then
-            echo "Existing RouterOS containers require a manual container-config compatibility review." >&2
+          if ! jq -e '
+            def values:
+              if . == null then []
+              elif type == "array" then .
+              elif type == "string" then split(",") | map(select(length > 0))
+              else []
+              end;
+            . as $containers
+            | if ($containers | type) != "array" then false
+              else
+                [$containers[] | select((.["remote-image"] // .remote_image // "") == "lpgonzalez/corosync-qnetd:1.0.0")] as $matches
+                | if ($containers | length) == 0 then true
+                  elif ($containers | length) != 1 or ($matches | length) != 1 then false
+                  else
+                    true
+                    and ($matches[0].comment == "Proxmox QDevice qnetd")
+                    and ($matches[0].interface == "veth-qnetd")
+                    and (($matches[0]["root-dir"] // $matches[0].root_dir // "") == "usb1/qnetd/root")
+                    and ((($matches[0].mountlists // $matches[0].mounts // []) | values | sort) == ["qnetd_authorized_keys", "qnetd_nssdb", "qnetd_ssh_host_keys"])
+                    and (((($matches[0]["start-on-boot"] // $matches[0].start_on_boot // false) | tostring | ascii_downcase)) | IN("true", "yes", "on", "1"))
+                    and (((($matches[0].logging // false) | tostring | ascii_downcase)) | IN("true", "yes", "on", "1"))
+                  end
+              end
+          ' <<<"${containers}" >/dev/null || {
+            echo "Existing RouterOS containers are not exactly the qnetd declaration." >&2
+            exit 1
+          }
+
+          if ! jq -e '
+            . as $mounts
+            | [
+                {list:"qnetd_authorized_keys",src:"usb1/qnetd/ssh-authorized-keys",dst:"/root/.ssh"},
+                {list:"qnetd_nssdb",src:"usb1/qnetd/nssdb",dst:"/etc/corosync/qnetd/nssdb"},
+                {list:"qnetd_ssh_host_keys",src:"usb1/qnetd/ssh-host-keys",dst:"/etc/ssh/keys"}
+              ] as $required
+            | if ($mounts | type) != "array" then false
+              elif length == 0 then true
+              else
+                (all(.[];
+                  type == "object"
+                  and ((.list | type) == "string")
+                  and ((.src | type) == "string")
+                  and ((.dst | type) == "string")
+                  and ((.list | length) > 0)
+                  and ((.src | length) > 0)
+                  and ((.dst | length) > 0)
+                ))
+                and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
+              end
+          ' <<<"${mounts}" >/dev/null; then
+            echo "Existing RouterOS container mounts are absent or not exactly the qnetd declaration." >&2
             exit 1
           fi
 
@@ -1303,10 +1404,8 @@ jobs:
           -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
           -target=routeros_container_config.qdevice[0]
           -target=routeros_file.qdevice_authorized_keys[0]
-          -target='routeros_container_mounts.qdevice["qnetd_nssdb"]'
-          -target='routeros_container_mounts.qdevice["qnetd_ssh_host_keys"]'
-          -target='routeros_container_mounts.qdevice["qnetd_authorized_keys"]'
-          -target=routeros_container.qdevice[0]
+          -target=terraform_data.qdevice_mounts[0]
+          -target=terraform_data.qdevice_container[0]
           -out=qdevice-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -1333,10 +1432,8 @@ jobs:
                   "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]",
                   "routeros_container_config.qdevice[0]",
                   "routeros_file.qdevice_authorized_keys[0]",
-                  "routeros_container_mounts.qdevice[\"qnetd_nssdb\"]",
-                  "routeros_container_mounts.qdevice[\"qnetd_ssh_host_keys\"]",
-                  "routeros_container_mounts.qdevice[\"qnetd_authorized_keys\"]",
-                  "routeros_container.qdevice[0]"
+                  "terraform_data.qdevice_mounts[0]",
+                  "terraform_data.qdevice_container[0]"
                 ] as $allowed
               | all($changes[]; (.address | IN($allowed[])))
                 and all($changes[]; (.change.actions | index("delete") | not))
@@ -1354,8 +1451,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  gateway-qdevice-apply:
-    name: Apply RouterOS qnetd quorum device
+  gateway-qdevice-recovery-plan:
+    name: Recover and plan RouterOS qnetd quorum device
+    # RouterOS 7.23 uses native mount/container fields that the pinned
+    # provider cannot write. This first production gate permits only the
+    # narrowly scoped recovery and a fresh immutable plan.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, gateway-qdevice-plan]
@@ -1365,7 +1465,150 @@ jobs:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
       STACK_PATH: network/gw/interfaces
-      TOFU_PLAN_ARTIFACT: network-gw-qdevice-tofuplan
+      INITIAL_PLAN_ARTIFACT: network-gw-qdevice-tofuplan
+      INITIAL_PLAN_FILE: qdevice-tofuplan
+      TOFU_PLAN_ARTIFACT: network-gw-qdevice-recovery-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Download initial qdevice plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.INITIAL_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get gateway qdevice secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: Set qdevice authorized public key
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          public_key_file="terraform/$STACK_PATH/qdevice-authorized.pub"
+          expected_fingerprint="SHA256:9x+cumin8611j5uKUYwq2kTRI6nVbTtxF9GoeISjeF8"
+          public_key="$(tr -d '\r\n' < "$public_key_file")"
+          actual_fingerprint="$(ssh-keygen -lf "$public_key_file" | awk '{print $2}')"
+          [[ "$actual_fingerprint" == "$expected_fingerprint" ]]
+          qdevice_json="$(jq -cn --arg key "$public_key" '{enabled:true,ssh_public_key:$key}')"
+          printf 'TF_VAR_qdevice=%s\n' "$qdevice_json" >> "$GITHUB_ENV"
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/$STACK_PATH init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Apply initial reviewed qdevice plan
+        run: tofu -chdir=terraform/$STACK_PATH apply -auto-approve "$INITIAL_PLAN_FILE"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Recover native RouterOS qdevice mounts and container
+        run: bash scripts/routeros-qdevice-recovery.sh
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+          STACK_PATH: ${{ env.STACK_PATH }}
+
+      - name: Create immutable post-recovery qdevice plan
+        run: >-
+          tofu -chdir=terraform/$STACK_PATH plan
+          -target=routeros_interface_veth.qdevice[0]
+          -target=routeros_interface_bridge_port.qdevice[0]
+          -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
+          -target=routeros_container_config.qdevice[0]
+          -target=routeros_file.qdevice_authorized_keys[0]
+          -target=terraform_data.qdevice_mounts[0]
+          -target=terraform_data.qdevice_container[0]
+          -out=$TOFU_PLAN_ARTIFACT
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Enforce qdevice-only recovered plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! tofu -chdir=terraform/$STACK_PATH show -json "$TOFU_PLAN_ARTIFACT" |
+            jq -e '
+              [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
+              | [
+                  "routeros_interface_veth.qdevice[0]",
+                  "routeros_interface_bridge_port.qdevice[0]",
+                  "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]",
+                  "routeros_container_config.qdevice[0]",
+                  "routeros_file.qdevice_authorized_keys[0]",
+                  "terraform_data.qdevice_mounts[0]",
+                  "terraform_data.qdevice_container[0]"
+                ] as $allowed
+              | all($changes[]; (.address | IN($allowed[])))
+                and all($changes[]; (.change.actions | index("delete") | not))
+                and all($changes[]; (.change.actions | index("replace") | not))
+            ' >/dev/null; then
+            echo "The recovered qdevice plan contains an unexpected or destructive change." >&2
+            exit 1
+          fi
+
+      - name: Upload recovered RouterOS qnetd plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/${{ env.TOFU_PLAN_ARTIFACT }}
+          if-no-files-found: error
+          retention-days: 7
+
+  gateway-qdevice-apply:
+    name: Apply RouterOS qnetd quorum device
+    # The second production gate applies only the fresh artifact produced
+    # after native recovery and review of the resulting OpenTofu changes.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: [validate-dispatch, gateway-qdevice-recovery-plan]
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-qdevice-recovery-tofuplan
 
     steps:
       - name: Checkout repository
@@ -1418,7 +1661,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
       - name: Apply RouterOS qnetd plan
-        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve qdevice-tofuplan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve "$TOFU_PLAN_ARTIFACT"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -1439,62 +1682,154 @@ jobs:
         run: |
           set -euo pipefail
 
-          api_get() {
-            curl --fail --silent --show-error --insecure \
-              --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
-              "${ROUTEROS_URL}${1}"
+          # Use curl's stdin configuration and pipe responses directly to jq
+          # so credentials and raw RouterOS responses are never logged.
+          routeros_request() {
+            local method="$1"
+            local url="$2"
+            local payload=${3-}
+
+            REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
+              jq -nr '
+                "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
+                "url = " + ($ENV.REQUEST_URL | @json),
+                "request = " + ($ENV.REQUEST_METHOD | @json),
+                "insecure",
+                "fail",
+                "silent",
+                "show-error",
+                "header = " + ("Content-Type: application/json" | @json),
+                (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
+              ' | curl --config -
           }
 
-          api_get /rest/interface/veth | jq -e '
-            any(.[]; .name == "veth-qnetd" and .address == "10.1.100.252/24" and .gateway == "10.1.100.1")
-          ' >/dev/null
-          api_get /rest/interface/bridge/port | jq -e '
-            any(.[]; .interface == "veth-qnetd" and .pvid == "100" and .["frame-types"] == "admit-only-untagged-and-priority-tagged")
-          ' >/dev/null
-          api_get /rest/interface/bridge/vlan | jq -e '
-            any(.[]; .["vlan-ids"] == "100" and ((.untagged // "") | split(",") | index("veth-qnetd")))
-          ' >/dev/null
-          api_get /rest/container/config | jq -e '
-            .["layer-dir"] == "usb1/qnetd/layers" and .tmpdir == "usb1/qnetd/tmp"
-          ' >/dev/null
-          api_get /rest/container/mounts | jq -e '
-            def names:
-              if . == null then []
-              elif type == "array" then .
-              elif type == "string" then split(",") | map(select(length > 0))
-              else []
-              end;
-            . as $mounts
-            | [
-                {name:"qnetd_authorized_keys",src:"usb1/qnetd/ssh-authorized-keys",dst:"/root/.ssh"},
-                {name:"qnetd_nssdb",src:"usb1/qnetd/nssdb",dst:"/etc/corosync/qnetd/nssdb"},
-                {name:"qnetd_ssh_host_keys",src:"usb1/qnetd/ssh-host-keys",dst:"/etc/ssh/keys"}
-              ] as $required
-            | all($required[]; . as $want | any($mounts[]; .name == $want.name and .src == $want.src and .dst == $want.dst))
-          ' >/dev/null
-          api_get /rest/container | jq -e '
-            def names:
-              if . == null then []
-              elif type == "array" then .
-              elif type == "string" then split(",") | map(select(length > 0))
-              else []
-              end;
-            [.[] | select((.["remote-image"] // .remote_image // "") == "lpgonzalez/corosync-qnetd:1.0.0")] as $matches
-            | ($matches | length == 1)
-              and ($matches[0].comment == "Proxmox QDevice qnetd")
-              and ($matches[0].interface == "veth-qnetd")
-              and (($matches[0]["root-dir"] // $matches[0].root_dir // "") == "usb1/qnetd/root")
-              and ((($matches[0].mounts // $matches[0].mountlists // []) | names | sort) == ["qnetd_authorized_keys", "qnetd_nssdb", "qnetd_ssh_host_keys"])
-              and (((($matches[0]["start-on-boot"] // $matches[0].start_on_boot // false) | tostring | ascii_downcase)) == "true")
-              and (((($matches[0].logging // false) | tostring | ascii_downcase)) == "true")
-              and (($matches[0].status // "") | test("running"; "i"))
-          ' >/dev/null
-          api_get /rest/file | jq -e '
-            any(.[]; .name == "usb1/qnetd/ssh-authorized-keys/authorized_keys" and .type == "file" and ((.size // "0") | tonumber) > 0)
-          ' >/dev/null
+          # Derive every native mount/container/config value from the two
+          # state-only records written by the initial reviewed plan. The full
+          # state is piped straight to jq and only those two addresses leave
+          # the command; no state dump is logged.
+          qdevice_desired="$(
+            tofu -chdir=terraform/${STACK_PATH} show -json |
+              jq -ce '
+                [
+                  .values.root_module.resources[]?
+                  | select(
+                      .address == "terraform_data.qdevice_mounts[0]"
+                      or .address == "terraform_data.qdevice_container[0]"
+                    )
+                  | {address, input: .values.input}
+                ] as $records
+                | if ($records | length) != 2 then
+                    error("qdevice desired-state records are missing")
+                  else
+                    (reduce $records[] as $record ({}; .[$record.address] = $record.input)) as $desired
+                    | {
+                        mounts: $desired["terraform_data.qdevice_mounts[0]"],
+                        container: $desired["terraform_data.qdevice_container[0]"]
+                      }
+                  end
+              '
+          )"
+          mount_specs="$(jq -ce '.mounts | to_entries | map({list:.key,src:.value.src,dst:.value.dst})' <<<"${qdevice_desired}")"
+          container_spec="$(jq -ce '.container' <<<"${qdevice_desired}")"
+          network_spec="$(jq -ce '.container.network' <<<"${qdevice_desired}")"
+          container_config_spec="$(jq -ce '.container.container_config' <<<"${qdevice_desired}")"
+          qdevice_interface="$(jq -er '.interface_name' <<<"${network_spec}")"
+          qdevice_address="$(jq -er '.address' <<<"${network_spec}")"
+          qdevice_host="${qdevice_address%%/*}"
+          qdevice_gateway="$(jq -er '.gateway' <<<"${network_spec}")"
+          qdevice_vlan="$(jq -er '.vlan_id | tostring' <<<"${network_spec}")"
+          qdevice_bridge="$(jq -er '.bridge' <<<"${network_spec}")"
+          qdevice_frame_types="$(jq -er '.frame_types' <<<"${network_spec}")"
+          qdevice_layer_dir="$(jq -er '.layer_dir' <<<"${container_config_spec}")"
+          qdevice_tmpdir="$(jq -er '.tmpdir' <<<"${container_config_spec}")"
+          key_path="$(jq -er '.container.container_config.authorized_key_path' <<<"${qdevice_desired}")"
 
-          if (command -v nc >/dev/null 2>&1 && nc -z -w 8 10.1.100.252 5403 >/dev/null 2>&1) ||
-             (timeout 8 bash -c '</dev/tcp/10.1.100.252/5403' >/dev/null 2>&1); then
+          routeros_request GET "$ROUTEROS_URL/rest/interface/veth" | jq -e --arg interface "$qdevice_interface" --arg address "$qdevice_address" --arg gateway "$qdevice_gateway" '
+            if type != "array" then false
+            else
+              [.[] | select(.name == $interface)] as $matches
+              | ($matches | length == 1)
+                and ($matches[0].address == $address)
+                and ($matches[0].gateway == $gateway)
+            end
+          ' >/dev/null
+          routeros_request GET "$ROUTEROS_URL/rest/interface/bridge/port" | jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg pvid "$qdevice_vlan" --arg frame_types "$qdevice_frame_types" '
+            if type != "array" then false
+            else
+              [.[] | select(.interface == $interface)] as $matches
+              | ($matches | length == 1)
+                and ($matches[0].bridge == $bridge)
+                and (($matches[0].pvid | tostring) == $pvid)
+                and ($matches[0]["frame-types"] == $frame_types)
+            end
+          ' >/dev/null
+          routeros_request GET "$ROUTEROS_URL/rest/interface/bridge/vlan" | jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '
+            def members($value):
+              if $value == null then []
+              elif ($value | type) == "array" then $value
+              elif ($value | type) == "string" then ($value | split(",") | map(select(length > 0)))
+              else []
+              end;
+            def occurrences($value; $member):
+              [members($value)[] | select(. == $member)] | length;
+            if type != "array" then false
+            else
+              . as $all
+              | [ $all[] | select(.bridge == $bridge and ((.["vlan-ids"] | tostring) == $vlan)) ] as $matches
+              | ([ $all[] | occurrences(.untagged; $interface) ] | add // 0) as $untagged_occurrences
+              | ([ $all[] | occurrences(.tagged; $interface) ] | add // 0) as $tagged_occurrences
+              | ($matches | length == 1)
+                and (occurrences($matches[0].untagged; $interface) == 1)
+                and (occurrences($matches[0].tagged; $interface) == 0)
+                and ($untagged_occurrences == 1)
+                and ($tagged_occurrences == 0)
+            end
+          ' >/dev/null
+          routeros_request GET "$ROUTEROS_URL/rest/container/config" | jq -e --arg layer_dir "$qdevice_layer_dir" --arg tmpdir "$qdevice_tmpdir" '
+            (type == "object")
+            and (.["layer-dir"] // "") == $layer_dir
+            and (.tmpdir // "") == $tmpdir
+          ' >/dev/null
+          routeros_request GET "$ROUTEROS_URL/rest/container/mounts" | jq -e --argjson required "$mount_specs" '
+            (type == "array")
+            and (length == 3)
+            and (all(.[]; type == "object" and (.list | type) == "string" and (.src | type) == "string" and (.dst | type) == "string"))
+            and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
+          ' >/dev/null
+          routeros_request GET "$ROUTEROS_URL/rest/container" | jq -e --argjson wanted "$container_spec" '
+            def values:
+              if . == null then []
+              elif type == "array" then .
+              elif type == "string" then split(",") | map(select(length > 0))
+              else []
+              end;
+            def truthy:
+              tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
+            (type == "array")
+            and (length == 1)
+            and (.[0] as $actual
+              | ($actual["remote-image"] // "") == $wanted["remote-image"]
+                and ($actual.interface // "") == $wanted.interface
+                and ($actual["root-dir"] // "") == $wanted["root-dir"]
+                and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
+                and (($actual["start-on-boot"] // false) | truthy)
+                and (($actual.logging // false) | truthy)
+                and ($actual.comment // "") == $wanted.comment
+                and (($actual.status // "") | ascii_downcase) == "running")
+          ' >/dev/null
+          public_key_file="terraform/${STACK_PATH}/qdevice-authorized.pub"
+          expected_key_content="$(printf '%s\n' "$(tr -d '\r\n' < "${public_key_file}")")"
+          routeros_request GET "$ROUTEROS_URL/rest/file?.proplist=name,type,size,contents" |
+            jq -e --arg key_path "$key_path" --arg expected_content "$expected_key_content" '
+              (type == "array")
+                and ([.[] | select(.name == $key_path)] | length == 1)
+                and ([.[] | select(.name == $key_path)][0].type == "file")
+                and (([.[] | select(.name == $key_path)][0].size // "0" | tonumber) > 0)
+                and ([.[] | select(.name == $key_path)][0].contents == $expected_content)
+            ' >/dev/null
+
+          if (command -v nc >/dev/null 2>&1 && nc -z -w 8 "$qdevice_host" 5403 >/dev/null 2>&1) ||
+             (timeout 8 bash -c "</dev/tcp/${qdevice_host}/5403" >/dev/null 2>&1); then
             printf 'qnetd=reachable\n'
           else
             echo "qnetd TCP/5403 is unreachable." >&2
