@@ -1652,7 +1652,7 @@ jobs:
               .address == "routeros_container_config.qdevice[0]"
               and ((path(.change.before)) != (path(.change.after)))
             )
-          ')")"
+          ')"
           if [[ "$migration_required" != true ]]; then
             exit 0
           fi
