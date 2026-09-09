@@ -312,15 +312,28 @@ if ! jq -e '
   exit 1
 fi
 
-# Existing mount rows are either absent or exactly the desired set. Any
-# unrelated, duplicate, or partial row is a conflict and is never overwritten.
+# Existing mount rows may be absent or an exact subset of the desired set so
+# an interrupted recovery can resume. Any unrelated, duplicate, or mismatched
+# row is a conflict and is never overwritten.
 if ! jq -e --argjson required "$mount_specs" '
-  if type != "array" then false
-  elif length == 0 then true
-  else
-    (all(.[]; type == "object" and (.list | type) == "string" and (.src | type) == "string" and (.dst | type) == "string"))
-    and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
-  end
+  . as $mounts
+  | (type == "array")
+    and all($mounts[];
+      . as $actual
+      | (type == "object")
+        and (($actual.list | type) == "string")
+        and (($actual.src | type) == "string")
+        and (($actual.dst | type) == "string")
+        and (($actual.list | length) > 0)
+        and (($actual.src | length) > 0)
+        and (($actual.dst | length) > 0)
+        and any($required[];
+          .list == $actual.list
+          and .src == $actual.src
+          and .dst == $actual.dst
+        )
+    )
+    and (($mounts | map(.list) | unique | length) == ($mounts | length))
 ' <<<"$mounts" >/dev/null; then
   echo "Existing RouterOS mounts conflict with qnetd." >&2
   exit 1
