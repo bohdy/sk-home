@@ -2082,6 +2082,11 @@ jobs:
                 "stopped"
               elif ((.stopped | tostring | ascii_downcase) == "false") then
                 "running"
+              elif ((.["image-id"] // "") | tostring | length) > 0
+                and ((.stopped // "") | tostring | length) == 0
+                and ((.running // "") | tostring | length) == 0
+                and ((.status // "") | tostring | length) == 0 then
+                "running"
               else
                 ""
               end;
