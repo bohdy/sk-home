@@ -1480,6 +1480,39 @@ jobs:
               )
               and (($mounts | map(.list) | unique | length) == ($mounts | length))
           ' <<<"${mounts}" >/dev/null; then
+            # Keep this diagnostic narrower than the raw RouterOS response:
+            # mount-list identifiers and counts aid diagnosis, while source/
+            # destination paths and all other infrastructure fields stay out of logs.
+            mount_summary="$(jq -c --argjson required "${qdevice_mount_specs}" '
+              if type != "array" then
+                {type: type}
+              else
+                {
+                  count: length,
+                  lists: map(
+                    if type != "object" then "<malformed>"
+                    elif (.list | type) == "string" then .list
+                    else "<missing>"
+                    end
+                  ),
+                  exact_matches: ([.[] as $actual |
+                    if ($actual | type) != "object" then
+                      empty
+                    elif any($required[];
+                      .list == $actual.list
+                      and .src == $actual.src
+                      and .dst == $actual.dst
+                    ) then
+                      $actual
+                    else
+                      empty
+                    end
+                  ] | length),
+                  desired_count: ($required | length)
+                }
+              end
+            ' <<<"${mounts}")"
+            echo "Sanitized qdevice mount summary: ${mount_summary}." >&2
             echo "Existing RouterOS container mounts are absent or conflict with the qnetd declaration." >&2
             exit 1
           fi
