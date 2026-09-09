@@ -1301,8 +1301,8 @@ jobs:
             [
               .container["root-dir"],
               (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
-              .container.container_config.layer_dir,
-              .container.container_config.tmpdir,
+              (.container.container_config.layer_dir | sub("^/+"; "")),
+              (.container.container_config.tmpdir | sub("^/+"; "")),
               (.mounts | to_entries[] | .value.src)
             ] | map(select((type == "string") and length > 0)) | unique
           ' <<<"${qdevice_desired}")"

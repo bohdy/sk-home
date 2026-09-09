@@ -184,20 +184,26 @@ fi
 
 # Recheck the adopted prerequisites after the production gate so a stale
 # initial plan cannot authorize recovery against a changed gateway.
-jq -e --arg interface "$qdevice_interface" --arg address "$qdevice_address" --arg gateway "$qdevice_gateway" '
+if ! jq -e --arg interface "$qdevice_interface" --arg address "$qdevice_address" --arg gateway "$qdevice_gateway" '
   [.[] | select(.name == $interface)] as $matches
   | ($matches | length == 1)
     and ($matches[0].address == $address)
     and ($matches[0].gateway == $gateway)
-' <<<"$veths" >/dev/null
-jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg pvid "$qdevice_vlan" --arg frame_types "$qdevice_frame_types" '
+' <<<"$veths" >/dev/null; then
+  echo "The qdevice veth no longer matches the reviewed network declaration." >&2
+  exit 1
+fi
+if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg pvid "$qdevice_vlan" --arg frame_types "$qdevice_frame_types" '
   [.[] | select(.interface == $interface)] as $matches
   | ($matches | length == 1)
     and ($matches[0].bridge == $bridge)
     and (($matches[0].pvid | tostring) == $pvid)
     and ($matches[0]["frame-types"] == $frame_types)
-' <<<"$ports" >/dev/null
-jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '
+' <<<"$ports" >/dev/null; then
+  echo "The qdevice bridge port no longer matches the reviewed VLAN declaration." >&2
+  exit 1
+fi
+if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '
   def members($value):
     if $value == null then []
     elif ($value | type) == "array" then $value
@@ -215,29 +221,38 @@ jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg 
     and (occurrences($matches[0].tagged; $interface) == 0)
     and ($untagged_occurrences == 1)
     and ($tagged_occurrences == 0)
-' <<<"$vlans" >/dev/null
+' <<<"$vlans" >/dev/null; then
+  echo "The qdevice VLAN 100 attachment no longer matches the reviewed declaration." >&2
+  exit 1
+fi
 
 required_paths="$(jq -ce '
   [
     .container["root-dir"],
     (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
-    .container.container_config.layer_dir,
-    .container.container_config.tmpdir,
+    (.container.container_config.layer_dir | sub("^/+"; "")),
+    (.container.container_config.tmpdir | sub("^/+"; "")),
     (.mounts | to_entries[] | .value.src)
   ] | map(select(length > 0)) | unique
 ' <<<"$qdevice_desired")"
-jq -e --argjson required "$required_paths" '
+if ! jq -e --argjson required "$required_paths" '
   . as $files
   | all($required[]; . as $path | any($files[]; .name == $path and .type == "directory"))
-' <<<"$files" >/dev/null
-jq -e --arg layer_dir "$qdevice_layer_dir" --arg tmpdir "$qdevice_tmpdir" '
+' <<<"$files" >/dev/null; then
+  echo "One or more reviewed qdevice USB directories are missing or not directories." >&2
+  exit 1
+fi
+if ! jq -e --arg layer_dir "$qdevice_layer_dir" --arg tmpdir "$qdevice_tmpdir" '
   (type == "object")
   and (.["layer-dir"] | type) == "string"
   and (.tmpdir | type) == "string"
   and .["layer-dir"] == $layer_dir
   and .tmpdir == $tmpdir
-' <<<"$container_config" >/dev/null
-jq -e '
+' <<<"$container_config" >/dev/null; then
+  echo "RouterOS global container extraction paths do not match the reviewed qdevice declaration." >&2
+  exit 1
+fi
+if ! jq -e '
   . as $config
   | if (type != "object")
     or ((($config["registry-url"] // $config.registry_url // "") | type) != "string")
@@ -249,7 +264,10 @@ jq -e '
       | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
         and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
     end
-' <<<"$container_config" >/dev/null
+' <<<"$container_config" >/dev/null; then
+  echo "RouterOS global container registry configuration is malformed or not Docker Hub." >&2
+  exit 1
+fi
 
 # Existing mount rows are either absent or exactly the desired set. Any
 # unrelated, duplicate, or partial row is a conflict and is never overwritten.
@@ -373,7 +391,10 @@ verify_authorized_key() {
 # Do not start qnetd until the mounted SSH bootstrap file is exactly the
 # committed public key. The later verification repeats this check after the
 # container is running so a changed file cannot pass unnoticed.
-verify_authorized_key
+if ! verify_authorized_key; then
+  echo "The qdevice authorized_keys file does not match the committed public key." >&2
+  exit 1
+fi
 
 if [[ "$container_status_lower" != running ]]; then
   start_payload=$(jq -cn --arg number "$container_id" '{number:$number}')
@@ -399,13 +420,16 @@ for attempt in $(seq 1 24); do
 done
 
 # Verify exact native objects before creating the fresh immutable plan.
-jq -e --argjson required "$mount_specs" '
+if ! jq -e --argjson required "$mount_specs" '
   (type == "array")
   and (length == 3)
   and (all(.[]; type == "object" and (.list | type) == "string" and (.src | type) == "string" and (.dst | type) == "string"))
   and (map({list:.list,src:.src,dst:.dst}) | sort_by(.list)) == ($required | sort_by(.list))
-' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container/mounts")" >/dev/null
-jq -e --argjson wanted "$container_spec" '
+' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container/mounts")" >/dev/null; then
+  echo "The recovered RouterOS mount set does not match the reviewed qnetd declaration." >&2
+  exit 1
+fi
+if ! jq -e --argjson wanted "$container_spec" '
   def values:
     if . == null then []
     elif type == "array" then .
@@ -425,6 +449,12 @@ jq -e --argjson wanted "$container_spec" '
       and (($actual.logging // false) | truthy)
       and ($actual.comment // "") == $wanted.comment
       and (($actual.status // "") | ascii_downcase) == "running")
-' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container")" >/dev/null
+' <<<"$(routeros_request GET "$ROUTEROS_URL/rest/container")" >/dev/null; then
+  echo "The recovered RouterOS container does not match the reviewed qnetd declaration." >&2
+  exit 1
+fi
 
-verify_authorized_key
+if ! verify_authorized_key; then
+  echo "The recovered qdevice authorized_keys file changed after container start." >&2
+  exit 1
+fi
