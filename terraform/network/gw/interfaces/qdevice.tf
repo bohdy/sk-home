@@ -73,40 +73,56 @@ locals {
   } : {}
 }
 
-resource "routeros_container_mounts" "qdevice" {
-  for_each = local.qdevice_mounts
-  provider = routeros.gw
+// RouterOS 7.23 uses the native `list` field for container mounts, while the
+// pinned provider sends its incompatible `name` field. Keep the desired
+// records in OpenTofu state so the recovery workflow can reconcile the live
+// objects without allowing the provider to emit the rejected payload.
+resource "terraform_data" "qdevice_mounts" {
+  count = var.qdevice.enabled ? 1 : 0
 
-  name = each.key
-  src  = each.value.src
-  dst  = each.value.dst
-
-  # The authorized_keys file must exist before the mounted SSH directory is
-  # attached to the container.
-  depends_on = [routeros_file.qdevice_authorized_keys]
+  # This is a state-only desired record. The production-gated recovery step
+  # owns the native RouterOS mount rows because the pinned provider cannot
+  # represent their RouterOS 7.23 `list` field.
+  input = local.qdevice_mounts
 }
 
-# The image uses an explicit multi-architecture version tag; update it only as
-# a deliberate change so image and SSH-bootstrap behavior remain reviewable.
-resource "routeros_container" "qdevice" {
-  count    = var.qdevice.enabled ? 1 : 0
-  provider = routeros.gw
+// The container record deliberately uses RouterOS's native `mountlists` field
+// and literal mount-list names. The provider's `mounts` serializer is kept out
+// of the graph for the same RouterOS 7.23 compatibility reason as above.
+resource "terraform_data" "qdevice_container" {
+  count = var.qdevice.enabled ? 1 : 0
 
-  remote_image  = var.qdevice.image
-  interface     = routeros_interface_veth.qdevice[0].name
-  root_dir      = var.qdevice.root_dir
-  mounts        = [for mount in values(routeros_container_mounts.qdevice) : mount.name]
-  start_on_boot = true
-  logging       = true
-  running       = true
-  comment       = "Proxmox QDevice qnetd"
+  input = {
+    "remote-image"  = var.qdevice.image
+    interface       = var.qdevice.interface_name
+    "root-dir"      = var.qdevice.root_dir
+    mountlists      = ["qnetd_authorized_keys", "qnetd_nssdb", "qnetd_ssh_host_keys"]
+    "start-on-boot" = true
+    logging         = true
+    running         = true
+    comment         = "Proxmox QDevice qnetd"
+    network = {
+      interface_name = var.qdevice.interface_name
+      address        = var.qdevice.address
+      gateway        = var.qdevice.gateway
+      vlan_id        = var.qdevice.vlan_id
+      bridge         = routeros_interface_bridge.bridge.name
+      frame_types    = "admit-only-untagged-and-priority-tagged"
+    }
+    container_config = {
+      layer_dir           = var.qdevice.layer_dir
+      tmpdir              = var.qdevice.tmpdir
+      authorized_key_path = "${var.qdevice.ssh_authorized_dir}/authorized_keys"
+    }
+  }
 
-  # The explicit dependencies keep image extraction/startup behind the
-  # network, global container config, authorized key, and persistent mounts.
+  # Keep the desired record behind the provider-managed prerequisites so a
+  # normal targeted plan presents the same dependency order as recovery.
   depends_on = [
     routeros_container_config.qdevice,
-    routeros_container_mounts.qdevice,
+    terraform_data.qdevice_mounts,
     routeros_interface_bridge_port.qdevice,
     routeros_interface_bridge_vlan.bridge_vlan,
+    routeros_file.qdevice_authorized_keys,
   ]
 }
