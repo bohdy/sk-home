@@ -31,16 +31,12 @@ resource "routeros_container_config" "qdevice" {
   count    = var.qdevice.enabled ? 1 : 0
   provider = routeros.gw
 
-  # Keep the existing global registry selection untouched; the targeted
-  # workflow validates that it already points at Docker Hub before planning.
-  layer_dir = var.qdevice.layer_dir
-  tmpdir    = var.qdevice.tmpdir
-
-  # The registry URL is shared global state and is intentionally adopted but
-  # not owned by this qdevice-specific resource.
-  lifecycle {
-    ignore_changes = [registry_url]
-  }
+  # RouterOS requires a registry URL before it can pull a remote image. The
+  # recovery preflight permits only an empty or Docker Hub registry, so this
+  # qdevice-specific resource can safely converge the empty case declaratively.
+  registry_url = "https://registry-1.docker.io"
+  layer_dir    = var.qdevice.layer_dir
+  tmpdir       = var.qdevice.tmpdir
 }
 
 # qnetd's SSH bootstrap accepts the Proxmox node public key and no password.
