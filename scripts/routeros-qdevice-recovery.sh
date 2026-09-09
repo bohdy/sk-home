@@ -273,6 +273,13 @@ container_runtime_status() {
             "stopped"
           elif (($container.stopped | tostring | ascii_downcase) == "false") then
             "running"
+          elif (($container["image-id"] // "") | tostring | length) > 0
+            and (($container.stopped // "") | tostring | length) == 0
+            and (($container.running // "") | tostring | length) == 0
+            and (($container.status // "") | tostring | length) == 0 then
+            # RouterOS omits the false `stopped` flag for an extracted
+            # container that is running; image-id proves extraction completed.
+            "running"
           else
             ""
           end
@@ -685,6 +692,13 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif ((.stopped | tostring | ascii_downcase) == "true") then
       "stopped"
     elif ((.stopped | tostring | ascii_downcase) == "false") then
+      "running"
+    elif ((.["image-id"] // "") | tostring | length) > 0
+      and ((.stopped // "") | tostring | length) == 0
+      and ((.running // "") | tostring | length) == 0
+      and ((.status // "") | tostring | length) == 0 then
+      # RouterOS omits the false `stopped` flag for an extracted container
+      # that is running; image-id proves extraction completed.
       "running"
     else
       ""
