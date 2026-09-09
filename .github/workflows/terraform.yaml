@@ -1273,6 +1273,8 @@ jobs:
               or ($desired.container | type) != "object"
               or (($desired.mounts | length) != 3)
               or (($desired.container["remote-image"] | type) != "string")
+              or (($desired.container.name | type) != "string")
+              or ($desired.container.name != "qnetd")
               or (($desired.container.interface | type) != "string")
               or (($desired.container["root-dir"] | type) != "string")
               or (($desired.container.mountlists | type) != "array")
@@ -1449,6 +1451,8 @@ jobs:
                     and (($actual["remote-image"] // $actual.remote_image) == $wanted["remote-image"])
                     and ($actual.interface == $interface)
                     and (($actual["root-dir"] // $actual.root_dir) == $root_dir)
+                    and (($actual.name | type) == "string")
+                    and ($actual.name == $wanted.name)
                     and ($actual.comment == $wanted.comment)
                     and (((($actual.mountlists // $actual.mounts) | values) // []) | sort) == ($wanted.mountlists | sort)
                     and (($actual["start-on-boot"] // $actual.start_on_boot // false) | truthy)
@@ -2037,6 +2041,8 @@ jobs:
               | ($actual["remote-image"] // "") == $wanted["remote-image"]
                 and ($actual.interface // "") == $wanted.interface
                 and ($actual["root-dir"] // "") == $wanted["root-dir"]
+                and (($actual.name | type) == "string")
+                and ($actual.name == $wanted.name)
                 and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
                 and (($actual["start-on-boot"] // false) | truthy)
                 and (($actual.logging // false) | truthy)

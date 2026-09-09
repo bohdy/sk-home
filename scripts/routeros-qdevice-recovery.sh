@@ -135,6 +135,8 @@ if ! jq -e '
     or (($container.mountlists | length) != 3)
     or (($container.mountlists | unique | length) != 3)
     or (($container.mountlists | sort) != ($mounts | keys | sort))
+    or (($container.name | type) != "string")
+    or ($container.name != "qnetd")
     or (($container["remote-image"] | type) != "string")
     or (($container["remote-image"] | length) == 0)
     or (($container.interface | type) != "string")
@@ -180,6 +182,7 @@ qdevice_gateway="$(jq -er '.gateway' <<<"$network_spec")"
 qdevice_vlan="$(jq -er '.vlan_id | tostring' <<<"$network_spec")"
 qdevice_bridge="$(jq -er '.bridge' <<<"$network_spec")"
 qdevice_frame_types="$(jq -er '.frame_types' <<<"$network_spec")"
+qdevice_container_name="$(jq -er '.name' <<<"$container_spec")"
 qdevice_image="$(jq -er '."remote-image"' <<<"$container_spec")"
 qdevice_layer_dir="$(jq -er '.layer_dir' <<<"$container_config_spec")"
 qdevice_tmpdir="$(jq -er '.tmpdir' <<<"$container_config_spec")"
@@ -364,6 +367,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
         and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
         and (($actual.logging // false) | truthy)
@@ -422,6 +426,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
         and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
         and (($actual.logging // false) | truthy)
@@ -431,9 +436,10 @@ if ! jq -e --argjson wanted "$container_spec" '
   echo "The RouterOS container set changed during recovery; refusing to create qnetd." >&2
   exit 1
 fi
-container_id=$(jq -r --arg image "$qdevice_image" '[.[] | select((.["remote-image"] // "") == $image)] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")
+container_id=$(jq -r --arg image "$qdevice_image" --arg name "$qdevice_container_name" '[.[] | select(((.["remote-image"] // "") == $image) and ((.name // "") == $name))] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")
 if [[ -z "$container_id" ]]; then
   container_payload="$(jq -cn --argjson wanted "$container_spec" '{
+    name: $wanted.name,
     "remote-image": $wanted["remote-image"],
     interface: $wanted.interface,
     "root-dir": $wanted["root-dir"],
@@ -453,7 +459,7 @@ for attempt in $(seq 1 60); do
     echo "RouterOS returned a malformed container collection while extracting the image." >&2
     exit 1
   fi
-  container_id=$(jq -r --arg image "$qdevice_image" '[.[] | select((.["remote-image"] // "") == $image)] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")
+  container_id=$(jq -r --arg image "$qdevice_image" --arg name "$qdevice_container_name" '[.[] | select(((.["remote-image"] // "") == $image) and ((.name // "") == $name))] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")
   container_status=$(jq -r --arg id "$container_id" '[.[] | select(.[".id"] == $id)] | if length == 1 then (.[0].status // "") else "" end' <<<"$containers")
   if [[ -n "$container_id" ]] && [[ "$container_status" =~ ^(stopped|running)$ ]]; then
     break
@@ -540,6 +546,7 @@ if ! jq -e --argjson wanted "$container_spec" '
     | ($actual["remote-image"] // "") == $wanted["remote-image"]
       and ($actual.interface // "") == $wanted.interface
       and ($actual["root-dir"] // "") == $wanted["root-dir"]
+      and ($actual.name // "") == $wanted.name
       and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
       and (($actual["start-on-boot"] // false) | truthy)
       and (($actual.logging // false) | truthy)

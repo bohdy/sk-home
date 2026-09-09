@@ -86,13 +86,15 @@ resource "terraform_data" "qdevice_mounts" {
   input = local.qdevice_mounts
 }
 
-// The container record deliberately uses RouterOS's native `mountlists` field
-// and literal mount-list names. The provider's `mounts` serializer is kept out
-// of the graph for the same RouterOS 7.23 compatibility reason as above.
+// The container record deliberately uses RouterOS's native `mountlists` field,
+// the required stable `qnetd` name, and literal mount-list names. The
+// provider's `mounts` serializer is kept out of the graph for the same
+// RouterOS 7.23 compatibility reason as above.
 resource "terraform_data" "qdevice_container" {
   count = var.qdevice.enabled ? 1 : 0
 
   input = {
+    name            = "qnetd"
     "remote-image"  = var.qdevice.image
     interface       = var.qdevice.interface_name
     "root-dir"      = var.qdevice.root_dir
