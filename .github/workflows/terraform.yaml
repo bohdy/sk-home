@@ -1580,6 +1580,7 @@ jobs:
           -target=routeros_file.qdevice_authorized_keys[0]
           -target=terraform_data.qdevice_mounts[0]
           -target=terraform_data.qdevice_container[0]
+          -target=routeros_ip_firewall_filter.allow_qdevice_qnetd[0]
           -out=qdevice-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -1607,7 +1608,8 @@ jobs:
                   "routeros_container_config.qdevice[0]",
                   "routeros_file.qdevice_authorized_keys[0]",
                   "terraform_data.qdevice_mounts[0]",
-                  "terraform_data.qdevice_container[0]"
+                  "terraform_data.qdevice_container[0]",
+                  "routeros_ip_firewall_filter.allow_qdevice_qnetd[0]"
                 ] as $allowed
               | all($changes[]; (.address | IN($allowed[])))
                 and all($changes[]; (.change.actions | index("delete") | not))
@@ -1771,6 +1773,7 @@ jobs:
           -target=routeros_file.qdevice_authorized_keys[0]
           -target=terraform_data.qdevice_mounts[0]
           -target=terraform_data.qdevice_container[0]
+          -target=routeros_ip_firewall_filter.allow_qdevice_qnetd[0]
           -out=$TOFU_PLAN_ARTIFACT
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -1798,7 +1801,8 @@ jobs:
                   "routeros_container_config.qdevice[0]",
                   "routeros_file.qdevice_authorized_keys[0]",
                   "terraform_data.qdevice_mounts[0]",
-                  "terraform_data.qdevice_container[0]"
+                  "terraform_data.qdevice_container[0]",
+                  "routeros_ip_firewall_filter.allow_qdevice_qnetd[0]"
                 ] as $allowed
               | all($changes[]; (.address | IN($allowed[])))
                 and all($changes[]; (.change.actions | index("delete") | not))
@@ -2035,6 +2039,16 @@ jobs:
               end;
             def truthy:
               tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
+            def runtime_state:
+              if ((.status // "") | tostring | length) > 0 then
+                (.status | tostring | ascii_downcase)
+              elif ((.running | tostring | ascii_downcase) == "true") then
+                "running"
+              elif ((.running | tostring | ascii_downcase) == "false") then
+                "stopped"
+              else
+                ""
+              end;
             (type == "array")
             and (length == 1)
             and (.[0] as $actual
@@ -2047,7 +2061,7 @@ jobs:
                 and (($actual["start-on-boot"] // false) | truthy)
                 and (($actual.logging // false) | truthy)
                 and ($actual.comment // "") == $wanted.comment
-                and (($actual.status // "") | ascii_downcase) == "running")
+                and (($actual | runtime_state) == "running"))
           ' >/dev/null
           public_key_file="terraform/${STACK_PATH}/qdevice-authorized.pub"
           expected_key_content="$(printf '%s\n' "$(tr -d '\r\n' < "${public_key_file}")")"

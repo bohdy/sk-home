@@ -88,6 +88,7 @@ locals {
       try(routeros_ip_firewall_filter.allow_unifi_snmp_responses.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_proxmox.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_dell.id, null),
+      try(routeros_ip_firewall_filter.allow_qdevice_qnetd[0].id, null),
       try(routeros_ip_firewall_filter.allow_management_proxmox.id, null),
       try(routeros_ip_firewall_filter.allow_management_dell.id, null),
       try(routeros_ip_firewall_filter.forward_allow_wan_dstnat.id, null),
@@ -786,6 +787,26 @@ resource "routeros_ip_firewall_filter" "allow_kubernetes_dell" {
   comment      = "sk-firewall/forward/allow-kubernetes-dell"
 }
 
+# Permit only the self-hosted VLAN 20 runner to verify qnetd's native TCP
+# service. The rule is enabled only with qdevice so ordinary gateway plans do
+# not expose an unused service, and it is placed before the inter-VLAN drop.
+resource "routeros_ip_firewall_filter" "allow_qdevice_qnetd" {
+  count         = var.qdevice.enabled ? 1 : 0
+  provider      = routeros.gw
+  action        = "accept"
+  chain         = "forward"
+  src_address   = "10.1.20.200"
+  dst_address   = split("/", var.qdevice.address)[0]
+  protocol      = "tcp"
+  dst_port      = "5403"
+  in_interface  = "vlan20"
+  out_interface = var.vlans[tostring(var.qdevice.vlan_id)].interface_name
+  # A targeted qdevice apply cannot run the full move-items resource, so place
+  # this narrow verification path before the terminal inter-VLAN deny alone.
+  place_before = routeros_ip_firewall_filter.forward_drop_inter_vlan.id
+  comment      = "sk-firewall/forward/allow-qdevice-qnetd-verification"
+}
+
 # Permit the management VLAN to reach both Proxmox-compatible API endpoints.
 # Keeping the source and service narrow gives the replacement node the same
 # administrator path as the original node without opening VLAN 100 broadly.
@@ -979,6 +1000,7 @@ resource "routeros_move_items" "forward_rules" {
       routeros_ip_firewall_filter.allow_management_proxmox.id,
       routeros_ip_firewall_filter.allow_management_dell.id,
     ],
+    var.qdevice.enabled ? [routeros_ip_firewall_filter.allow_qdevice_qnetd[0].id] : [],
     [for rule in values(routeros_ip_firewall_filter.forward_management) : rule.id],
     [
       routeros_ip_firewall_filter.forward_allow_wan_dstnat.id,
@@ -1021,6 +1043,7 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.allow_synology_snmp_responses,
     routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp,
     routeros_ip_firewall_filter.allow_unifi_snmp_responses,
+    routeros_ip_firewall_filter.allow_qdevice_qnetd,
     routeros_ip_firewall_filter.forward_management,
     routeros_ip_firewall_filter.forward_allow_wan_dstnat,
     routeros_ip_firewall_filter.forward_drop_inter_vlan,
