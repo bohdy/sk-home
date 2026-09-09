@@ -409,21 +409,23 @@ fi
 
 # RouterOS creates the root-dir store during /container/add. A prior failed
 # attempt or manual preparation may leave the exact empty placeholder behind;
-# remove only that placeholder and refuse any directory containing data.
+# remove only that placeholder and refuse any directory containing data. An
+# existing exact qnetd container may already own the path as a container store.
 root_dir_matches="$(jq -c --arg root_dir "$(jq -er '."root-dir"' <<<"$container_spec")" '[.[] | select(.name == $root_dir)]' <<<"$files")"
 root_dir_count="$(jq -er 'length' <<<"$root_dir_matches")"
 if [[ "$root_dir_count" -gt 1 ]] ||
-   [[ "$root_dir_count" == 1 && "$(jq -er '.[0].type' <<<"$root_dir_matches")" != directory ]]; then
-  echo "The reviewed RouterOS qnetd root-dir path is not a single directory." >&2
+   [[ "$root_dir_count" == 1 && "$(jq -er '.[0].type' <<<"$root_dir_matches")" != directory && "$(jq -er '.[0].type' <<<"$root_dir_matches")" != 'container store' ]]; then
+  echo "The reviewed RouterOS qnetd root-dir path is not a supported directory or container store." >&2
   exit 1
 fi
 root_dir="$(jq -er '."root-dir"' <<<"$container_spec")"
-root_dir_children="$(jq -er --arg root_dir "$root_dir" '[.[] | select((.name // "") | startswith($root_dir + "/"))] | length' <<<"$files")"
-if [[ "$root_dir_children" != 0 ]]; then
-  echo "The reviewed RouterOS qnetd root-dir placeholder contains data; refusing to remove it." >&2
-  exit 1
-fi
-if [[ "$root_dir_count" == 1 ]]; then
+root_dir_type="$(jq -er '.[0].type' <<<"$root_dir_matches" 2>/dev/null || true)"
+if [[ "$root_dir_type" == directory ]]; then
+  root_dir_children="$(jq -er --arg root_dir "$root_dir" '[.[] | select((.name // "") | startswith($root_dir + "/"))] | length' <<<"$files")"
+  if [[ "$root_dir_children" != 0 ]]; then
+    echo "The reviewed RouterOS qnetd root-dir placeholder contains data; refusing to remove it." >&2
+    exit 1
+  fi
   root_dir_id="$(jq -er '.[0][".id"]' <<<"$root_dir_matches")"
   routeros_request DELETE "$ROUTEROS_URL/rest/file/$root_dir_id" >/dev/null
   files=$(routeros_request GET "$ROUTEROS_URL/rest/file")
@@ -432,6 +434,10 @@ if [[ "$root_dir_count" == 1 ]]; then
     exit 1
   fi
   echo "Removed the exact empty RouterOS qnetd root-dir placeholder before container creation."
+elif [[ "$root_dir_type" == 'container store' ]]; then
+  # An existing exact qnetd container owns this store, so preserve it and let
+  # the idempotent mount and runtime checks continue without deleting data.
+  echo "Preserving the existing RouterOS qnetd container store."
 fi
 
 # Existing mount rows may be absent or an exact subset of the desired set so

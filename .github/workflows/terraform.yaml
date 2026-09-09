@@ -1427,14 +1427,32 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e --arg root_dir "${qdevice_root_dir}" '
+          # RouterOS owns the root-dir as a `container store` after a
+          # successful extraction. Accept that store only when the live
+          # collection already contains the exact reviewed qnetd container;
+          # arbitrary stores remain a hard preflight failure.
+          if ! jq -e --arg root_dir "${qdevice_root_dir}" --arg image "${qdevice_image}" --argjson containers "${containers}" '
+            def canonical_root_path:
+              if type == "string" and startswith("/usb1/") then .[1:] else . end;
+            def existing_qnetd_container:
+              ($containers | type) == "array"
+              and ($containers | length) == 1
+              and (($containers[0]["remote-image"] // $containers[0].remote_image // "") == $image)
+              and (($containers[0].name // "") == "qnetd")
+              and ((($containers[0]["root-dir"] // $containers[0].root_dir // "") | canonical_root_path) == ($root_dir | canonical_root_path));
             [ .[] | select(.name == $root_dir) ] as $roots
-            | (($roots | length) == 0)
-              or (($roots | length) == 1
-                and $roots[0].type == "directory"
-                and ([ .[] | select((.name // "") | startswith($root_dir + "/")) ] | length) == 0)
+            | if ($roots | length) == 0 then
+                true
+              elif ($roots | length) != 1 then
+                false
+              elif $roots[0].type == "container store" then
+                existing_qnetd_container
+              else
+                $roots[0].type == "directory"
+                and ([ .[] | select((.name // "") | startswith($root_dir + "/")) ] | length) == 0
+              end
           ' <<<"${files}" >/dev/null; then
-            echo "The qdevice root-dir placeholder must be absent or an empty directory." >&2
+            echo "The qdevice root-dir must be absent/empty before creation or belong to the exact existing qnetd container." >&2
             exit 1
           fi
 
