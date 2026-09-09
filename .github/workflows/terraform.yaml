@@ -1412,6 +1412,8 @@ jobs:
               elif type == "string" then split(",") | map(select(length > 0))
               else null
               end;
+            def truthy:
+              tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
             . as $containers
             | if ($containers | type) != "array" then false
               else
@@ -1429,8 +1431,8 @@ jobs:
                     and (($actual["root-dir"] // $actual.root_dir) == $root_dir)
                     and ($actual.comment == $wanted.comment)
                     and (((($actual.mountlists // $actual.mounts) | values) // []) | sort) == ($wanted.mountlists | sort)
-                    and (($actual["start-on-boot"] // $actual.start_on_boot | type) == "string" or ($actual["start-on-boot"] // $actual.start_on_boot | type) == "boolean")
-                    and (($actual.logging | type) == "string" or ($actual.logging | type) == "boolean")
+                    and (($actual["start-on-boot"] // $actual.start_on_boot // false) | truthy)
+                    and (($actual.logging // false) | truthy)
                   end
               end
           ' <<<"${containers}" >/dev/null; then
