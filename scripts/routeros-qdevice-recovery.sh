@@ -251,9 +251,9 @@ qdevice_image="$(jq -er '."remote-image"' <<<"$container_spec")"
 qdevice_layer_dir="$(jq -er '.layer_dir' <<<"$container_config_spec")"
 qdevice_tmpdir="$(jq -er '.tmpdir' <<<"$container_config_spec")"
 
-# RouterOS 7.23 exposes runtime state as the string/boolean `.running` field;
-# retain compatibility with installations that expose a human-readable
-# `.status` field instead.
+# RouterOS 7.23 exposes runtime state as the string `.stopped` field in the
+# REST container collection; retain compatibility with versions that expose
+# `.running` or a human-readable `.status` field instead.
 container_runtime_status() {
   local container_id="$1"
 
@@ -269,6 +269,10 @@ container_runtime_status() {
             "running"
           elif (($container.running | tostring | ascii_downcase) == "false") then
             "stopped"
+          elif (($container.stopped | tostring | ascii_downcase) == "true") then
+            "stopped"
+          elif (($container.stopped | tostring | ascii_downcase) == "false") then
+            "running"
           else
             ""
           end
@@ -470,6 +474,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   . as $containers
@@ -481,7 +487,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       .[0] as $actual
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
-        and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
         and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
@@ -531,6 +537,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   . as $containers
@@ -540,7 +548,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       .[0] as $actual
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
-        and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
         and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
@@ -653,6 +661,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   def runtime_state:
@@ -662,6 +672,10 @@ if ! jq -e --argjson wanted "$container_spec" '
       "running"
     elif ((.running | tostring | ascii_downcase) == "false") then
       "stopped"
+    elif ((.stopped | tostring | ascii_downcase) == "true") then
+      "stopped"
+    elif ((.stopped | tostring | ascii_downcase) == "false") then
+      "running"
     else
       ""
     end;
@@ -670,7 +684,7 @@ if ! jq -e --argjson wanted "$container_spec" '
   and (.[0] as $actual
     | ($actual["remote-image"] // "") == $wanted["remote-image"]
       and ($actual.interface // "") == $wanted.interface
-      and ($actual["root-dir"] // "") == $wanted["root-dir"]
+      and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
       and ($actual.name // "") == $wanted.name
       and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
       and (($actual["start-on-boot"] // false) | truthy)

@@ -1444,6 +1444,8 @@ jobs:
               elif type == "string" then split(",") | map(select(length > 0))
               else null
               end;
+            def canonical_root_path:
+              if type == "string" and startswith("/usb1/") then .[1:] else . end;
             def truthy:
               tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
             . as $containers
@@ -1460,7 +1462,7 @@ jobs:
                     and (($actual.comment | type) == "string")
                     and (($actual["remote-image"] // $actual.remote_image) == $wanted["remote-image"])
                     and ($actual.interface == $interface)
-                    and (($actual["root-dir"] // $actual.root_dir) == $root_dir)
+                    and ((($actual["root-dir"] // $actual.root_dir) | canonical_root_path) == ($root_dir | canonical_root_path))
                     and (($actual.name | type) == "string")
                     and ($actual.name == $wanted.name)
                     and ($actual.comment == $wanted.comment)
@@ -2049,6 +2051,8 @@ jobs:
               end;
             def truthy:
               tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
+            def canonical_root_path:
+              if type == "string" and startswith("/usb1/") then .[1:] else . end;
             def runtime_state:
               if ((.status // "") | tostring | length) > 0 then
                 (.status | tostring | ascii_downcase)
@@ -2056,6 +2060,10 @@ jobs:
                 "running"
               elif ((.running | tostring | ascii_downcase) == "false") then
                 "stopped"
+              elif ((.stopped | tostring | ascii_downcase) == "true") then
+                "stopped"
+              elif ((.stopped | tostring | ascii_downcase) == "false") then
+                "running"
               else
                 ""
               end;
@@ -2064,7 +2072,7 @@ jobs:
             and (.[0] as $actual
               | ($actual["remote-image"] // "") == $wanted["remote-image"]
                 and ($actual.interface // "") == $wanted.interface
-                and ($actual["root-dir"] // "") == $wanted["root-dir"]
+                and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
                 and (($actual.name | type) == "string")
                 and ($actual.name == $wanted.name)
                 and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
