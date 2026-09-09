@@ -18,19 +18,30 @@ routeros_request() {
   local method="$1"
   local url="$2"
   local payload=${3-}
+  local endpoint="${url#"$ROUTEROS_URL"}"
+  local response
 
-  REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
-    jq -nr '
-      "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
-      "url = " + ($ENV.REQUEST_URL | @json),
-      "request = " + ($ENV.REQUEST_METHOD | @json),
-      "insecure",
-      "fail",
-      "silent",
-      "show-error",
-      "header = " + ("Content-Type: application/json" | @json),
-      (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
-    ' | curl --config -
+  # Keep the response private while identifying the endpoint on transport or
+  # HTTP failure; raw RouterOS errors may contain configuration data.
+  if ! response="$(
+    REQUEST_METHOD="$method" REQUEST_URL="$url" REQUEST_PAYLOAD="$payload" \
+      jq -nr '
+        "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
+        "url = " + ($ENV.REQUEST_URL | @json),
+        "request = " + ($ENV.REQUEST_METHOD | @json),
+        "insecure",
+        "fail",
+        "silent",
+        "show-error",
+        "header = " + ("Content-Type: application/json" | @json),
+        (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
+      ' | curl --config -
+  )"; then
+    echo "RouterOS request failed: ${method} ${endpoint:-/}." >&2
+    return 1
+  fi
+
+  printf '%s\n' "$response"
 }
 
 ROUTEROS_URL=$(printf '%s' "$ROUTEROS_URL" | sed 's:/*$::')
