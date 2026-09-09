@@ -1286,9 +1286,9 @@ jobs:
             exit 1
           fi
 
-          veth_id="$(jq -r '.[] | select(.name == "veth-qnetd") | .id' <<<"${veths}")"
-          port_id="$(jq -r '.[] | select(.interface == "veth-qnetd") | .id' <<<"${ports}")"
-          vlan_id="$(jq -r '.[] | select(."vlan-ids" == "100" and .bridge == "bridge") | .id' <<<"${vlans}")"
+          veth_id="$(jq -er '.[] | select(.name == "veth-qnetd") | .[".id"]' <<<"${veths}")"
+          port_id="$(jq -er '.[] | select(.interface == "veth-qnetd") | .[".id"]' <<<"${ports}")"
+          vlan_id="$(jq -er '.[] | select(."vlan-ids" == "100" and .bridge == "bridge") | .[".id"]' <<<"${vlans}")"
 
           import_if_missing 'routeros_interface_veth.qdevice[0]' "${veth_id}"
           import_if_missing 'routeros_interface_bridge_port.qdevice[0]' "${port_id}"
