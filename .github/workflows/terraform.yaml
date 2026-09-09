@@ -1264,6 +1264,10 @@ jobs:
 
           qdevice_desired="$(jq -ce . terraform/${STACK_PATH}/qdevice-desired.json)"
           if ! jq -e '
+            def safe_global_path:
+              if type != "string" then false
+              else test("^/usb1/[^/]+(/[^/]+)*$") and ((split("/") | index("..")) == null)
+              end;
             . as $desired
             | if ($desired.mounts | type) != "object"
               or ($desired.container | type) != "object"
@@ -1274,9 +1278,13 @@ jobs:
               or (($desired.container.mountlists | type) != "array")
               or (($desired.container.mountlists | length) != 3)
               or (($desired.container.network | type) != "object")
+              or (($desired.container.network.tagged | type) != "array")
+              or (($desired.container.network.untagged | type) != "array")
+              or (any($desired.container.network.tagged[]?; type != "string"))
+              or (any($desired.container.network.untagged[]?; type != "string"))
               or (($desired.container.container_config | type) != "object")
-              or (($desired.container.container_config.layer_dir | type) != "string")
-              or (($desired.container.container_config.tmpdir | type) != "string")
+              or (($desired.container.container_config.layer_dir | safe_global_path) | not)
+              or (($desired.container.container_config.tmpdir | safe_global_path) | not)
               or (any($desired.mounts | to_entries[];
                 ((.value | type) != "object")
                 or ((.value.src | type) != "string")
@@ -1297,12 +1305,14 @@ jobs:
           qdevice_root_dir="$(jq -er '.container["root-dir"]' <<<"${qdevice_desired}")"
           qdevice_layer_dir="$(jq -er '.container.container_config.layer_dir' <<<"${qdevice_desired}")"
           qdevice_tmpdir="$(jq -er '.container.container_config.tmpdir' <<<"${qdevice_desired}")"
+          qdevice_tagged="$(jq -ce '.container.network.tagged' <<<"${qdevice_desired}")"
+          qdevice_untagged="$(jq -ce '.container.network.untagged' <<<"${qdevice_desired}")"
           required_paths="$(jq -ce '
             [
               .container["root-dir"],
               (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
-              .container.container_config.layer_dir,
-              .container.container_config.tmpdir,
+              (.container.container_config.layer_dir | sub("^/+"; "")),
+              (.container.container_config.tmpdir | sub("^/+"; "")),
               (.mounts | to_entries[] | .value.src)
             ] | map(select((type == "string") and length > 0)) | unique
           ' <<<"${qdevice_desired}")"
@@ -1321,6 +1331,13 @@ jobs:
               if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null; then
                 echo "State lists ${address}, but state show failed; refusing to import or continue." >&2
                 exit 1
+              fi
+              if [[ "${import_id}" != "." ]]; then
+                state_id="$(tofu -chdir=terraform/${STACK_PATH} state show -no-color "${address}" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
+                if [[ -z "${state_id}" || "${state_id}" != "${import_id}" ]]; then
+                  echo "State identity for ${address} does not match the live RouterOS object; refusing to continue." >&2
+                  exit 1
+                fi
               fi
             else
               tofu -chdir=terraform/${STACK_PATH} import -input=false "${address}" "${import_id}" >/dev/null
@@ -1367,7 +1384,7 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '
+          if ! jq -e --argjson desired_tagged "${qdevice_tagged}" --argjson desired_untagged "${qdevice_untagged}" '
             def members($value):
               if $value == null then []
               elif ($value | type) == "array" then $value
@@ -1376,11 +1393,14 @@ jobs:
               end;
             def occurrences($value; $member):
               [members($value)[] | select(. == $member)] | length;
+            def vlan_ids($value): members($value);
             . as $all
-            | [.[] | select(."vlan-ids" == "100" and .bridge == "bridge")] as $matches
+            | [.[] | select(.bridge == "bridge" and (vlan_ids(.["vlan-ids"]) == ["100"]))] as $matches
             | ([ $all[] | occurrences(.untagged; "veth-qnetd") ] | add // 0) as $untagged_occurrences
             | ([ $all[] | occurrences(.tagged; "veth-qnetd") ] | add // 0) as $tagged_occurrences
             | ($matches | length == 1)
+              and ((members($matches[0].tagged) | sort) == ($desired_tagged | sort))
+              and ((members($matches[0].untagged) | sort) == ($desired_untagged | sort))
               and (occurrences($matches[0].untagged; "veth-qnetd") == 1)
               and (occurrences($matches[0].tagged; "veth-qnetd") == 0)
               and ($untagged_occurrences == 1)
@@ -1899,6 +1919,8 @@ jobs:
           qdevice_frame_types="$(jq -er '.frame_types' <<<"${network_spec}")"
           qdevice_layer_dir="$(jq -er '.layer_dir' <<<"${container_config_spec}")"
           qdevice_tmpdir="$(jq -er '.tmpdir' <<<"${container_config_spec}")"
+          qdevice_tagged="$(jq -ce '.tagged' <<<"${network_spec}")"
+          qdevice_untagged="$(jq -ce '.untagged' <<<"${network_spec}")"
           key_path="$(jq -er '.container.container_config.authorized_key_path' <<<"${qdevice_desired}")"
 
           routeros_request GET "$ROUTEROS_URL/rest/interface/veth" | jq -e --arg interface "$qdevice_interface" --arg address "$qdevice_address" --arg gateway "$qdevice_gateway" '
@@ -1920,7 +1942,7 @@ jobs:
                 and ($matches[0]["frame-types"] == $frame_types)
             end
           ' >/dev/null
-          routeros_request GET "$ROUTEROS_URL/rest/interface/bridge/vlan" | jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '
+          routeros_request GET "$ROUTEROS_URL/rest/interface/bridge/vlan" | jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" --argjson desired_tagged "$qdevice_tagged" --argjson desired_untagged "$qdevice_untagged" '
             def members($value):
               if $value == null then []
               elif ($value | type) == "array" then $value
@@ -1929,13 +1951,16 @@ jobs:
               end;
             def occurrences($value; $member):
               [members($value)[] | select(. == $member)] | length;
+            def vlan_ids($value): members($value);
             if type != "array" then false
             else
               . as $all
-              | [ $all[] | select(.bridge == $bridge and ((.["vlan-ids"] | tostring) == $vlan)) ] as $matches
+              | [ $all[] | select(.bridge == $bridge and (vlan_ids(.["vlan-ids"]) == [$vlan])) ] as $matches
               | ([ $all[] | occurrences(.untagged; $interface) ] | add // 0) as $untagged_occurrences
               | ([ $all[] | occurrences(.tagged; $interface) ] | add // 0) as $tagged_occurrences
               | ($matches | length == 1)
+                and ((members($matches[0].tagged) | sort) == ($desired_tagged | sort))
+                and ((members($matches[0].untagged) | sort) == ($desired_untagged | sort))
                 and (occurrences($matches[0].untagged; $interface) == 1)
                 and (occurrences($matches[0].tagged; $interface) == 0)
                 and ($untagged_occurrences == 1)

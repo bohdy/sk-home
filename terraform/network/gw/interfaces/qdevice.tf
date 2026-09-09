@@ -108,6 +108,17 @@ resource "terraform_data" "qdevice_container" {
       vlan_id        = var.qdevice.vlan_id
       bridge         = routeros_interface_bridge.bridge.name
       frame_types    = "admit-only-untagged-and-priority-tagged"
+      # Preserve the complete VLAN row in the state-only record so preflight
+      # can reject unrelated membership drift before the targeted resource
+      # is allowed to reconcile it.
+      tagged = sort(setunion(
+        [routeros_interface_bridge.bridge.name],
+        coalesce(try(var.vlans[tostring(var.qdevice.vlan_id)].tagged, null), [])
+      ))
+      untagged = sort(setunion(
+        coalesce(try(var.vlans[tostring(var.qdevice.vlan_id)].untagged, null), []),
+        [var.qdevice.interface_name]
+      ))
     }
     container_config = {
       layer_dir           = var.qdevice.layer_dir

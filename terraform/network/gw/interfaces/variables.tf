@@ -937,8 +937,8 @@ variable "qdevice" {
     vlan_id            = optional(number, 100)
     image              = optional(string, "lpgonzalez/corosync-qnetd:1.0.0")
     root_dir           = optional(string, "usb1/qnetd/root")
-    layer_dir          = optional(string, "usb1/qnetd/layers")
-    tmpdir             = optional(string, "usb1/qnetd/tmp")
+    layer_dir          = optional(string, "/usb1/qnetd/layers")
+    tmpdir             = optional(string, "/usb1/qnetd/tmp")
     nssdb_dir          = optional(string, "usb1/qnetd/nssdb")
     ssh_host_keys_dir  = optional(string, "usb1/qnetd/ssh-host-keys")
     ssh_authorized_dir = optional(string, "usb1/qnetd/ssh-authorized-keys")
@@ -949,6 +949,17 @@ variable "qdevice" {
   validation {
     condition     = !var.qdevice.enabled || trimspace(var.qdevice.ssh_public_key) != ""
     error_message = "qdevice.ssh_public_key must contain a public SSH key when qdevice.enabled is true."
+  }
+
+  validation {
+    # RouterOS exposes these global extraction paths with a leading slash;
+    # keep them on the dedicated USB filesystem and reject traversal or empty
+    # path components before they can affect other containers.
+    condition = !var.qdevice.enabled || alltrue([
+      for path in [var.qdevice.layer_dir, var.qdevice.tmpdir] :
+      can(regex("^/usb1/[^/]+(/[^/]+)*$", path)) && !contains(split("/", path), "..")
+    ])
+    error_message = "qdevice.layer_dir and qdevice.tmpdir must be non-empty canonical paths below /usb1 without traversal components."
   }
 }
 
