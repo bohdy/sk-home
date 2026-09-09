@@ -1337,7 +1337,7 @@ jobs:
                     and (((($matches[0].logging // false) | tostring | ascii_downcase)) | IN("true", "yes", "on", "1"))
                   end
               end
-          ' <<<"${containers}" >/dev/null || {
+          ' <<<"${containers}" >/dev/null; then
             echo "Existing RouterOS containers are not exactly the qnetd declaration." >&2
             exit 1
           }
