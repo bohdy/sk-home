@@ -103,6 +103,10 @@ qdevice_desired="$(
 # Mount names must match native mountlists exactly and the record must request
 # a running, boot-enabled, logged qnetd container.
 if ! jq -e '
+  def safe_global_path:
+    if type != "string" then false
+    else test("^/usb1/[^/]+(/[^/]+)*$") and ((split("/") | index("..")) == null)
+    end;
   .mounts as $mounts
   | .container as $container
   | if ($mounts | type) != "object"
@@ -136,9 +140,13 @@ if ! jq -e '
     or (($container.network.vlan_id | type) != "number")
     or (($container.network.bridge | type) != "string")
     or (($container.network.frame_types | type) != "string")
+    or (($container.network.tagged | type) != "array")
+    or (($container.network.untagged | type) != "array")
+    or (any($container.network.tagged[]?; type != "string"))
+    or (any($container.network.untagged[]?; type != "string"))
     or (($container.container_config | type) != "object")
-    or (($container.container_config.layer_dir | type) != "string")
-    or (($container.container_config.tmpdir | type) != "string")
+    or (($container.container_config.layer_dir | safe_global_path) | not)
+    or (($container.container_config.tmpdir | safe_global_path) | not)
     or (($container.container_config.authorized_key_path | type) != "string") then
       false
     else true
@@ -152,6 +160,8 @@ mount_specs="$(jq -ce '.mounts | to_entries | map({list:.key,src:.value.src,dst:
 container_spec="$(jq -ce '.container' <<<"$qdevice_desired")"
 network_spec="$(jq -ce '.container.network' <<<"$qdevice_desired")"
 container_config_spec="$(jq -ce '.container.container_config' <<<"$qdevice_desired")"
+qdevice_tagged="$(jq -ce '.tagged' <<<"$network_spec")"
+qdevice_untagged="$(jq -ce '.untagged' <<<"$network_spec")"
 
 qdevice_interface="$(jq -er '.interface_name' <<<"$network_spec")"
 qdevice_address="$(jq -er '.address' <<<"$network_spec")"
@@ -203,7 +213,7 @@ if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" -
   echo "The qdevice bridge port no longer matches the reviewed VLAN declaration." >&2
   exit 1
 fi
-if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '
+if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" --argjson desired_tagged "$qdevice_tagged" --argjson desired_untagged "$qdevice_untagged" '
   def members($value):
     if $value == null then []
     elif ($value | type) == "array" then $value
@@ -212,11 +222,14 @@ if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" -
     end;
   def occurrences($value; $member):
     [members($value)[] | select(. == $member)] | length;
+  def vlan_ids($value): members($value);
   . as $all
-  | [ $all[] | select(.bridge == $bridge and ((.["vlan-ids"] | tostring) == $vlan)) ] as $matches
+  | [ $all[] | select(.bridge == $bridge and (vlan_ids(.["vlan-ids"]) == [$vlan])) ] as $matches
   | ([ $all[] | occurrences(.untagged; $interface) ] | add // 0) as $untagged_occurrences
   | ([ $all[] | occurrences(.tagged; $interface) ] | add // 0) as $tagged_occurrences
   | ($matches | length == 1)
+    and ((members($matches[0].tagged) | sort) == ($desired_tagged | sort))
+    and ((members($matches[0].untagged) | sort) == ($desired_untagged | sort))
     and (occurrences($matches[0].untagged; $interface) == 1)
     and (occurrences($matches[0].tagged; $interface) == 0)
     and ($untagged_occurrences == 1)
@@ -225,6 +238,25 @@ if ! jq -e --arg interface "$qdevice_interface" --arg bridge "$qdevice_bridge" -
   echo "The qdevice VLAN 100 attachment no longer matches the reviewed declaration." >&2
   exit 1
 fi
+
+verify_state_identity() {
+  local address="$1"
+  local expected_id="$2"
+  local state_id
+
+  state_id="$(tofu -chdir=terraform/$STACK_PATH state show -no-color "$address" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
+  if [[ -z "$state_id" || "$state_id" != "$expected_id" ]]; then
+    echo "State identity for $address does not match the live RouterOS object; refusing to continue." >&2
+    exit 1
+  fi
+}
+
+veth_id="$(jq -er --arg interface "$qdevice_interface" '[.[] | select(.name == $interface)] | if length == 1 then .[0][".id"] else error("qdevice veth identity is unavailable") end' <<<"$veths")"
+port_id="$(jq -er --arg interface "$qdevice_interface" '[.[] | select(.interface == $interface)] | if length == 1 then .[0][".id"] else error("qdevice bridge-port identity is unavailable") end' <<<"$ports")"
+vlan_id="$(jq -er --arg bridge "$qdevice_bridge" --arg vlan "$qdevice_vlan" '[.[] | select(.bridge == $bridge and (.["vlan-ids"] | tostring) == $vlan)] | if length == 1 then .[0][".id"] else error("qdevice VLAN identity is unavailable") end' <<<"$vlans")"
+verify_state_identity 'routeros_interface_veth.qdevice[0]' "$veth_id"
+verify_state_identity 'routeros_interface_bridge_port.qdevice[0]' "$port_id"
+verify_state_identity 'routeros_interface_bridge_vlan.bridge_vlan["100"]' "$vlan_id"
 
 required_paths="$(jq -ce '
   [
@@ -335,6 +367,32 @@ done < <(jq -c '.[]' <<<"$mount_specs")
 containers=$(routeros_request GET "$ROUTEROS_URL/rest/container")
 if ! jq -e 'type == "array"' <<<"$containers" >/dev/null; then
   echo "RouterOS returned a malformed container collection before creation." >&2
+  exit 1
+fi
+if ! jq -e --argjson wanted "$container_spec" '
+  def values:
+    if . == null then []
+    elif type == "array" then .
+    elif type == "string" then split(",") | map(select(length > 0))
+    else []
+    end;
+  def truthy:
+    tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
+  . as $containers
+  | if ($containers | length) == 0 then true
+    elif ($containers | length) != 1 then false
+    else
+      .[0] as $actual
+      | ($actual["remote-image"] // "") == $wanted["remote-image"]
+        and ($actual.interface // "") == $wanted.interface
+        and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
+        and (($actual["start-on-boot"] // false) | truthy)
+        and (($actual.logging // false) | truthy)
+        and ($actual.comment // "") == $wanted.comment
+    end
+' <<<"$containers" >/dev/null; then
+  echo "The RouterOS container set changed during recovery; refusing to create qnetd." >&2
   exit 1
 fi
 container_id=$(jq -r --arg image "$qdevice_image" '[.[] | select((.["remote-image"] // "") == $image)] | if length == 1 then .[0][".id"] else "" end' <<<"$containers")

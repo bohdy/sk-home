@@ -950,6 +950,17 @@ variable "qdevice" {
     condition     = !var.qdevice.enabled || trimspace(var.qdevice.ssh_public_key) != ""
     error_message = "qdevice.ssh_public_key must contain a public SSH key when qdevice.enabled is true."
   }
+
+  validation {
+    # RouterOS exposes these global extraction paths with a leading slash;
+    # keep them on the dedicated USB filesystem and reject traversal or empty
+    # path components before they can affect other containers.
+    condition = !var.qdevice.enabled || alltrue([
+      for path in [var.qdevice.layer_dir, var.qdevice.tmpdir] :
+      can(regex("^/usb1/[^/]+(/[^/]+)*$", path)) && !contains(split("/", path), "..")
+    ])
+    error_message = "qdevice.layer_dir and qdevice.tmpdir must be non-empty canonical paths below /usb1 without traversal components."
+  }
 }
 
 variable "interfaces" {
