@@ -2100,14 +2100,16 @@ jobs:
                 and (($actual | runtime_state) == "running"))
           ' >/dev/null
           public_key_file="terraform/${STACK_PATH}/qdevice-authorized.pub"
-          expected_key_content="$(printf '%s\n' "$(tr -d '\r\n' < "${public_key_file}")")"
+          # Command substitution strips trailing newlines, so retain the key
+          # line and add the required single newline inside jq.
+          expected_key_line="$(tr -d '\r\n' < "${public_key_file}")"
           routeros_request GET "$ROUTEROS_URL/rest/file?.proplist=name,type,size,contents" |
-            jq -e --arg key_path "$key_path" --arg expected_content "$expected_key_content" '
+            jq -e --arg key_path "$key_path" --arg expected_key_line "$expected_key_line" '
               (type == "array")
                 and ([.[] | select(.name == $key_path)] | length == 1)
                 and ([.[] | select(.name == $key_path)][0].type == "file")
                 and (([.[] | select(.name == $key_path)][0].size // "0" | tonumber) > 0)
-                and ([.[] | select(.name == $key_path)][0].contents == $expected_content)
+                and ([.[] | select(.name == $key_path)][0].contents == ($expected_key_line + "\n"))
             ' >/dev/null
 
           if (command -v nc >/dev/null 2>&1 && nc -z -w 8 "$qdevice_host" 5403 >/dev/null 2>&1) ||
