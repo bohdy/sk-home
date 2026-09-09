@@ -227,17 +227,28 @@ required_paths="$(jq -ce '
   ] | map(select(length > 0)) | unique
 ' <<<"$qdevice_desired")"
 jq -e --argjson required "$required_paths" '
-  all($required[]; . as $path | any($files[]; .name == $path and .type == "directory"))
+  . as $files
+  | all($required[]; . as $path | any($files[]; .name == $path and .type == "directory"))
 ' <<<"$files" >/dev/null
 jq -e --arg layer_dir "$qdevice_layer_dir" --arg tmpdir "$qdevice_tmpdir" '
-  (.["layer-dir"] // "") == $layer_dir and (.tmpdir // "") == $tmpdir
+  (type == "object")
+  and (.["layer-dir"] | type) == "string"
+  and (.tmpdir | type) == "string"
+  and .["layer-dir"] == $layer_dir
+  and .tmpdir == $tmpdir
 ' <<<"$container_config" >/dev/null
 jq -e '
   . as $config
-  | ($config["registry-url"] // $config.registry_url // "") as $registry
-  | ($config["assumed-registry-url"] // "") as $assumed
-  | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
-    and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
+  | if (type != "object")
+    or ((($config["registry-url"] // $config.registry_url // "") | type) != "string")
+    or ((($config["assumed-registry-url"] // "") | type) != "string") then
+      false
+    else
+      ($config["registry-url"] // $config.registry_url // "") as $registry
+      | ($config["assumed-registry-url"] // "") as $assumed
+      | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
+        and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
+    end
 ' <<<"$container_config" >/dev/null
 
 # Existing mount rows are either absent or exactly the desired set. Any
