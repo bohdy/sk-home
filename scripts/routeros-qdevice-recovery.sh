@@ -470,6 +470,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   . as $containers
@@ -481,7 +483,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       .[0] as $actual
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
-        and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
         and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
@@ -531,6 +533,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   . as $containers
@@ -540,7 +544,7 @@ if ! jq -e --argjson wanted "$container_spec" '
       .[0] as $actual
       | ($actual["remote-image"] // "") == $wanted["remote-image"]
         and ($actual.interface // "") == $wanted.interface
-        and ($actual["root-dir"] // "") == $wanted["root-dir"]
+        and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
         and ($actual.name // "") == $wanted.name
         and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
         and (($actual["start-on-boot"] // false) | truthy)
@@ -653,6 +657,8 @@ if ! jq -e --argjson wanted "$container_spec" '
     elif type == "string" then split(",") | map(select(length > 0))
     else []
     end;
+  def canonical_root_path:
+    if type == "string" and startswith("/usb1/") then .[1:] else . end;
   def truthy:
     tostring | ascii_downcase as $value | ["true", "yes", "on", "1"] | index($value) != null;
   def runtime_state:
@@ -670,7 +676,7 @@ if ! jq -e --argjson wanted "$container_spec" '
   and (.[0] as $actual
     | ($actual["remote-image"] // "") == $wanted["remote-image"]
       and ($actual.interface // "") == $wanted.interface
-      and ($actual["root-dir"] // "") == $wanted["root-dir"]
+      and (($actual["root-dir"] // "") | canonical_root_path) == ($wanted["root-dir"] | canonical_root_path)
       and ($actual.name // "") == $wanted.name
       and (($actual.mountlists // []) | values | sort) == ($wanted.mountlists | sort)
       and (($actual["start-on-boot"] // false) | truthy)
