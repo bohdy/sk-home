@@ -71,6 +71,20 @@ on:
         required: true
         default: false
         type: boolean
+      apply_gateway_qdevice:
+        # Keep the USB-backed qnetd container isolated from provider-sensitive
+        # gateway resources and require a separate production approval.
+        description: Apply only the reviewed RouterOS qnetd quorum device
+        required: true
+        default: false
+        type: boolean
+      plan_gateway_qdevice:
+        # Permit a review-only qnetd plan without granting a production
+        # mutation. The apply remains a separate explicit dispatch.
+        description: Plan only the RouterOS qnetd quorum device
+        required: true
+        default: false
+        type: boolean
       apply_gateway_ether7:
         # Isolate the Dell Server switchport reconciliation from the broader
         # gateway stack and its still-pending firewall changes.
@@ -145,6 +159,8 @@ jobs:
       PLAN_GATEWAY_FIREWALL: ${{ inputs.plan_gateway_firewall || false }}
       APPLY_GATEWAY_PROXMOX: ${{ inputs.apply_gateway_proxmox || false }}
       PLAN_GATEWAY_PROXMOX: ${{ inputs.plan_gateway_proxmox || false }}
+      APPLY_GATEWAY_QDEVICE: ${{ inputs.apply_gateway_qdevice || false }}
+      PLAN_GATEWAY_QDEVICE: ${{ inputs.plan_gateway_qdevice || false }}
       APPLY_GATEWAY_ETHER7: ${{ inputs.apply_gateway_ether7 || false }}
       PLAN_GATEWAY_ETHER7: ${{ inputs.plan_gateway_ether7 || false }}
       APPLY_GATEWAY_WIREGUARD: ${{ inputs.apply_gateway_wireguard || false }}
@@ -175,6 +191,8 @@ jobs:
             "${PLAN_GATEWAY_FIREWALL}" \
             "${APPLY_GATEWAY_PROXMOX}" \
             "${PLAN_GATEWAY_PROXMOX}" \
+            "${APPLY_GATEWAY_QDEVICE}" \
+            "${PLAN_GATEWAY_QDEVICE}" \
             "${APPLY_GATEWAY_ETHER7}" \
             "${PLAN_GATEWAY_ETHER7}" \
             "${APPLY_GATEWAY_WIREGUARD}" \
@@ -212,13 +230,13 @@ jobs:
     # Only ordinary main-branch planning may access remote state, provider
     # credentials, or immutable plan artifacts here; targeted modes use their
     # own isolated plan jobs below.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
+    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix))
     strategy:
       max-parallel: 1
       matrix:
         # Targeted BGP, firewall, and WireGuard dispatches use dedicated jobs
         # and omit the provider-sensitive interface stack from this matrix.
-        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
+        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]') }}
     #if: needs.detect-changes.outputs.changed == 'true'
 
     env:
@@ -1099,6 +1117,433 @@ jobs:
           TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+  gateway-qdevice-plan:
+    name: Plan RouterOS qnetd quorum device
+    # Keep the USB-backed container and its management attachment isolated
+    # from provider-sensitive gateway resources. The qdevice flag is mutually
+    # exclusive with every other trusted mutation mode above.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: validate-dispatch
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-qdevice-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Get gateway qdevice secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+            a64de379-c939-4d47-841e-b41b00c8641d > PROXMOX_SSH_PRIVATE_KEY
+
+      - name: Derive qdevice authorized public key
+        shell: bash
+        env:
+          PROXMOX_SSH_PRIVATE_KEY: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
+          pubfile="${RUNNER_TEMP}/proxmox-qdevice-key.pub"
+          cleanup_on_failure() {
+            status=$?
+            if (( status != 0 )); then
+              rm -f "${keyfile}" "${pubfile}"
+            fi
+            exit "${status}"
+          }
+          trap cleanup_on_failure EXIT
+          umask 077
+          printf '%s\n' "${PROXMOX_SSH_PRIVATE_KEY}" > "${keyfile}"
+          ssh-keygen -y -f "${keyfile}" > "${pubfile}"
+          qdevice_json="$(jq -cn --arg key "$(<"${pubfile}")" '{enabled:true,ssh_public_key:$key}')"
+          printf 'TF_VAR_qdevice=%s\n' "${qdevice_json}" >> "${GITHUB_ENV}"
+          rm -f "${keyfile}" "${pubfile}"
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Adopt existing qdevice network and container config
+        shell: bash
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            curl --fail --silent --show-error --insecure \
+              --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+              "${ROUTEROS_URL}${1}"
+          }
+
+          import_if_missing() {
+            local address="$1"
+            local import_id="$2"
+            if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null 2>&1; then
+              tofu -chdir=terraform/${STACK_PATH} import -input=false "${address}" "${import_id}" >/dev/null
+            fi
+          }
+
+          veths="$(api_get /rest/interface/veth)"
+          ports="$(api_get /rest/interface/bridge/port)"
+          vlans="$(api_get /rest/interface/bridge/vlan)"
+          files="$(api_get /rest/file)"
+          containers="$(api_get /rest/container)"
+          container_config="$(api_get /rest/container/config)"
+
+          if ! jq -e '
+            [.[] | select(.name == "veth-qnetd")] as $matches
+            | ($matches | length == 1)
+              and ($matches[0].address == "10.1.100.252/24")
+              and ($matches[0].gateway == "10.1.100.1")
+          ' <<<"${veths}" >/dev/null; then
+            echo "The live qdevice veth is missing, duplicated, or has an unexpected address." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            [.[] | select(.interface == "veth-qnetd")] as $matches
+            | ($matches | length == 1)
+              and ($matches[0].bridge == "bridge")
+              and ($matches[0].pvid == "100")
+              and ($matches[0]["frame-types"] == "admit-only-untagged-and-priority-tagged")
+          ' <<<"${ports}" >/dev/null; then
+            echo "The live qdevice bridge port is missing, duplicated, or has unexpected VLAN admission." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            [.[] | select(."vlan-ids" == "100" and .bridge == "bridge")] as $matches
+            | ($matches | length == 1)
+              and (($matches[0].untagged // "") | split(",") | index("veth-qnetd"))
+              and (((($matches[0].tagged // "") | split(",") | index("veth-qnetd"))) | not)
+          ' <<<"${vlans}" >/dev/null; then
+            echo "The live VLAN 100 row does not contain exactly one safe qdevice attachment." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            . as $files
+            | [
+              "usb1/qnetd",
+              "usb1/qnetd/root",
+              "usb1/qnetd/layers",
+              "usb1/qnetd/tmp",
+              "usb1/qnetd/nssdb",
+              "usb1/qnetd/ssh-host-keys",
+              "usb1/qnetd/ssh-authorized-keys"
+            ] as $required
+            | all($required[]; . as $path | any($files[]; .name == $path and .type == "directory"))
+          ' <<<"${files}" >/dev/null; then
+            echo "One or more qdevice USB prerequisite directories are missing or not directories." >&2
+            exit 1
+          fi
+
+          if ! jq -e 'length == 0' <<<"${containers}" >/dev/null; then
+            echo "Existing RouterOS containers require a manual container-config compatibility review." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            ((.["layer-dir"] // "") == "" or .["layer-dir"] == "usb1/qnetd/layers")
+            and ((.tmpdir // "") == "" or .tmpdir == "usb1/qnetd/tmp")
+          ' <<<"${container_config}" >/dev/null; then
+            echo "The global RouterOS container extraction paths conflict with qnetd." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            . as $config
+            | ($config["registry-url"] // $config.registry_url // "") as $registry
+            | ($config["assumed-registry-url"] // "") as $assumed
+            | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
+              and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
+          ' <<<"${container_config}" >/dev/null; then
+            echo "The existing global RouterOS container registry is not Docker Hub; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+          veth_id="$(jq -r '.[] | select(.name == "veth-qnetd") | .id' <<<"${veths}")"
+          port_id="$(jq -r '.[] | select(.interface == "veth-qnetd") | .id' <<<"${ports}")"
+          vlan_id="$(jq -r '.[] | select(."vlan-ids" == "100" and .bridge == "bridge") | .id' <<<"${vlans}")"
+
+          import_if_missing 'routeros_interface_veth.qdevice[0]' "${veth_id}"
+          import_if_missing 'routeros_interface_bridge_port.qdevice[0]' "${port_id}"
+          import_if_missing 'routeros_interface_bridge_vlan.bridge_vlan["100"]' "${vlan_id}"
+          import_if_missing 'routeros_container_config.qdevice[0]' .
+
+      - name: Plan RouterOS qnetd quorum device
+        run: >-
+          tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=routeros_interface_veth.qdevice[0]
+          -target=routeros_interface_bridge_port.qdevice[0]
+          -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
+          -target=routeros_container_config.qdevice[0]
+          -target=routeros_file.qdevice_authorized_keys[0]
+          -target='routeros_container_mounts.qdevice["qnetd_nssdb"]'
+          -target='routeros_container_mounts.qdevice["qnetd_ssh_host_keys"]'
+          -target='routeros_container_mounts.qdevice["qnetd_authorized_keys"]'
+          -target=routeros_container.qdevice[0]
+          -out=qdevice-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Enforce qdevice-only plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json qdevice-tofuplan |
+            jq -e '
+              [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
+              | [
+                  "routeros_interface_veth.qdevice[0]",
+                  "routeros_interface_bridge_port.qdevice[0]",
+                  "routeros_interface_bridge_vlan.bridge_vlan[\"100\"]",
+                  "routeros_container_config.qdevice[0]",
+                  "routeros_file.qdevice_authorized_keys[0]",
+                  "routeros_container_mounts.qdevice[\"qnetd_nssdb\"]",
+                  "routeros_container_mounts.qdevice[\"qnetd_ssh_host_keys\"]",
+                  "routeros_container_mounts.qdevice[\"qnetd_authorized_keys\"]",
+                  "routeros_container.qdevice[0]"
+                ] as $allowed
+              | all($changes[]; (.address | IN($allowed[])))
+                and all($changes[]; (.change.actions | index("delete") | not))
+                and all($changes[]; (.change.actions | index("replace") | not))
+            ' >/dev/null; then
+            echo "The qdevice plan contains an unexpected, destructive, or unrelated change." >&2
+            exit 1
+          fi
+
+      - name: Upload RouterOS qnetd plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}/qdevice-tofuplan
+          if-no-files-found: error
+          retention-days: 7
+
+  gateway-qdevice-apply:
+    name: Apply RouterOS qnetd quorum device
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    runs-on: self-hosted
+    needs: [validate-dispatch, gateway-qdevice-plan]
+    environment: production
+
+    env:
+      MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
+      MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
+      STACK_PATH: network/gw/interfaces
+      TOFU_PLAN_ARTIFACT: network-gw-qdevice-tofuplan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4.0.1
+        with:
+          install: true
+
+      - name: Download RouterOS qnetd plan
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.TOFU_PLAN_ARTIFACT }}
+          path: terraform/${{ env.STACK_PATH }}
+
+      - name: Get gateway qdevice secrets
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
+            31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+            2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
+            f59a5c29-2dc7-4acf-b74b-b48e015b7439 > SNMP_V2_COMMUNITY
+            1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
+            12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
+            90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+            a64de379-c939-4d47-841e-b41b00c8641d > PROXMOX_SSH_PRIVATE_KEY
+
+      - name: Derive qdevice authorized public key
+        shell: bash
+        env:
+          PROXMOX_SSH_PRIVATE_KEY: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
+          pubfile="${RUNNER_TEMP}/proxmox-qdevice-key.pub"
+          cleanup_on_failure() {
+            status=$?
+            if (( status != 0 )); then
+              rm -f "${keyfile}" "${pubfile}"
+            fi
+            exit "${status}"
+          }
+          trap cleanup_on_failure EXIT
+          umask 077
+          printf '%s\n' "${PROXMOX_SSH_PRIVATE_KEY}" > "${keyfile}"
+          ssh-keygen -y -f "${keyfile}" > "${pubfile}"
+          qdevice_json="$(jq -cn --arg key "$(<"${pubfile}")" '{enabled:true,ssh_public_key:$key}')"
+          printf 'TF_VAR_qdevice=%s\n' "${qdevice_json}" >> "${GITHUB_ENV}"
+
+      - name: OpenTofu init
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Apply RouterOS qnetd plan
+        run: tofu -chdir=terraform/${{ env.STACK_PATH }} apply -auto-approve qdevice-tofuplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
+      - name: Verify qnetd live state and ports
+        shell: bash
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+        run: |
+          set -euo pipefail
+
+          keyfile="${RUNNER_TEMP}/proxmox-qdevice-key"
+          cleanup() {
+            rm -f "${keyfile}"
+          }
+          trap cleanup EXIT
+
+          api_get() {
+            curl --fail --silent --show-error --insecure \
+              --user "${MIKROTIK_USERNAME}:${MIKROTIK_PASSWORD}" \
+              "${ROUTEROS_URL}${1}"
+          }
+
+          api_get /rest/interface/veth | jq -e '
+            any(.[]; .name == "veth-qnetd" and .address == "10.1.100.252/24" and .gateway == "10.1.100.1")
+          ' >/dev/null
+          api_get /rest/interface/bridge/port | jq -e '
+            any(.[]; .interface == "veth-qnetd" and .pvid == "100" and .["frame-types"] == "admit-only-untagged-and-priority-tagged")
+          ' >/dev/null
+          api_get /rest/interface/bridge/vlan | jq -e '
+            any(.[]; .["vlan-ids"] == "100" and ((.untagged // "") | split(",") | index("veth-qnetd")))
+          ' >/dev/null
+          api_get /rest/container/config | jq -e '
+            .["layer-dir"] == "usb1/qnetd/layers" and .tmpdir == "usb1/qnetd/tmp"
+          ' >/dev/null
+          api_get /rest/container/mounts | jq -e '
+            def names:
+              if . == null then []
+              elif type == "array" then .
+              elif type == "string" then split(",") | map(select(length > 0))
+              else []
+              end;
+            . as $mounts
+            | [
+                {name:"qnetd_authorized_keys",src:"usb1/qnetd/ssh-authorized-keys",dst:"/root/.ssh"},
+                {name:"qnetd_nssdb",src:"usb1/qnetd/nssdb",dst:"/etc/corosync/qnetd/nssdb"},
+                {name:"qnetd_ssh_host_keys",src:"usb1/qnetd/ssh-host-keys",dst:"/etc/ssh/keys"}
+              ] as $required
+            | all($required[]; . as $want | any($mounts[]; .name == $want.name and .src == $want.src and .dst == $want.dst))
+          ' >/dev/null
+          api_get /rest/container | jq -e '
+            def names:
+              if . == null then []
+              elif type == "array" then .
+              elif type == "string" then split(",") | map(select(length > 0))
+              else []
+              end;
+            [.[] | select((.["remote-image"] // .remote_image // "") == "lpgonzalez/corosync-qnetd:1.0.0")] as $matches
+            | ($matches | length == 1)
+              and ($matches[0].comment == "Proxmox QDevice qnetd")
+              and ($matches[0].interface == "veth-qnetd")
+              and (($matches[0]["root-dir"] // $matches[0].root_dir // "") == "usb1/qnetd/root")
+              and ((($matches[0].mounts // $matches[0].mountlists // []) | names | sort) == ["qnetd_authorized_keys", "qnetd_nssdb", "qnetd_ssh_host_keys"])
+              and (((($matches[0]["start-on-boot"] // $matches[0].start_on_boot // false) | tostring | ascii_downcase)) == "true")
+              and (((($matches[0].logging // false) | tostring | ascii_downcase)) == "true")
+              and (($matches[0].status // "") | test("running"; "i"))
+          ' >/dev/null
+          api_get /rest/file | jq -e '
+            any(.[]; .name == "usb1/qnetd/ssh-authorized-keys/authorized_keys" and .type == "file" and ((.size // "0") | tonumber) > 0)
+          ' >/dev/null
+
+          if [[ ! -s "${keyfile}" ]]; then
+            echo "The temporary Proxmox SSH key is missing." >&2
+            exit 1
+          fi
+          ssh -i "${keyfile}" -o BatchMode=yes -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 \
+            root@10.1.100.252 true >/dev/null
+
+          if (command -v nc >/dev/null 2>&1 && nc -z -w 8 10.1.100.252 5403 >/dev/null 2>&1) ||
+             (timeout 8 bash -c '</dev/tcp/10.1.100.252/5403' >/dev/null 2>&1); then
+            printf 'qnetd=reachable\n'
+          else
+            echo "qnetd TCP/5403 is unreachable." >&2
+            exit 1
+          fi
+
+      - name: Clean up qdevice bootstrap key
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "${RUNNER_TEMP}/proxmox-qdevice-key" "${RUNNER_TEMP}/proxmox-qdevice-key.pub"
 
   gateway-proxmox-plan:
     name: Plan Kubernetes to Proxmox firewall rule

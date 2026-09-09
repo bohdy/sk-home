@@ -52,8 +52,16 @@ resource "routeros_interface_bridge_vlan" "bridge_vlan" {
   vlan_ids = [tonumber(each.key)]
   bridge   = routeros_interface_bridge.bridge.name
   tagged   = setunion([routeros_interface_bridge.bridge.name], each.value.tagged)
-  untagged = each.value.untagged
-  comment  = each.value.name
+  # The qdevice veth is deliberately merged here instead of added to the
+  # physical interface inventory, whose map creates Ethernet resources.
+  untagged = tonumber(each.key) == var.qdevice.vlan_id && var.qdevice.enabled ? setunion(
+    coalesce(each.value.untagged, toset([])),
+    [var.qdevice.interface_name]
+  ) : each.value.untagged
+  comment = each.value.name
+
+  # Ensure the VLAN row cannot be reconciled before the optional veth exists.
+  depends_on = [routeros_interface_veth.qdevice]
 }
 
 resource "routeros_ip_address" "ip_address" {

@@ -924,6 +924,34 @@ variable "wireguard_peers" {
   }
 }
 
+# Keep the quorum device disabled for ordinary gateway plans. The dedicated
+# production-gated qdevice workflow enables it and injects only the Proxmox
+# nodes' public SSH key; the private key never enters RouterOS or OpenTofu.
+variable "qdevice" {
+  description = "Optional RouterOS qnetd quorum-device configuration."
+  type = object({
+    enabled            = optional(bool, false)
+    interface_name     = optional(string, "veth-qnetd")
+    address            = optional(string, "10.1.100.252/24")
+    gateway            = optional(string, "10.1.100.1")
+    vlan_id            = optional(number, 100)
+    image              = optional(string, "lpgonzalez/corosync-qnetd:1.0.0")
+    root_dir           = optional(string, "usb1/qnetd/root")
+    layer_dir          = optional(string, "usb1/qnetd/layers")
+    tmpdir             = optional(string, "usb1/qnetd/tmp")
+    nssdb_dir          = optional(string, "usb1/qnetd/nssdb")
+    ssh_host_keys_dir  = optional(string, "usb1/qnetd/ssh-host-keys")
+    ssh_authorized_dir = optional(string, "usb1/qnetd/ssh-authorized-keys")
+    ssh_public_key     = optional(string, "")
+  })
+  default = {}
+
+  validation {
+    condition     = !var.qdevice.enabled || trimspace(var.qdevice.ssh_public_key) != ""
+    error_message = "qdevice.ssh_public_key must contain a public SSH key when qdevice.enabled is true."
+  }
+}
+
 variable "interfaces" {
   # Model each managed port once so bridge membership, comments, and VLAN-facing
   # access settings can be derived from the same inventory entry.

@@ -174,6 +174,27 @@ gh workflow run terraform.yaml --ref main \
 
 The WireGuard path imported only public peer configuration and interface identity; private and preshared keys remain sensitive state and are ignored during adoption. Its temporary import blocks were removed after the production-gated apply, and a clean follow-up plan is required.
 
+Manage the optional USB-backed Proxmox qnetd quorum device through its isolated targeted path. It is disabled by default in ordinary gateway plans. Review it only from `main`; the trusted workflow derives the public key from the existing Proxmox private key in ephemeral runner files, passes only that public key to OpenTofu, adopts and validates the existing VLAN attachment into state, and rejects deletes, replacements, or unrelated resources:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway=false \
+  -f apply_gateway_qdevice=false \
+  -f plan_gateway_qdevice=true
+```
+
+After reviewing `network-gw-qdevice-tofuplan`, apply only the reviewed artifact through the production-gated path:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway_qdevice=true \
+  -f plan_gateway_qdevice=false
+```
+
+The workflow removes the temporary private-key files after key derivation and applies only that immutable artifact, then verifies the qnetd container, persistent mounts, VLAN 100 attachment, SSH/22, and qnetd/5403. This path does not add firewall rules because the qdevice and Proxmox nodes share the management VLAN 100 Layer-2 segment. Before enabling it, format the USB drive with a RouterOS-supported filesystem and create these exact directories: `usb1/qnetd`, `usb1/qnetd/root`, `usb1/qnetd/layers`, `usb1/qnetd/tmp`, `usb1/qnetd/nssdb`, `usb1/qnetd/ssh-host-keys`, and `usb1/qnetd/ssh-authorized-keys`; these are one-time RouterOS prerequisites and are intentionally not destructive OpenTofu resources. Run the review-only dispatch again afterward and require an empty plan.
+
+If the review plan is wrong, do not apply it. If post-apply verification fails, do not retry an unreviewed artifact; use RouterOS Safe Mode or the local console only to stop the qnetd container if necessary, preserve the USB data and global container configuration, correct the declaration, and create a new reviewed plan. The qdevice no-destroy guard intentionally rejects destructive rollback artifacts, so removal is a separate reviewed operation.
+
 Terraform/OpenTofu is the preferred ownership path for infrastructure and managed-device configuration. Direct API or CLI changes are reserved for documented break-glass work and must be adopted into state immediately. To import or update only the gateway SNMP communities while the pinned RouterOS provider cannot safely apply unrelated IP-address and BGP resources, dispatch the targeted workflow from `main`:
 
 ```bash
