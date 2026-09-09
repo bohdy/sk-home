@@ -1177,6 +1177,54 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
+      - name: Derive qdevice desired state for preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Evaluate the state-only qdevice records without refreshing or
+          # mutating RouterOS. The live preflight below consumes these values
+          # so USB checks and global-path checks cannot drift from qdevice.tf.
+          tofu -chdir=terraform/${STACK_PATH} plan \
+            -refresh=false \
+            -target=terraform_data.qdevice_mounts[0] \
+            -target=terraform_data.qdevice_container[0] \
+            -out=qdevice-desired-tofuplan
+          tofu -chdir=terraform/${STACK_PATH} show -json qdevice-desired-tofuplan |
+            jq -ce '
+              [
+                .planned_values.root_module.resources[]?
+                | select(
+                    .address == "terraform_data.qdevice_mounts[0]"
+                    or .address == "terraform_data.qdevice_container[0]"
+                  )
+                | {address, input: .values.input}
+              ] as $records
+              | if ($records | length) != 2
+                or (($records | map(.address) | sort) != [
+                  "terraform_data.qdevice_container[0]",
+                  "terraform_data.qdevice_mounts[0]"
+                ]) then
+                  error("qdevice desired-state records are missing")
+                else
+                  (reduce $records[] as $record ({}; .[$record.address] = $record.input)) as $desired
+                  | {
+                      mounts: $desired["terraform_data.qdevice_mounts[0]"],
+                      container: $desired["terraform_data.qdevice_container[0]"]
+                    }
+                end
+            ' > terraform/${STACK_PATH}/qdevice-desired.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+
       - name: Adopt existing qdevice network and container config
         shell: bash
         env:
@@ -1213,6 +1261,51 @@ jobs:
                 (if ($ENV.REQUEST_PAYLOAD // "") == "" then empty else "data = " + ($ENV.REQUEST_PAYLOAD | @json) end)
               ' | curl --config -
           }
+
+          qdevice_desired="$(jq -ce . terraform/${STACK_PATH}/qdevice-desired.json)"
+          if ! jq -e '
+            . as $desired
+            | if ($desired.mounts | type) != "object"
+              or ($desired.container | type) != "object"
+              or (($desired.mounts | length) != 3)
+              or (($desired.container["remote-image"] | type) != "string")
+              or (($desired.container.interface | type) != "string")
+              or (($desired.container["root-dir"] | type) != "string")
+              or (($desired.container.mountlists | type) != "array")
+              or (($desired.container.mountlists | length) != 3)
+              or (($desired.container.network | type) != "object")
+              or (($desired.container.container_config | type) != "object")
+              or (($desired.container.container_config.layer_dir | type) != "string")
+              or (($desired.container.container_config.tmpdir | type) != "string")
+              or (any($desired.mounts | to_entries[];
+                ((.value | type) != "object")
+                or ((.value.src | type) != "string")
+                or ((.value.dst | type) != "string")
+              )) then
+                false
+              else true
+              end
+          ' <<<"${qdevice_desired}" >/dev/null; then
+            echo "The evaluated qdevice desired state is malformed or unsafe." >&2
+            exit 1
+          fi
+
+          qdevice_mount_specs="$(jq -ce '.mounts | to_entries | map({list:.key,src:.value.src,dst:.value.dst})' <<<"${qdevice_desired}")"
+          qdevice_container_spec="$(jq -ce '.container' <<<"${qdevice_desired}")"
+          qdevice_image="$(jq -er '.container["remote-image"]' <<<"${qdevice_desired}")"
+          qdevice_interface="$(jq -er '.container.interface' <<<"${qdevice_desired}")"
+          qdevice_root_dir="$(jq -er '.container["root-dir"]' <<<"${qdevice_desired}")"
+          qdevice_layer_dir="$(jq -er '.container.container_config.layer_dir' <<<"${qdevice_desired}")"
+          qdevice_tmpdir="$(jq -er '.container.container_config.tmpdir' <<<"${qdevice_desired}")"
+          required_paths="$(jq -ce '
+            [
+              .container["root-dir"],
+              (.container["root-dir"] | split("/") | .[0:-1] | join("/")),
+              .container.container_config.layer_dir,
+              .container.container_config.tmpdir,
+              (.mounts | to_entries[] | .value.src)
+            ] | map(select((type == "string") and length > 0)) | unique
+          ' <<<"${qdevice_desired}")"
 
           state_list="$(tofu -chdir=terraform/${STACK_PATH} state list)"
           if legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
@@ -1297,44 +1390,47 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '
+          if ! jq -e --argjson required "${required_paths}" '
             . as $files
-            | [
-              "usb1/qnetd",
-              "usb1/qnetd/root",
-              "usb1/qnetd/layers",
-              "usb1/qnetd/tmp",
-              "usb1/qnetd/nssdb",
-              "usb1/qnetd/ssh-host-keys",
-              "usb1/qnetd/ssh-authorized-keys"
-            ] as $required
-            | all($required[]; . as $path | any($files[]; .name == $path and .type == "directory"))
+            | (type == "array")
+              and all($files[];
+                ((.name | type) == "string")
+                and ((.type | type) == "string")
+              )
+              and all($required[];
+                . as $path
+                | any($files[]; .name == $path and .type == "directory")
+              )
           ' <<<"${files}" >/dev/null; then
             echo "One or more qdevice USB prerequisite directories are missing or not directories." >&2
             exit 1
           fi
 
-          if ! jq -e '
+          if ! jq -e --argjson wanted "${qdevice_container_spec}" --arg image "${qdevice_image}" --arg interface "${qdevice_interface}" --arg root_dir "${qdevice_root_dir}" '
             def values:
-              if . == null then []
-              elif type == "array" then .
+              if type == "array" and all(.[]; type == "string") then .
               elif type == "string" then split(",") | map(select(length > 0))
-              else []
+              else null
               end;
             . as $containers
             | if ($containers | type) != "array" then false
               else
-                [$containers[] | select((.["remote-image"] // .remote_image // "") == "lpgonzalez/corosync-qnetd:1.0.0")] as $matches
+                [$containers[] | select((.["remote-image"] // .remote_image // "") == $image)] as $matches
                 | if ($containers | length) == 0 then true
                   elif ($containers | length) != 1 or ($matches | length) != 1 then false
                   else
-                    true
-                    and ($matches[0].comment == "Proxmox QDevice qnetd")
-                    and ($matches[0].interface == "veth-qnetd")
-                    and (($matches[0]["root-dir"] // $matches[0].root_dir // "") == "usb1/qnetd/root")
-                    and ((($matches[0].mountlists // $matches[0].mounts // []) | values | sort) == ["qnetd_authorized_keys", "qnetd_nssdb", "qnetd_ssh_host_keys"])
-                    and (((($matches[0]["start-on-boot"] // $matches[0].start_on_boot // false) | tostring | ascii_downcase)) | IN("true", "yes", "on", "1"))
-                    and (((($matches[0].logging // false) | tostring | ascii_downcase)) | IN("true", "yes", "on", "1"))
+                    $matches[0] as $actual
+                    | (($actual["remote-image"] // $actual.remote_image) | type) == "string"
+                    and (($actual.interface | type) == "string")
+                    and (($actual["root-dir"] // $actual.root_dir | type) == "string")
+                    and (($actual.comment | type) == "string")
+                    and (($actual["remote-image"] // $actual.remote_image) == $wanted["remote-image"])
+                    and ($actual.interface == $interface)
+                    and (($actual["root-dir"] // $actual.root_dir) == $root_dir)
+                    and ($actual.comment == $wanted.comment)
+                    and (((($actual.mountlists // $actual.mounts) | values) // []) | sort) == ($wanted.mountlists | sort)
+                    and (($actual["start-on-boot"] // $actual.start_on_boot | type) == "string" or ($actual["start-on-boot"] // $actual.start_on_boot | type) == "boolean")
+                    and (($actual.logging | type) == "string" or ($actual.logging | type) == "boolean")
                   end
               end
           ' <<<"${containers}" >/dev/null; then
@@ -1342,13 +1438,8 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '
+          if ! jq -e --argjson required "${qdevice_mount_specs}" '
             . as $mounts
-            | [
-                {list:"qnetd_authorized_keys",src:"usb1/qnetd/ssh-authorized-keys",dst:"/root/.ssh"},
-                {list:"qnetd_nssdb",src:"usb1/qnetd/nssdb",dst:"/etc/corosync/qnetd/nssdb"},
-                {list:"qnetd_ssh_host_keys",src:"usb1/qnetd/ssh-host-keys",dst:"/etc/ssh/keys"}
-              ] as $required
             | if ($mounts | type) != "array" then false
               elif length == 0 then true
               else
@@ -1368,20 +1459,37 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '
-            ((.["layer-dir"] // "") == "" or .["layer-dir"] == "usb1/qnetd/layers")
-            and ((.tmpdir // "") == "" or .tmpdir == "usb1/qnetd/tmp")
+          if ! jq -e --arg layer_dir "${qdevice_layer_dir}" --arg tmpdir "${qdevice_tmpdir}" --argjson containers "${containers}" '
+            if (type != "object")
+              or ((.["layer-dir"] | type) != "string")
+              or ((.tmpdir | type) != "string") then
+              false
+            elif (($containers | length) == 0) then
+              true
+            else
+              .["layer-dir"] == $layer_dir and .tmpdir == $tmpdir
+            end
           ' <<<"${container_config}" >/dev/null; then
-            echo "The global RouterOS container extraction paths conflict with qnetd." >&2
+            live_layer_dir="$(jq -r 'if type == "object" and (.["layer-dir"] | type) == "string" then .["layer-dir"] else "<missing-or-non-string>" end' <<<"${container_config}")"
+            live_tmpdir="$(jq -r 'if type == "object" and (.tmpdir | type) == "string" then .tmpdir else "<missing-or-non-string>" end' <<<"${container_config}")"
+            container_count="$(jq -r 'if type == "array" then length else -1 end' <<<"${containers}")"
+            echo "The global RouterOS container extraction paths conflict with qnetd: layer-dir=${live_layer_dir}, tmpdir=${live_tmpdir}, containers=${container_count}." >&2
+            echo "The global RouterOS container extraction paths are unsafe for the live container set." >&2
             exit 1
           fi
 
           if ! jq -e '
             . as $config
-            | ($config["registry-url"] // $config.registry_url // "") as $registry
-            | ($config["assumed-registry-url"] // "") as $assumed
-            | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
-              and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
+            | if (type != "object")
+              or ((($config["registry-url"] // $config.registry_url // "") | type) != "string")
+              or ((($config["assumed-registry-url"] // "") | type) != "string") then
+                false
+              else
+                ($config["registry-url"] // $config.registry_url // "") as $registry
+                | ($config["assumed-registry-url"] // "") as $assumed
+                | (["", "docker.io", "registry-1.docker.io", "https://registry-1.docker.io"] | index($registry) != null)
+                  and (["", "docker.io", "registry-1.docker.io"] | index($assumed) != null)
+              end
           ' <<<"${container_config}" >/dev/null; then
             echo "The existing global RouterOS container registry is not Docker Hub; refusing to overwrite it." >&2
             exit 1
@@ -1518,6 +1626,53 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Recheck global path migration before initial apply
+        shell: bash
+        env:
+          MIKROTIK_USERNAME: ${{ env.MIKROTIK_USERNAME }}
+          MIKROTIK_PASSWORD: ${{ env.MIKROTIK_PASSWORD }}
+          ROUTEROS_URL: https://10.1.100.1
+        run: |
+          set -euo pipefail
+
+          # The first gate may authorize a shared global-path update only when
+          # the reviewed plan changes those paths. Re-read the full container
+          # list after the gate so a newly created stopped container cannot be
+          # affected by the immutable initial artifact.
+          migration_required="$(tofu -chdir=terraform/$STACK_PATH show -json "$INITIAL_PLAN_FILE" | jq -r '
+            def path($value):
+              ($value // {}) as $object
+              | ($object["layer-dir"] // $object.layer_dir // "") as $layer_dir
+              | ($object.tmpdir // "") as $tmpdir
+              | [$layer_dir, $tmpdir];
+            any(.resource_changes[]?;
+              .address == "routeros_container_config.qdevice[0]"
+              and ((path(.change.before)) != (path(.change.after)))
+            )
+          ')")"
+          if [[ "$migration_required" != true ]]; then
+            exit 0
+          fi
+
+          routeros_request() {
+            jq -nr '
+              "user = " + (($ENV.MIKROTIK_USERNAME + ":" + $ENV.MIKROTIK_PASSWORD) | @json),
+              "url = " + (($ENV.ROUTEROS_URL + "/rest/container") | @json),
+              "request = \"GET\"",
+              "insecure",
+              "fail",
+              "silent",
+              "show-error"
+            ' | curl --config -
+          }
+
+          containers="$(routeros_request)"
+          if ! jq -e 'type == "array" and length == 0' <<<"${containers}" >/dev/null; then
+            container_count="$(jq -r 'if type == "array" then length else -1 end' <<<"${containers}")"
+            echo "The reviewed plan migrates global container paths, but RouterOS now has ${container_count} container(s); refusing the initial apply." >&2
+            exit 1
+          fi
 
       - name: Apply initial reviewed qdevice plan
         run: tofu -chdir=terraform/$STACK_PATH apply -auto-approve "$INITIAL_PLAN_FILE"
@@ -1787,8 +1942,10 @@ jobs:
           ' >/dev/null
           routeros_request GET "$ROUTEROS_URL/rest/container/config" | jq -e --arg layer_dir "$qdevice_layer_dir" --arg tmpdir "$qdevice_tmpdir" '
             (type == "object")
-            and (.["layer-dir"] // "") == $layer_dir
-            and (.tmpdir // "") == $tmpdir
+            and (.["layer-dir"] | type) == "string"
+            and (.tmpdir | type) == "string"
+            and .["layer-dir"] == $layer_dir
+            and .tmpdir == $tmpdir
           ' >/dev/null
           routeros_request GET "$ROUTEROS_URL/rest/container/mounts" | jq -e --argjson required "$mount_specs" '
             (type == "array")
