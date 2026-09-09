@@ -406,14 +406,14 @@ fi
 # RouterOS creates the root-dir store during /container/add. A prior failed
 # attempt or manual preparation may leave the exact empty placeholder behind;
 # remove only that placeholder and refuse any directory containing data.
-root_dir_matches="$(jq -c --arg root_dir "$(jq -er '.root-dir' <<<"$container_spec")" '[.[] | select(.name == $root_dir)]' <<<"$files")"
+root_dir_matches="$(jq -c --arg root_dir "$(jq -er '."root-dir"' <<<"$container_spec")" '[.[] | select(.name == $root_dir)]' <<<"$files")"
 root_dir_count="$(jq -er 'length' <<<"$root_dir_matches")"
 if [[ "$root_dir_count" -gt 1 ]] ||
    [[ "$root_dir_count" == 1 && "$(jq -er '.[0].type' <<<"$root_dir_matches")" != directory ]]; then
   echo "The reviewed RouterOS qnetd root-dir path is not a single directory." >&2
   exit 1
 fi
-root_dir="$(jq -er '.root-dir' <<<"$container_spec")"
+root_dir="$(jq -er '."root-dir"' <<<"$container_spec")"
 root_dir_children="$(jq -er --arg root_dir "$root_dir" '[.[] | select((.name // "") | startswith($root_dir + "/"))] | length' <<<"$files")"
 if [[ "$root_dir_children" != 0 ]]; then
   echo "The reviewed RouterOS qnetd root-dir placeholder contains data; refusing to remove it." >&2
