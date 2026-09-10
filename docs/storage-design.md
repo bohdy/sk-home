@@ -10,6 +10,8 @@ Provide a stable NAS-backed Kubernetes StorageClass for stateful single-writer w
 
 The first storage backend is the existing Synology NAS, exposed to Kubernetes through Synology CSI.
 
+The Proxmox cluster also consumes the NAS through a shared iSCSI target. Its reviewed contract lives in `terraform/proxmox/storage`; the Proxmox iSCSI and LVM-over-iSCSI entries are kept separate from Kubernetes CSI because they have different ownership, failure, and rollback boundaries. The Proxmox storage is shared block storage for one writer at a time, not a clustered filesystem or Kubernetes `ReadWriteMany` backend.
+
 Use the Sidero-documented Talos-specific Synology CSI path. That path requires Synology DSM 7.0 or newer, Kubernetes v1.20 or newer, the `siderolabs/iscsi-tools` Talos extension, Synology API credentials, a Talos-compatible Synology CSI image, and live PVC validation.
 
 The Talos image schematic in `terraform/k3s/talos-cluster/image/schematic.yaml` includes `siderolabs/iscsi-tools`. Talos nodes must be rolled or updated onto that image before deploying the CSI driver.
@@ -34,6 +36,8 @@ Do not make the first Synology StorageClass default. Workloads must set `storage
 Do not create a `Delete` reclaim-policy class in the first implementation. Add one later only for disposable workloads that explicitly accept automatic backing-volume deletion.
 
 Reserve NFS for later `ReadWriteMany` or shared-file workloads. Do not use NFS for the first VictoriaMetrics, VictoriaLogs, or Grafana data volumes unless iSCSI validation fails and the tradeoff is revisited.
+
+This NFS decision applies to Kubernetes workloads. It does not replace the existing Proxmox iSCSI contract, which is required for VM and container disks shared between `pve` and `pve02`.
 
 ## Consumers
 
