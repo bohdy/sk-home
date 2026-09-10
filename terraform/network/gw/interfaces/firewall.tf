@@ -79,6 +79,9 @@ locals {
       try(routeros_ip_firewall_filter.forward_allow_ipsec_out.id, null),
       try(routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan.id, null),
       try(routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0].id, null),
+      try(routeros_ip_firewall_filter.allow_unifi_ap_inform.id, null),
+      try(routeros_ip_firewall_filter.allow_unifi_ap_stun.id, null),
+      try(routeros_ip_firewall_filter.allow_unifi_ap_discovery.id, null),
       try(routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id, null),
       try(routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id, null),
       try(routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id, null),
@@ -149,9 +152,10 @@ locals {
     }
   }
 
-  # All gateway VLANs need access to the Kubernetes service VIPs used by
-  # internal DNS and applications. This explicit address list avoids adding
-  # camera or AP VLANs to the broader LAN interface list.
+  # Keep every addressed VLAN available to exact internal policies without
+  # adding camera or AP VLANs to the broader LAN interface list. The broad
+  # Kubernetes VIP rule below excludes AP VLAN 102; this list remains useful
+  # to exact AP, NAS, SNMP, and other reviewed policy boundaries.
   internal_networks = {
     for vlan_id, vlan in var.vlans : tostring(vlan_id) => {
       address = cidrsubnet(vlan.ip_address, 0, 0)
@@ -194,9 +198,10 @@ resource "routeros_ip_firewall_addr_list" "adopted" {
   comment = each.value.comment
 }
 
-# Keep the internal service boundary explicit instead of broadening the LAN
-# interface list. This allows routed VLANs 101 and 102 to use Kubernetes VIPs
-# while their other inter-VLAN and WAN traffic remains denied by policy.
+# Keep the internal address-list boundary explicit instead of broadening the
+# LAN interface list. VLAN 102 remains represented here for exact reviewed
+# policies, while the broad Kubernetes VIP rule explicitly excludes it and
+# DHCP-advertised DNS does not itself grant forward-chain permission.
 resource "routeros_ip_firewall_addr_list" "internal_networks" {
   provider = routeros.gw
   for_each = local.internal_networks
@@ -639,8 +644,12 @@ resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
   action            = "accept"
   chain             = "forward"
   in_interface_list = var.firewall_policy.internal_interface_list
-  src_address_list  = var.firewall_policy.internal_network_address_list
-  dst_address_list  = var.kubernetes_bgp.service_vip_address_list
+  # Keep the AP VLAN outside this broad VIP path. Its controller traffic is
+  # granted by the three exact UniFi rules below instead of every Kubernetes
+  # VIP and port; other internal VLANs retain the existing boundaries.
+  src_address      = "!10.1.102.0/24"
+  src_address_list = var.firewall_policy.internal_network_address_list
+  dst_address_list = var.kubernetes_bgp.service_vip_address_list
   # Keep the printer-only SMTP exception meaningful even though the general
   # internal service-VIP rule also covers the Kubernetes VIP address list.
   dst_address = "!${var.firewall_policy.smtp_relay_service_vip}"
@@ -652,6 +661,56 @@ resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
     routeros_ip_firewall_addr_list.internal_networks,
     routeros_ip_firewall_addr_list.kubernetes_service_vips,
   ]
+}
+
+# UniFi APs use the routed VLAN 102 boundary to reach only their controller's
+# device-communication VIP. The three controller protocols are explicit so
+# VLAN 102 remains outside the broad LAN interface list and all other
+# inter-VLAN traffic remains denied. Connection tracking accepts stateful
+# replies through forward_accept_established; no reverse-direction rules are
+# needed.
+resource "routeros_ip_firewall_filter" "allow_unifi_ap_inform" {
+  provider     = routeros.gw
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.102.0/24"
+  dst_address  = "10.1.30.1"
+  in_interface = "vlan102"
+  protocol     = "tcp"
+  dst_port     = "8080"
+  # RouterOS inserts this rule before its target. The dependency chain is
+  # inform -> STUN -> discovery -> inter-VLAN deny in the final rule order.
+  place_before = routeros_ip_firewall_filter.allow_unifi_ap_stun.id
+  comment      = "sk-firewall/forward/allow-unifi-ap-inform"
+}
+
+resource "routeros_ip_firewall_filter" "allow_unifi_ap_stun" {
+  provider     = routeros.gw
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.102.0/24"
+  dst_address  = "10.1.30.1"
+  in_interface = "vlan102"
+  protocol     = "udp"
+  dst_port     = "3478"
+  # Chain targeted creation behind discovery so the isolated apply preserves
+  # the same order as routeros_move_items even when the three are new.
+  place_before = routeros_ip_firewall_filter.allow_unifi_ap_discovery.id
+  comment      = "sk-firewall/forward/allow-unifi-ap-stun"
+}
+
+resource "routeros_ip_firewall_filter" "allow_unifi_ap_discovery" {
+  provider     = routeros.gw
+  action       = "accept"
+  chain        = "forward"
+  src_address  = "10.1.102.0/24"
+  dst_address  = "10.1.30.1"
+  in_interface = "vlan102"
+  protocol     = "udp"
+  dst_port     = "10001"
+  # Create this last AP rule before the existing inter-VLAN deny anchor.
+  place_before = routeros_ip_firewall_filter.forward_drop_inter_vlan.id
+  comment      = "sk-firewall/forward/allow-unifi-ap-discovery"
 }
 
 # The remote-access client is explicitly documented to use the Kubernetes DNS
@@ -988,6 +1047,11 @@ resource "routeros_move_items" "forward_rules" {
     ]),
     var.kubernetes_bgp.enabled ? [routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0].id] : [],
     [
+      routeros_ip_firewall_filter.allow_unifi_ap_inform.id,
+      routeros_ip_firewall_filter.allow_unifi_ap_stun.id,
+      routeros_ip_firewall_filter.allow_unifi_ap_discovery.id,
+    ],
+    [
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp.id,
       routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp.id,
       routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id,
@@ -1036,6 +1100,9 @@ resource "routeros_move_items" "forward_rules" {
     routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan,
     routeros_ip_firewall_filter.forward_allow_synology_from_vlans,
     routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips,
+    routeros_ip_firewall_filter.allow_unifi_ap_inform,
+    routeros_ip_firewall_filter.allow_unifi_ap_stun,
+    routeros_ip_firewall_filter.allow_unifi_ap_discovery,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_udp,
     routeros_ip_firewall_filter.forward_allow_wireguard_kubernetes_dns_tcp,
     routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer,
