@@ -18,9 +18,9 @@ The reconciler can create the declared Proxmox storage entries when they are abs
 
 ## Workflow
 
-Pull requests run `tofu init -backend=false` and `tofu validate` without infrastructure credentials or binary plans. A trusted review-only dispatch performs a read-only live preflight and produces the immutable `proxmox-storage-tofuplan` artifact. A separate `apply_proxmox_storage` dispatch from `main` requires the `production` environment, applies only that artifact, reconciles the two APIs, and verifies both Proxmox nodes have active shared storage and both initiators are connected.
+Pull requests run `tofu init -backend=false` and `tofu validate` without infrastructure credentials or binary plans. An optional review-only dispatch performs a read-only live preflight and produces an informational `proxmox-storage-tofuplan` artifact; that artifact is not reusable by a later dispatch. The production procedure is one `apply_proxmox_storage` dispatch from `main`: the same run creates and guards its immutable artifact, publishes a plan summary and digest, waits for the `production` environment, verifies the downloaded artifact digest, applies that exact artifact, reconciles the two APIs, and verifies both Proxmox nodes have active shared storage and both initiators are connected.
 
-The exact dispatch flags are documented in the root README. Do not run the apply flag until the review-only artifact shows only the two storage contract records and no delete or replacement actions. If verification fails, stop and inspect the live target, ACL, iSCSI sessions, and Proxmox storage status before generating a new plan.
+The exact dispatch flags are documented in the root README. For an apply dispatch, review the plan summary and `proxmox-storage-tofuplan` artifact from that same run before approving the production environment; confirm that it contains only the two storage contract records and no delete or replacement actions. Do not treat an artifact from a separate plan-only run as approval for a later apply run. If verification fails, stop and inspect the live target, ACL, iSCSI sessions, and Proxmox storage status before generating a new plan.
 
 ## Network and rollback
 

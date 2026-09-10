@@ -134,13 +134,13 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same trusted run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
 
-Run the read-only Proxmox/Synology shared-storage preflight and produce its immutable contract plan from `main`:
+For a read-only Proxmox/Synology shared-storage preflight and plan, optionally dispatch this review-only run from `main`:
 
 ```bash
 gh workflow run terraform.yaml --ref main -f plan_proxmox_storage=true -f apply_proxmox_storage=false
 ```
 
-After reviewing the artifact for the two storage contract records and no destructive action, apply it through the production environment:
+The review-only artifact is informational and cannot be reused by a later dispatch. For production, use one apply dispatch. That same run performs the read-only preflight, creates and guards `proxmox-storage-tofuplan`, publishes its SHA-256 digest and plan summary, and then waits at the `production` environment. Review the plan job's summary and the matching artifact in that run before approving the environment; the apply job verifies the digest and applies that exact artifact.
 
 ```bash
 gh workflow run terraform.yaml --ref main -f plan_proxmox_storage=false -f apply_proxmox_storage=true

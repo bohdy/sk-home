@@ -453,10 +453,15 @@ jobs:
     name: Plan Proxmox shared storage
     # Shared iSCSI storage is isolated from ordinary OpenTofu planning because
     # its API reconciliation needs a live preflight and a separate credential
-    # set. Both review and apply dispatches produce this read-only artifact.
+    # set. An apply dispatch produces this artifact in the same run that later
+    # waits for the production environment and applies it.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_proxmox_storage || inputs.plan_proxmox_storage) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: validate-dispatch
+    outputs:
+      # Pass the digest of the reviewed artifact to the gated apply job so a
+      # later download cannot silently substitute a different plan file.
+      plan_sha256: ${{ steps.plan_digest.outputs.sha256 }}
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -577,6 +582,35 @@ jobs:
             exit 1
           fi
 
+      - name: Publish immutable plan review summary
+        id: plan_digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          plan_path="terraform/${STACK_PATH}/${TOFU_PLAN_ARTIFACT}"
+          plan_sha256="$(sha256sum "${plan_path}" | awk '{print $1}')"
+          [[ "${plan_sha256}" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "Could not calculate a valid shared-storage plan digest." >&2
+            exit 1
+          }
+          echo "sha256=${plan_sha256}" >> "${GITHUB_OUTPUT}"
+
+          # The apply dispatch pauses at the production environment after this
+          # job. Review this summary and the matching artifact before approving;
+          # the apply job verifies the same digest after downloading it.
+          {
+            echo "## Proxmox shared-storage plan"
+            echo
+            echo "Review this plan and artifact before approving the production environment."
+            echo
+            echo "SHA-256: \`${plan_sha256}\`"
+            echo
+            echo '```text'
+            tofu -chdir="terraform/${STACK_PATH}" show -no-color "${TOFU_PLAN_ARTIFACT}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Upload shared-storage plan
         uses: actions/upload-artifact@v7
         with:
@@ -589,6 +623,8 @@ jobs:
     name: Apply Proxmox shared storage
     # Applying the API-backed storage contract requires both an explicit input
     # and the production environment; a plan-only dispatch cannot reach here.
+    # The production approval follows the plan job in this same run, so the
+    # reviewed artifact is not regenerated or selected from another run.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_proxmox_storage && !inputs.plan_proxmox_storage && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
     needs: [validate-dispatch, proxmox-storage-plan]
@@ -614,6 +650,24 @@ jobs:
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
           path: terraform/${{ env.STACK_PATH }}
+
+      - name: Verify reviewed shared-storage plan digest
+        shell: bash
+        env:
+          EXPECTED_PLAN_SHA256: ${{ needs.proxmox-storage-plan.outputs.plan_sha256 }}
+        run: |
+          set -euo pipefail
+
+          [[ "${EXPECTED_PLAN_SHA256}" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "The production apply is missing the reviewed plan digest." >&2
+            exit 1
+          }
+          actual_plan_sha256="$(sha256sum "terraform/${STACK_PATH}/${TOFU_PLAN_ARTIFACT}" | awk '{print $1}')"
+          if [[ "${actual_plan_sha256}" != "${EXPECTED_PLAN_SHA256}" ]]; then
+            echo "The downloaded storage plan does not match the reviewed artifact." >&2
+            exit 1
+          fi
+          echo "Verified the reviewed shared-storage plan artifact digest."
 
       - name: Get shared-storage secrets
         uses: bitwarden/sm-action@v3.0.0

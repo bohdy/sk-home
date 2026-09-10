@@ -145,6 +145,14 @@ storage_nodes_csv() {
   jq -r 'if .nodes == null then "" elif (.nodes | type) == "array" then (.nodes | sort | join(",")) else (.nodes | tostring) end' <<<"$1"
 }
 
+storage_nodes_delete_pair() {
+  # Proxmox treats an omitted update field as unchanged. A null desired nodes
+  # value instead means the node restriction must be removed explicitly.
+  if jq -e '.nodes == null' >/dev/null <<<"$1"; then
+    printf '%s\n' 'delete=nodes'
+  fi
+}
+
 storage_identity_matches() {
   local live="$1"
   local expected="$2"
@@ -283,16 +291,26 @@ proxmox_create_body() {
 proxmox_update_body() {
   local expected="$1"
   local kind="$2"
-  local content nodes
+  local content nodes delete_nodes
 
   content="$(storage_content_csv "$expected")"
   nodes="$(storage_nodes_csv "$expected")"
+  delete_nodes="$(storage_nodes_delete_pair "$expected")"
   case "$kind" in
     iscsi)
-      urlencode_pairs "content=${content}"
+      if [[ -n "$delete_nodes" ]]; then
+        urlencode_pairs "content=${content}" "$delete_nodes"
+      else
+        urlencode_pairs "content=${content}"
+      fi
       ;;
     lvm)
-      if [[ -n "$nodes" ]]; then
+      if [[ -n "$delete_nodes" ]]; then
+        urlencode_pairs "content=${content}" \
+          "saferemove=$(jq -er '.saferemove' <<<"$expected")" \
+          "shared=$(jq -er 'if .shared then 1 else 0 end' <<<"$expected")" \
+          "$delete_nodes"
+      elif [[ -n "$nodes" ]]; then
         urlencode_pairs "content=${content}" \
           "saferemove=$(jq -er '.saferemove' <<<"$expected")" \
           "shared=$(jq -er 'if .shared then 1 else 0 end' <<<"$expected")" \
@@ -304,7 +322,11 @@ proxmox_update_body() {
       fi
       ;;
     local_lvm)
-      urlencode_pairs "content=${content}" "nodes=${nodes}"
+      if [[ -n "$delete_nodes" ]]; then
+        urlencode_pairs "content=${content}" "$delete_nodes"
+      else
+        urlencode_pairs "content=${content}" "nodes=${nodes}"
+      fi
       ;;
   esac
 }
