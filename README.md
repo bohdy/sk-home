@@ -42,7 +42,7 @@ The Talos Kubernetes learning cluster lives in `terraform/k3s/talos-cluster`. It
 
 Kubernetes add-ons live in `kubernetes/`. Cilium is bootstrapped first as the cluster CNI and BGP speaker, then Flux reconciles the committed Cilium LoadBalancer IPAM and BGP custom resources from Git.
 
-The trusted `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, and `cloudflare/tunnel`. It applies only `k3s/talos-cluster` on `main`; gateway and Cloudflare changes stay plan-only because they have higher operational blast radius. The gateway firewall has its own targeted, production-gated apply path because the RouterOS provider can fail unrelated gateway resources during a full plan.
+The trusted `main` OpenTofu workflow plans all active stacks: `network/gw/interfaces`, `network/gw/dhcp`, `k3s/talos-cluster`, `proxmox/storage`, and `cloudflare/tunnel`. The ordinary workflow path applies only `k3s/talos-cluster` on `main`; gateway, Proxmox shared-storage, and Cloudflare changes remain plan-only there because they have higher operational blast radius. The gateway firewall and Proxmox shared-storage contract each have isolated targeted, production-gated paths because their external APIs require narrower reconciliation than an ordinary provider plan.
 
 The repository keeps the historical `terraform/` directory name and existing `terraform.tfstate` object keys during the first OpenTofu migration. After the first successful OpenTofu apply, treat the retained remote state objects as OpenTofu-owned.
 
@@ -107,7 +107,7 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 
 `.github/workflows/terraform-pr-validation.yaml` is the only OpenTofu workflow triggered by pull requests. It uses an ephemeral hosted runner, initializes every stack with `-backend=false`, validates configuration without contacting infrastructure, and never retrieves secrets or creates binary plans.
 
-`.github/workflows/terraform.yaml` is trusted-only. It runs for pushes to `main` and manual dispatches from `main`, retrieves Bitwarden values only for those trusted events, and creates immutable plan artifacts only during trusted runs for the existing production-gated apply jobs. A manual dispatch pointed at any other ref fails before credential retrieval, and multiple mutation inputs fail closed.
+`.github/workflows/terraform.yaml` is trusted-only. It runs for pushes to `main` and manual dispatches from `main`, retrieves Bitwarden values only for those trusted events, and creates immutable plan artifacts only during trusted runs for the production-gated apply jobs. A manual dispatch pointed at any other ref fails before credential retrieval, and multiple mutation inputs fail closed. The Proxmox storage path retrieves only the Proxmox API token and Synology password, and the pull-request path never has either credential.
 
 ### Running OpenTofu Locally
 
@@ -133,6 +133,22 @@ gh workflow run terraform.yaml --ref main -f apply_gateway=true -f apply_gateway
 ```
 
 The gated gateway job uses the immutable gateway plan artifact produced earlier in the same trusted run, requests only the gateway's Bitwarden values, and runs in the `production` GitHub environment. OpenTofu workflow runs are serialized and an active run is never cancelled by a newer invocation. A gateway dispatch does not apply the Talos or Cloudflare stacks.
+
+Run the read-only Proxmox/Synology shared-storage preflight and produce its immutable contract plan from `main`:
+
+```bash
+gh workflow run terraform.yaml --ref main -f plan_proxmox_storage=true -f apply_proxmox_storage=false
+```
+
+After reviewing the artifact for the two storage contract records and no destructive action, apply it through the production environment:
+
+```bash
+gh workflow run terraform.yaml --ref main -f plan_proxmox_storage=false -f apply_proxmox_storage=true
+```
+
+The storage reconciler may create or update only the declared Proxmox storage entries, Synology session limit, and missing initiator mappings. It refuses identity mismatches, unexpected ACLs, deletes, and LUN or target removal. A valid, trusted Synology HTTPS certificate is a prerequisite for the live preflight and production path; renew or repair the currently identified certificate issue before dispatching either storage workflow. The reconciler never disables TLS verification. It does not add or require a RouterOS firewall rule because the nodes and NAS already use the existing management VLAN 100; the firewaller approved this explicit no-change result. Review a fresh firewall inventory separately if operational assurance is needed.
+
+If post-apply verification fails, stop and inspect the live target, ACL, iSCSI sessions, and Proxmox storage status; do not retry the same artifact. Correct the committed contract and create a new reviewed plan before retrying, and do not remove the mapped LUN or shared storage entry as an application rollback.
 
 Capture the read-only RouterOS firewall baseline before enabling or reviewing the firewall policy:
 
