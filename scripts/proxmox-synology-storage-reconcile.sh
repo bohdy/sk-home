@@ -79,6 +79,10 @@ case "$proxmox_endpoint" in
 esac
 
 synology_endpoint="${SYNOLOGY_ENDPOINT%/}"
+case "$synology_endpoint" in
+  https://*) ;;
+  *) fail "SYNOLOGY_ENDPOINT must use HTTPS" ;;
+esac
 [[ "$(jq -r '.synology.endpoint' <<<"$desired_json")" == "$synology_endpoint" ]] || fail "SYNOLOGY_ENDPOINT does not match the declared endpoint"
 synology_api_url="${synology_endpoint}/webapi/entry.cgi"
 
@@ -128,7 +132,7 @@ proxmox_response_ok() {
 
 proxmox_storage_list=""
 refresh_proxmox_storage() {
-  proxmox_storage_list="$(proxmox_request GET "${proxmox_endpoint}/cluster/storage")" || fail "Proxmox storage inventory request failed"
+  proxmox_storage_list="$(proxmox_request GET "${proxmox_endpoint}/storage")" || fail "Proxmox storage inventory request failed"
   jq -e '.data | type == "array"' >/dev/null <<<"$proxmox_storage_list" || fail "Proxmox returned an invalid storage inventory"
 }
 
@@ -255,10 +259,18 @@ proxmox_create_body() {
 
   case "$kind" in
     iscsi)
-      urlencode_pairs \
-        "storage=${storage_id}" "type=${type}" \
-        "portal=$(jq -er '.portal' <<<"$expected")" \
-        "target=$(jq -er '.target' <<<"$expected")" "content=${content}"
+      if jq -e '.nodes == null' >/dev/null <<<"$expected"; then
+        urlencode_pairs \
+          "storage=${storage_id}" "type=${type}" \
+          "portal=$(jq -er '.portal' <<<"$expected")" \
+          "target=$(jq -er '.target' <<<"$expected")" "content=${content}"
+      else
+        urlencode_pairs \
+          "storage=${storage_id}" "type=${type}" \
+          "portal=$(jq -er '.portal' <<<"$expected")" \
+          "target=$(jq -er '.target' <<<"$expected")" "content=${content}" \
+          "nodes=${nodes}"
+      fi
       ;;
     lvm)
       if [[ -n "$nodes" ]]; then
@@ -301,7 +313,7 @@ proxmox_update_body() {
       if [[ -n "$delete_nodes" ]]; then
         urlencode_pairs "content=${content}" "$delete_nodes"
       else
-        urlencode_pairs "content=${content}"
+        urlencode_pairs "content=${content}" "nodes=${nodes}"
       fi
       ;;
     lvm)
