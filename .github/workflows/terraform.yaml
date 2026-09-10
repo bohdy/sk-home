@@ -1445,9 +1445,9 @@ jobs:
 
   gateway-unifi-ap-plan:
     name: Plan UniFi AP firewall rules
-    # Target only the AP controller exception, its broad-VIP boundary update,
-    # and the inter-VLAN deny anchor; the ordinary firewall plan remains a
-    # separate broader review path.
+    # Target only the AP controller exception and the existing inter-VLAN deny
+    # anchor; the ordinary firewall plan remains a separate broader review
+    # path that owns the broad Kubernetes VIP policy.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_unifi_ap || inputs.plan_gateway_unifi_ap) && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_proxmox && !inputs.plan_gateway_proxmox && !inputs.apply_gateway_qdevice && !inputs.plan_gateway_qdevice && !inputs.apply_gateway_ether7 && !inputs.plan_gateway_ether7 && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare && !inputs.apply_proxmox_storage && !inputs.plan_proxmox_storage
     runs-on: self-hosted
     needs: validate-dispatch
@@ -1495,7 +1495,6 @@ jobs:
           -target=routeros_ip_firewall_filter.allow_unifi_ap_inform
           -target=routeros_ip_firewall_filter.allow_unifi_ap_stun
           -target=routeros_ip_firewall_filter.allow_unifi_ap_discovery
-          -target=routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0]
           -target=routeros_ip_firewall_filter.forward_drop_inter_vlan
           -out=unifi-ap-tofuplan
         env:
@@ -1512,9 +1511,8 @@ jobs:
       - name: Enforce exact UniFi AP plan
         shell: bash
         env:
-          # Apply mode must carry the three reviewed creates plus the broad
-          # Kubernetes VIP exclusion update. Review mode also accepts an
-          # empty plan after those changes are already live.
+          # Apply mode must carry the three reviewed AP-rule creates. Review
+          # mode also accepts an empty plan after those rules are live.
           EXPECT_UNIFI_AP_APPLY: ${{ inputs.apply_gateway_unifi_ap || false }}
         run: |
           set -euo pipefail
@@ -1524,47 +1522,33 @@ jobs:
               [
                 {address: "routeros_ip_firewall_filter.allow_unifi_ap_inform", protocol: "tcp", dst_port: "8080", comment: "sk-firewall/forward/allow-unifi-ap-inform"},
                 {address: "routeros_ip_firewall_filter.allow_unifi_ap_stun", protocol: "udp", dst_port: "3478", comment: "sk-firewall/forward/allow-unifi-ap-stun"},
-                {address: "routeros_ip_firewall_filter.allow_unifi_ap_discovery", protocol: "udp", dst_port: "10001", comment: "sk-firewall/forward/allow-unifi-ap-discovery"},
-                {address: "routeros_ip_firewall_filter.forward_allow_kubernetes_service_vips[0]", action: "update", comment: "sk-firewall/forward/allow-kubernetes-service-vips"}
+                {address: "routeros_ip_firewall_filter.allow_unifi_ap_discovery", protocol: "udp", dst_port: "10001", comment: "sk-firewall/forward/allow-unifi-ap-discovery"}
               ] as $expected
               | [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
               | ($changes | map(.address) | sort) as $addresses
               | if $expect_apply != "true" and ($changes | length) == 0 then
                   true
                 else
-                  ($changes | length) == 4
+                  ($changes | length) == 3
                   and ($addresses == ($expected | map(.address) | sort))
                   and all($expected[];
                     . as $spec
                     | (([$changes[] | select(.address == $spec.address)] | length) == 1)
                     and (([$changes[] | select(.address == $spec.address)][0] as $change
-                      | if $spec.action == "update" then
-                          $change.change.actions == ["update"]
-                          and $change.change.after.action == "accept"
-                          and $change.change.after.chain == "forward"
-                          and $change.change.after.src_address == "!10.1.102.0/24"
-                          and $change.change.after.src_address_list == "sk-internal-vlan-networks"
-                          and $change.change.after.in_interface_list == "sk-internal-vlans"
-                          and $change.change.after.dst_address_list == "sk-kubernetes-service-vips"
-                          and $change.change.after.dst_address == "!10.1.30.58"
-                          and $change.change.after.comment == $spec.comment
-                          and (($change.change.after.disabled == false) or ($change.change.after.disabled == null))
-                        else
-                          $change.change.actions == ["create"]
-                          and $change.change.after.action == "accept"
-                          and $change.change.after.chain == "forward"
-                          and $change.change.after.src_address == "10.1.102.0/24"
-                          and $change.change.after.dst_address == "10.1.30.1"
-                          and $change.change.after.in_interface == "vlan102"
-                          and $change.change.after.protocol == $spec.protocol
-                          and $change.change.after.dst_port == $spec.dst_port
-                          and $change.change.after.comment == $spec.comment
-                          and (($change.change.after.disabled == false) or ($change.change.after.disabled == null))
-                        end))
+                      | $change.change.actions == ["create"]
+                      and $change.change.after.action == "accept"
+                      and $change.change.after.chain == "forward"
+                      and $change.change.after.src_address == "10.1.102.0/24"
+                      and $change.change.after.dst_address == "10.1.30.1"
+                      and $change.change.after.in_interface == "vlan102"
+                      and $change.change.after.protocol == $spec.protocol
+                      and $change.change.after.dst_port == $spec.dst_port
+                      and $change.change.after.comment == $spec.comment
+                      and (($change.change.after.disabled == false) or ($change.change.after.disabled == null))))
                   )
                 end
             ' >/dev/null; then
-            echo "The UniFi AP plan is not exactly the three AP creates plus the reviewed VIP exclusion update, or an allowed empty recovery plan; refusing to upload it." >&2
+            echo "The UniFi AP plan is not exactly the three reviewed AP creates or an allowed empty recovery plan; refusing to upload it." >&2
             exit 1
           fi
 
@@ -1670,17 +1654,15 @@ jobs:
                 "sk-firewall/forward/allow-unifi-ap-discovery"
               ] as $comments
             | [$rules[] | select(.comment as $comment | ($comments | index($comment)) != null)] as $allows
-            | [$rules[] | select(.comment == "sk-firewall/forward/allow-kubernetes-service-vips")] as $kubernetes_vips
             | [$rules[] | select(.comment == "sk-firewall/forward/drop-inter-vlan")] as $inter_vlan_drops
             | [$rules[] | select(.comment == "sk-firewall/forward/drop-unmatched")] as $terminal_drops
-            | if ($allows | length) != 3 or ($kubernetes_vips | length) != 1 or ($inter_vlan_drops | length) != 1 or ($terminal_drops | length) != 1 then
-                error("expected exactly three UniFi AP allow rules, one Kubernetes VIP boundary rule, and both forward deny anchors")
+            | if ($allows | length) != 3 or ($inter_vlan_drops | length) != 1 or ($terminal_drops | length) != 1 then
+                error("expected exactly three UniFi AP allow rules and both forward deny anchors")
               else
                 ([$allows[] | enabled and .action == "accept" and .chain == "forward" and .["src-address"] == "10.1.102.0/24" and .["dst-address"] == "10.1.30.1" and .["in-interface"] == "vlan102"] | all)
                 and (($allows | map(select(.comment == "sk-firewall/forward/allow-unifi-ap-inform" and .protocol == "tcp" and .["dst-port"] == "8080")) | length) == 1)
                 and (($allows | map(select(.comment == "sk-firewall/forward/allow-unifi-ap-stun" and .protocol == "udp" and .["dst-port"] == "3478")) | length) == 1)
                 and (($allows | map(select(.comment == "sk-firewall/forward/allow-unifi-ap-discovery" and .protocol == "udp" and .["dst-port"] == "10001")) | length) == 1)
-                and ($kubernetes_vips[0] | enabled and .action == "accept" and .chain == "forward" and .["src-address"] == "!10.1.102.0/24" and .["src-address-list"] == "sk-internal-vlan-networks" and .["in-interface-list"] == "sk-internal-vlans" and .["dst-address-list"] == "sk-kubernetes-service-vips" and .["dst-address"] == "!10.1.30.58")
                 and ($inter_vlan_drops[0] | enabled and .action == "drop" and .chain == "forward")
                 and ($terminal_drops[0] | enabled and .action == "drop" and .chain == "forward")
                 and (($rules | map(.comment) | index("sk-firewall/forward/allow-unifi-ap-inform")) < ($rules | map(.comment) | index("sk-firewall/forward/allow-unifi-ap-stun")))
