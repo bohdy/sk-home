@@ -131,6 +131,7 @@ proxmox_response_ok() {
 }
 
 proxmox_storage_list=""
+proxmox_storage_drift=0
 refresh_proxmox_storage() {
   proxmox_storage_list="$(proxmox_request GET "${proxmox_endpoint}/storage")" || fail "Proxmox storage inventory request failed"
   jq -e '.data | type == "array"' >/dev/null <<<"$proxmox_storage_list" || fail "Proxmox returned an invalid storage inventory"
@@ -391,6 +392,9 @@ proxmox_reconcile_storage() {
 
   storage_identity_matches "$live" "$expected" "$kind" || fail "Proxmox storage ${storage_id} has an unexpected identity"
   if ! storage_contract_matches "$live" "$expected" "$kind"; then
+    # Mutable drift is repairable by the apply path, so remember it and defer
+    # the all-nodes activation check until the repair has actually run.
+    proxmox_storage_drift=1
     if [[ "$mode" == check ]]; then
       echo "Proxmox storage ${storage_id} differs from the declared mutable settings."
     else
@@ -539,6 +543,7 @@ synology_entry_response_ok() {
 
 synology_target_json=""
 synology_host_json=""
+synology_contract_drift=0
 
 synology_validate_contract() {
   local target_list host_list target host desired_iqns target_id host_id lun_uuid permission
@@ -559,6 +564,7 @@ synology_validate_contract() {
   ' >/dev/null <<<"$target" || fail "Synology target identity or LUN mapping is unexpected"
 
   if [[ "$(jq -r '.max_sessions | tostring' <<<"$target")" != "$(jq -r '.synology.target_max_sessions | tostring' <<<"$desired_json")" ]]; then
+    synology_contract_drift=1
     echo "Synology target ${target_id} has a different session limit and would be updated by apply."
   fi
 
@@ -579,8 +585,10 @@ synology_validate_contract() {
       continue
     fi
     if [[ "$mode" == check ]]; then
+      synology_contract_drift=1
       echo "Synology host ${host_id} is missing declared initiator ${iqn} and would be updated by apply."
     else
+      synology_contract_drift=1
       echo "Synology host ${host_id} is missing a declared initiator and would be updated by apply."
     fi
   done < <(jq -r '.[]' <<<"$desired_iqns")
@@ -660,11 +668,16 @@ if [[ "$mode" == apply ]]; then
   proxmox_verify_active
   echo "Proxmox and Synology shared iSCSI storage converged and passed post-apply verification."
 elif (( proxmox_storage_missing == 0 )); then
-  # The live configuration is part of the plan preflight. Mutable drift is
-  # permitted here, but an already-declared shared storage that is inactive is
-  # not a safe target for an immutable production apply.
-  proxmox_verify_active
-  echo "Proxmox and Synology shared iSCSI storage passed read-only preflight."
+  if (( proxmox_storage_drift == 0 && synology_contract_drift == 0 )); then
+    # The live configuration is part of the plan preflight. An already-declared
+    # storage is safe to gate only when no repairable contract drift was found.
+    proxmox_verify_active
+    echo "Proxmox and Synology shared iSCSI storage passed read-only preflight."
+  else
+    # A node restriction, session limit, or missing initiator can be repaired by
+    # the reviewed apply path; activation is verified after those writes.
+    echo "Proxmox and Synology storage preflight passed identity checks; repairable drift will be verified after apply."
+  fi
 else
   echo "Proxmox and Synology storage preflight passed identity checks; apply would create the missing shared entries."
 fi
