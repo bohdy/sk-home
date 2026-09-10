@@ -59,6 +59,9 @@ jq -e '
 
 tmpdir="$(mktemp -d)"
 cookie_file="$tmpdir/synology.cookies"
+# Create the cookie jar before changing its mode so strict error handling does
+# not abort every run before the first Synology request.
+(umask 077 && : >"$cookie_file")
 chmod 600 "$cookie_file"
 
 cleanup() {
@@ -481,8 +484,12 @@ synology_call() {
   local api="$1"
   local method="$2"
   local version="$3"
-  local params_json="${4:-{}}"
+  local params_json="${4-}"
   local body
+
+  if [[ -z "$params_json" ]]; then
+    params_json='{}'
+  fi
 
   export SYNO_API="$api" SYNO_METHOD="$method" SYNO_VERSION="$version" SYNO_PARAMS_JSON="$params_json"
   body="$(synology_form_body)"
