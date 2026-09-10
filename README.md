@@ -174,6 +174,16 @@ gh workflow run terraform.yaml --ref main \
 
 The firewall plan targets the gateway internal-interface boundary, all audited IPv4/IPv6 firewall-table resources, address-list, ownership, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The baseline ownership and complete rule review are documented in `terraform/network/gw/interfaces/FIREWALL_REVIEW.md`, with the operational runbook in `terraform/network/gw/interfaces/README.md`.
 
+For the UniFi AP management fix, use the narrower mutually exclusive path from `main` so the broader pending firewall plan is not evaluated:
+
+```bash
+gh workflow run terraform.yaml --ref main \
+  -f apply_gateway_unifi_ap=false \
+  -f plan_gateway_unifi_ap=true
+```
+
+Review `network-gw-unifi-ap-tofuplan` and require exactly four non-noop changes on initial recovery: three AP-rule creates for inform, STUN, and discovery plus the update excluding `10.1.102.0/24` from the broad Kubernetes VIP rule. Reject deletes, replacements, and unrelated resources. The AP rules allow only that subnet entering `vlan102` to the UniFi device-communication VIP `10.1.30.1` on TCP/8080, UDP/3478, and UDP/10001. After review, run a separate dispatch with `-f apply_gateway_unifi_ap=true -f plan_gateway_unifi_ap=false`; that trusted run regenerates and uploads its own immutable artifact from current `main`, so inspect the new artifact and approve the production gate only when it passes the same exact four-change guard. The production-gated job applies that artifact and verifies enabled rules, sanitized fields, the broad-VIP exclusion, and order before both enabled forward deny anchors. DHCP may advertise `10.1.30.53` to VLAN 102, but it does not grant DNS or general Kubernetes VIP forwarding; only the three UniFi controller ports are allowed. Re-run the review-only dispatch afterward and require an empty plan. If verification fails, use RouterOS Safe Mode or the local console to disable only the three new stable-comment rules, correct the declaration, and create a fresh reviewed artifact; do not use REST or the broader firewall path as rollback.
+
 Adopt the verified gateway WireGuard interfaces and peers through the separate targeted path after the focused firewall contract is present:
 
 ```bash
