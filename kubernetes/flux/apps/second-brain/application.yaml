@@ -1,0 +1,148 @@
+# API and worker share one RWO claim in one pod; Recreate prevents node overlap.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: second-brain
+  namespace: second-brain
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: second-brain
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: second-brain
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Migration retries database startup and exits on a migration failure.
+        - name: migrate
+          image: ghcr.io/bohdy/brain-backend:activation-required
+          command: [python, -m, brain.migrate]
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: brain-config
+            - secretRef:
+                name: brain-runtime
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      containers:
+        - name: api
+          image: ghcr.io/bohdy/brain-backend:activation-required
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: brain-config
+            - secretRef:
+                name: brain-runtime
+          ports:
+            - name: http-api
+              containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http-api
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http-api
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http-api
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: assets
+              mountPath: /data/assets
+        - name: worker
+          image: ghcr.io/bohdy/brain-backend:activation-required
+          command: [python, -m, brain.worker]
+          # The worker refreshes /tmp/worker-heartbeat on each loop;
+          # a 600-second age limit detects stalls without interrupting normal jobs.
+          livenessProbe:
+            exec:
+              command: [python, -m, brain.worker_health]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: brain-config
+            - secretRef:
+                name: brain-runtime
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: assets
+              mountPath: /data/assets
+        - name: web
+          image: ghcr.io/bohdy/brain-web:activation-required
+          securityContext:
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http-web
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http-web
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: assets
+          persistentVolumeClaim:
+            claimName: brain-assets

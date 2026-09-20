@@ -1,0 +1,11 @@
+# Preserve the namespace and retained claims when removing the Flux child.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: second-brain
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

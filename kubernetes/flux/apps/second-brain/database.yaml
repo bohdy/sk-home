@@ -1,0 +1,71 @@
+# One StatefulSet ordinal owns the explicitly retained database claim.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: brain-db
+  namespace: second-brain
+spec:
+  replicas: 1
+  serviceName: brain-db
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: brain-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: brain-db
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: ghcr.io/bohdy/brain-db:activation-required
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: brain
+            - name: POSTGRES_USER
+              value: brain
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: brain-postgres-auth
+                  key: POSTGRES_PASSWORD
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, brain, -d, brain]
+            periodSeconds: 10
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, brain, -d, brain]
+            failureThreshold: 60
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: database
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: database
+          persistentVolumeClaim:
+            claimName: brain-database

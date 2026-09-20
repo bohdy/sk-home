@@ -30,7 +30,7 @@ variable "tunnel_name" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID that owns the public Grafana hostname."
+  description = "Cloudflare zone ID that owns the public application hostnames."
   type        = string
   default     = "48fce2129073417a753d224107dcefa1"
 
@@ -96,12 +96,35 @@ variable "unifi_origin_service" {
 }
 
 variable "grafana_access_email" {
-  description = "Exact Gmail identity allowed by the Grafana Cloudflare Access policy."
+  description = "Exact Gmail owner identity shared by the application Cloudflare Access policies."
   type        = string
   sensitive   = true
 
   validation {
     condition     = var.grafana_access_email == lower(trimspace(var.grafana_access_email)) && can(regex("^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@gmail\\.com$", var.grafana_access_email))
     error_message = "grafana_access_email must be one normalized @gmail.com address."
+  }
+}
+
+# These defaults define the public perimeter without introducing internal DNS or a VIP.
+variable "brain_hostname" {
+  description = "Public Second Brain hostname protected by the exact-owner Cloudflare Access policy."
+  type        = string
+  default     = "brain.bohdal.name"
+
+  validation {
+    condition     = var.brain_hostname == lower(trimspace(var.brain_hostname)) && can(regex("^[a-z0-9.-]+$", var.brain_hostname))
+    error_message = "brain_hostname must be a normalized lowercase DNS hostname."
+  }
+}
+
+variable "brain_origin_service" {
+  description = "Private Second Brain web Service reached by the existing cloudflared connectors."
+  type        = string
+  default     = "http://second-brain.second-brain.svc.cluster.local:8080"
+
+  validation {
+    condition     = can(regex("^http://[a-z0-9-]+\\.[a-z0-9-]+\\.svc\\.cluster\\.local:8080$", var.brain_origin_service))
+    error_message = "brain_origin_service must target an in-cluster HTTP web Service on port 8080."
   }
 }

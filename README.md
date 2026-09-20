@@ -301,3 +301,5 @@ Keep shell tracing disabled while running these commands, and do not echo the ex
 - **OpenSSL errors**: Ensure you're using `node:18-bookworm` (not `node:18-bullseye`)
 - **Access token errors**: Verify your Bitwarden access token is valid and has proper permissions
 - **Docker issues**: Make sure Docker is running and you have sufficient permissions
+
+The [staged Second Brain application](kubernetes/flux/apps/second-brain/README.md) adds a suspended `second-brain` namespace with one Recreate app pod, one PostgreSQL StatefulSet, and two Synology ReadWriteOnce claims. Its image refs stay `activation-required`; a scoped image-update pull request may update only the Kustomize image entries and must never unsuspend Flux. Activation requires the exact Secret bootstrap, live Flux/Cilium/CSI and policy/probe/backup/auth checks, and explicit production approval; database rollback never uses a PostgreSQL downgrade.

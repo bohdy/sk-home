@@ -1,0 +1,40 @@
+# No ingress or external listener is provisioned; access requires an explicit tunnel.
+apiVersion: v1
+kind: Service
+metadata:
+  name: brain-db
+  namespace: second-brain
+spec:
+  selector:
+    app.kubernetes.io/name: brain-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+# The web image's default upstream is api:8000.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: second-brain
+spec:
+  selector:
+    app.kubernetes.io/name: second-brain
+  ports:
+    - name: http-api
+      port: 8000
+      targetPort: http-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: second-brain
+  namespace: second-brain
+spec:
+  selector:
+    app.kubernetes.io/name: second-brain
+  ports:
+    - name: http-web
+      port: 8080
+      targetPort: http-web
