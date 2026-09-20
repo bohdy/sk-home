@@ -134,8 +134,8 @@ locals {
     ]) : replace(address, ".", "_") => address
   } : {}
 
-  # Keep the first policy cutover limited to the verified management VLAN. A
-  # future remote-management exception must add an explicit address-list entry.
+  # Keep router management limited to the explicitly declared VLAN 10 and VLAN
+  # 100 sources; broader remote-management exceptions require a new map entry.
   management_sources = var.firewall_policy.management_sources
 
   # VLAN 100 is the Synology layer-2 segment. Derive every other routed VLAN
@@ -169,6 +169,9 @@ locals {
     "wireguard_site_to_site_handshake",
   ]
   active_forward_adoption_keys = [
+    "lan_to_nas",
+    "vlan10_to_vlan100_management",
+    "vlan10_to_vlan100_ping",
     "site_to_site",
     "known_wan",
     "wireguard_roadwarrior_to_trusted_lan",
@@ -282,7 +285,12 @@ resource "routeros_ip_firewall_filter" "adopted_forward" {
   out_interface        = each.value.out_interface
   out_interface_list   = each.value.out_interface_list
 
-  depends_on = [routeros_ip_firewall_addr_list.adopted]
+  depends_on = [
+    routeros_ip_firewall_addr_list.adopted,
+    routeros_ip_firewall_addr_list.internal_networks,
+    routeros_interface_list.lists,
+    routeros_interface_list_member.list_member_internal_vlan,
+  ]
 }
 
 # Adopt every live NAT row with the same complete attribute model used for
