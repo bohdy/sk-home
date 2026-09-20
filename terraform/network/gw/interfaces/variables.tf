@@ -757,15 +757,15 @@ variable "firewall_policy" {
     }
     forward_rules = {
       lan_to_nas = {
-        action      = "accept"
-        comment     = "lan-to-nas"
-        disabled    = true
-        dst_address = "10.1.100.10"
+        action            = "accept"
+        comment           = "lan-to-nas"
+        dst_address       = "10.1.100.10"
+        src_address_list  = "sk-internal-vlan-networks"
+        in_interface_list = "sk-internal-vlans"
       }
       vlan10_to_vlan100_management = {
         action      = "accept"
         comment     = "Allow VLAN10 to VLAN100 management"
-        disabled    = true
         src_address = "10.1.10.0/24"
         dst_address = "10.1.100.0/24"
         protocol    = "tcp"
@@ -774,7 +774,6 @@ variable "firewall_policy" {
       vlan10_to_vlan100_ping = {
         action      = "accept"
         comment     = "Allow VLAN10 to VLAN100 ping"
-        disabled    = true
         src_address = "10.1.10.0/24"
         dst_address = "10.1.100.0/24"
         protocol    = "icmp"
