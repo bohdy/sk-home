@@ -48,6 +48,7 @@ jobs:
           python3 scripts/render-dns.py --check
           kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null
           kubectl kustomize kubernetes/flux/apps/smtp-relay >/dev/null
+          kubectl kustomize kubernetes/flux/apps/second-brain >/dev/null
           kubectl kustomize kubernetes/flux/clusters/sk-talos/apps >/dev/null
           kubectl kustomize kubernetes/flux/clusters/sk-talos >/dev/null
           kubectl kustomize kubernetes/flux/observability/alerting >/dev/null

@@ -1,0 +1,117 @@
+# Default-deny both directions. Same-pod web/API access remains local.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: second-brain
+  namespace: second-brain
+spec:
+  endpointSelector: {}
+  ingress:
+    # Kubelet HTTP probes and an operator port-forward are the staged access path.
+    - fromEntities: [host, remote-node]
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: second-brain
+            k8s:app.kubernetes.io/name: second-brain
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            - port: "8000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: second-brain
+            k8s:app.kubernetes.io/name: brain-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: second-brain
+            k8s:app.kubernetes.io/name: second-brain
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+---
+# Only the app may fetch public web/AI endpoints; private and special-use IPv4
+# ranges are excluded. IPv6 egress is denied. Application URL checks also reject
+# private resolutions and redirects; verify actual Cilium identities before activation.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: second-brain-public-egress
+  namespace: second-brain
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: second-brain
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 0.0.0.0/8
+            - 10.0.0.0/8
+            - 100.64.0.0/10
+            - 127.0.0.0/8
+            - 169.254.0.0/16
+            - 172.16.0.0/12
+            - 192.0.0.0/24
+            - 192.0.2.0/24
+            - 192.31.196.0/24
+            - 192.52.193.0/24
+            - 192.88.99.0/24
+            - 192.175.48.0/24
+            - 192.168.0.0/16
+            - 198.18.0.0/15
+            - 198.51.100.0/24
+            - 203.0.113.0/24
+            - 224.0.0.0/4
+            - 240.0.0.0/4
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+---
+# Only the existing tunnel connector identity may reach the web proxy. This
+# grants no direct API/database port access and does not bypass API bearer auth.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: second-brain-tunnel-ingress
+  namespace: second-brain
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: second-brain
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cloudflare-tunnel
+            k8s:app.kubernetes.io/name: cloudflared
+            k8s:io.kubernetes.serviceaccount.name: cloudflared
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

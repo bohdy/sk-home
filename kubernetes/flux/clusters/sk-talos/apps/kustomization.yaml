@@ -5,3 +5,4 @@ kind: Kustomization
 resources:
   - smtp-relay-kustomization.yaml
   - unifi-kustomization.yaml
+  - second-brain-kustomization.yaml

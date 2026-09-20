@@ -6,7 +6,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared" "cluster" {
   config_src = "cloudflare"
 }
 
-# Route Grafana and UniFi through the shared tunnel. Grafana validates its
+# Route the approved application hostnames through the shared tunnel. Grafana validates its
 # cert-manager certificate; UniFi retains its self-hosted keystore, so the
 # private in-cluster hop stays encrypted while Cloudflare skips its unknown
 # local issuer until a controller-managed certificate is introduced.
@@ -38,11 +38,23 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "cluster" {
         }
       },
       {
+        # The private web proxy is the only Second Brain origin; API auth remains required.
+        hostname = var.brain_hostname
+        service  = var.brain_origin_service
+        origin_request = {
+          http_host_header = var.brain_hostname
+          connect_timeout  = 10
+        }
+      },
+      {
         # Unmatched public hostnames remain fail-closed.
         service = "http_status:404"
       },
     ]
   }
+
+  # Establish the new identity perimeter before publishing its origin route.
+  depends_on = [cloudflare_zero_trust_access_application.brain]
 }
 
 # Public DNS routes to the tunnel while internal split DNS continues resolving
@@ -201,10 +213,75 @@ resource "cloudflare_zero_trust_access_application" "unifi" {
   depends_on = [cloudflare_zero_trust_organization.account]
 }
 
+# Use the same exact owner and Google IdP boundary as the existing applications.
+resource "cloudflare_zero_trust_access_application" "brain" {
+  account_id                 = var.cloudflare_account_id
+  name                       = "Second Brain"
+  domain                     = var.brain_hostname
+  type                       = "self_hosted"
+  allowed_idps               = [data.cloudflare_zero_trust_access_identity_provider.google.id]
+  auto_redirect_to_identity  = true
+  session_duration           = "8h"
+  http_only_cookie_attribute = true
+  same_site_cookie_attribute = "strict"
+  mfa_config = {
+    allowed_authenticators = ["totp", "security_key", "biometrics"]
+    mfa_disabled           = true
+    session_duration       = "8h"
+  }
+
+  policies = [
+    {
+      name       = "Allow exact owner through Google"
+      decision   = "allow"
+      precedence = 1
+      include = [
+        {
+          email = {
+            email = lower(trimspace(var.grafana_access_email))
+          }
+        },
+      ]
+      require = [
+        {
+          login_method = {
+            id = data.cloudflare_zero_trust_access_identity_provider.google.id
+          }
+        },
+      ]
+    },
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = data.cloudflare_zero_trust_access_identity_provider.google.type == "google"
+      error_message = "The configured Cloudflare Access identity provider must remain Google."
+    }
+  }
+
+  depends_on = [cloudflare_zero_trust_organization.account]
+}
+
 # Cloudflare generates the connector token from the remotely managed tunnel.
 # OpenTofu marks it sensitive, but remote state and any explicit output consumer
 # must still be treated as credential-bearing.
 data "cloudflare_zero_trust_tunnel_cloudflared_token" "cluster" {
   account_id = var.cloudflare_account_id
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.cluster.id
+}
+
+# Create Access and its route before DNS exposes the new public hostname.
+resource "cloudflare_dns_record" "brain" {
+  zone_id = var.cloudflare_zone_id
+  name    = var.brain_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.cluster.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+  comment = "Second Brain through the shared sk-talos tunnel; managed by OpenTofu"
+
+  depends_on = [
+    cloudflare_zero_trust_access_application.brain,
+    cloudflare_zero_trust_tunnel_cloudflared_config.cluster,
+  ]
 }

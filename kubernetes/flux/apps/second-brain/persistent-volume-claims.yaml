@@ -1,0 +1,28 @@
+# Separate retained claims isolate database storage from application assets.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: brain-assets
+  namespace: second-brain
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: brain-database
+  namespace: second-brain
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 10Gi

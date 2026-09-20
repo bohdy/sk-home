@@ -1,0 +1,9 @@
+# Manual processing is usable without third-party AI credentials.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: brain-config
+  namespace: second-brain
+data:
+  BRAIN_ASSET_ROOT: /data/assets
+  BRAIN_PROVIDER: manual

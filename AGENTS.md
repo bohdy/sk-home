@@ -122,7 +122,7 @@ The orchestrator must classify each task before delegating and use the smallest 
 
 - Verify the changed files after editing them.
 - When changing tracked Markdown, shell scripts, or GitHub Actions workflows, verify the matching repo-hygiene checks still pass or explicitly call out why they could not be run locally.
-- Manifest validation must render every active Kustomize tree introduced by a change, including the SMTP relay component and its cluster application tree.
+- Manifest validation must render every active Kustomize tree introduced by a change, including the SMTP relay and staged Second Brain components and their cluster application tree. The Second Brain child stays `suspend: true` while image refs are `activation-required`; planned image updates use a scoped reviewed GitHub App pull request and never unsuspend Flux. Activation requires immutable image digests, approved Secret bootstrap metadata, live Flux/Cilium/CSI and policy/probe/backup/auth checks, and explicit production approval.
 - For any change that touches credentials, authentication, CI injection, or secret-management paths, explicitly verify that secrets are not exposed in logs or other observable outputs.
 - For workflow changes, inspect the pull-request path separately and verify it cannot initialize remote state, retrieve Bitwarden values, create binary plans, upload artifacts, or execute on a shared infrastructure runner.
 - Summarize what was validated when reporting completed work.

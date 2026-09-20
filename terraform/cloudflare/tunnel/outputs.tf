@@ -28,3 +28,14 @@ output "unifi_access_application_id" {
   description = "Cloudflare Access application ID enforcing the UniFi owner policy."
   value       = cloudflare_zero_trust_access_application.unifi.id
 }
+
+# Public identifiers are safe to inspect without exposing the owner identity or tokens.
+output "brain_public_hostname" {
+  description = "Public Second Brain hostname protected by Cloudflare Access."
+  value       = cloudflare_dns_record.brain.name
+}
+
+output "brain_access_application_id" {
+  description = "Cloudflare Access application ID enforcing the Second Brain owner policy."
+  value       = cloudflare_zero_trust_access_application.brain.id
+}
