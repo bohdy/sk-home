@@ -94,8 +94,8 @@ spec:
             - port: "443"
               protocol: TCP
 ---
-# Only the existing tunnel connector identity may reach the web proxy. This
-# grants no direct API/database port access and does not bypass API bearer auth.
+# Match the service-account key emitted by the installed Cilium 1.19.4 identity.
+# This grants no direct API/database port access and does not bypass API bearer auth.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -110,7 +110,7 @@ spec:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: cloudflare-tunnel
             k8s:app.kubernetes.io/name: cloudflared
-            k8s:io.kubernetes.serviceaccount.name: cloudflared
+            k8s:io.cilium.k8s.policy.serviceaccount: cloudflared
       toPorts:
         - ports:
             - port: "8080"
