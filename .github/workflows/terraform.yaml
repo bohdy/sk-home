@@ -1606,8 +1606,51 @@ jobs:
         run: |
           set -euo pipefail
           # Accept only the exact anchor-based create, a same-ID correction, or an empty plan.
+          # Reject undeclared or unknown policy behavior while ignoring provider metadata.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
             | jq -e '
+              def camera_rule_value_is_unset($name; $value):
+                ($value == null or $value == "" or $value == [])
+                or ($name == "log" and $value == false);
+
+              def camera_rule_has_only_declared_behavior($rule):
+                all($rule | to_entries[];
+                  . as $entry
+                  | if ([
+                      "action", "chain", "comment", "connection_state", "disabled", "dst_address",
+                      "in_interface", "out_interface", "place_before", "src_address"
+                    ] | index($entry.key)) != null then
+                      true
+                    elif (["id", "bytes", "packets", "hw_offload"] | index($entry.key)) != null then
+                      true
+                    elif (["dynamic", "invalid"] | index($entry.key)) != null then
+                      ($entry.value == false or $entry.value == null)
+                    else
+                      camera_rule_value_is_unset($entry.key; $entry.value)
+                    end
+                );
+
+              def camera_rule_contains_unknown($value):
+                if $value == true then
+                  true
+                elif ($value | type) == "object" then
+                  any($value | to_entries[]; .value | camera_rule_contains_unknown(.))
+                elif ($value | type) == "array" then
+                  any($value[]; camera_rule_contains_unknown(.))
+                else
+                  false
+                end;
+
+              def camera_rule_has_no_unknown_behavior($unknown):
+                all(($unknown // {}) | to_entries[];
+                  . as $entry
+                  | if (["id", "bytes", "packets", "dynamic", "hw_offload", "invalid"] | index($entry.key)) != null then
+                      true
+                    else
+                      ($entry.value | camera_rule_contains_unknown(.)) == false
+                    end
+                );
+
               def camera_rule_has_exact_fields($rule; $anchor_id):
                 $rule.action == "accept"
                 and $rule.chain == "forward"
@@ -1625,18 +1668,21 @@ jobs:
                 and $rule.dst_address_list == null
                 and $rule.in_interface_list == null
                 and $rule.out_interface_list == null
-                and ($rule.disabled == false or $rule.disabled == null);
+                and ($rule.disabled == false or $rule.disabled == null)
+                and camera_rule_has_only_declared_behavior($rule);
 
               def camera_rule_is_exact_create($anchor_id):
                 .change.actions == ["create"]
                 and .change.after.id == null
                 and .change.after_unknown.id == true
+                and camera_rule_has_no_unknown_behavior(.change.after_unknown)
                 and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
               def camera_rule_is_exact_update($anchor_id):
                 .change.actions == ["update"]
                 and .change.before.id != null
                 and .change.after.id == .change.before.id
+                and camera_rule_has_no_unknown_behavior(.change.after_unknown)
                 and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
               [.planned_values.root_module.resources[]?
