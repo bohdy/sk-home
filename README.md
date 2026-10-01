@@ -174,6 +174,20 @@ gh workflow run terraform.yaml --ref main \
 
 The firewall plan targets the gateway internal-interface boundary, all audited IPv4/IPv6 firewall-table resources, address-list, ownership, and ordering resources, refuses to upload any artifact containing a delete or replacement, and performs no mutation during review. After reviewing it, dispatch the same command with `apply_gateway_firewall=true` and `plan_gateway_firewall=false`; the production environment gate applies only that immutable artifact. Run the review-only plan again afterward and require an empty change set. The baseline ownership and complete rule review are documented in `terraform/network/gw/interfaces/FIREWALL_REVIEW.md`, with the operational runbook in `terraform/network/gw/interfaces/README.md`.
 
+### Synology Surveillance Station to IP camera
+
+The isolated NAS-to-camera exception permits new connections only from the Synology NAS `10.1.100.10` entering `vlan100` to camera `10.1.101.20` leaving `vlan101`. Its stable comment is `sk-firewall/forward/allow-synology-to-camera`. The service port set has not been verified, so the rule matches all IP protocols for this exact host pair and `connection_state=new`; the existing established/related rule admits return traffic. It adds no camera-to-NAS initiation, NAT, or broad VLAN membership or access.
+
+Before planning, run `routeros-firewall-inventory.yaml` from current `main` and review its fresh sanitized artifact. The historical inventory run [34529082120](https://github.com/bohdy/sk-home/actions/runs/34529082120) is not fresh enough for this change. Then request the isolated review plan from `main`:
+
+```bash
+gh workflow run terraform.yaml --ref main -f plan_gateway_nas_camera=true
+```
+
+Review `network-gw-nas-camera-tofuplan` and accept only the new camera allow rule plus its forward-rule ordering update, or an empty plan after recovery; reject all other changes, deletes, and replacements. For production, dispatch `apply_gateway_nas_camera=true` separately. That run creates and guards a new immutable artifact, and the `production` environment gate applies only that same-run artifact. Review its summary before approving the gate, then dispatch the plan input again and require an empty plan.
+
+After apply, initiate a new Surveillance Station connection and confirm the camera responds, the exact allow counter increases, and the forward deny counters do not increase for that attempt. Confirm the camera cannot initiate a new connection to the NAS and another VLAN 100 host cannot use this exception. If verification fails, use RouterOS Safe Mode or the local console to disable only `sk-firewall/forward/allow-synology-to-camera`, then correct the declaration and create a fresh reviewed artifact; do not use REST or retry the same artifact. The detailed policy review and rollback steps are in `terraform/network/gw/interfaces/FIREWALL_REVIEW.md` and `terraform/network/gw/interfaces/README.md`.
+
 For the UniFi AP management fix, use the narrower mutually exclusive path from `main` so the broader pending firewall plan is not evaluated:
 
 ```bash
