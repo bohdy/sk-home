@@ -1426,11 +1426,8 @@ jobs:
                 if .change.actions == ["create"] then
                   camera_rule_has_exact_fields(.change.after)
                 elif .change.actions == ["update"] then
-                  .change.before.disabled == true
-                  and .change.after.disabled == false
-                  and .change.before.id != null
+                  .change.before.id != null
                   and .change.after.id == .change.before.id
-                  and ((.change.before | .disabled = false) == .change.after)
                   and camera_rule_has_exact_fields(.change.after)
                 else
                   false
@@ -1608,7 +1605,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Accept only the exact anchor-based create, a same-ID disabled-rule re-enable, or an empty plan.
+          # Accept only the exact anchor-based create, a same-ID correction, or an empty plan.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
             | jq -e '
               def camera_rule_has_exact_fields($rule; $anchor_id):
@@ -1636,13 +1633,10 @@ jobs:
                 and .change.after_unknown.id == true
                 and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
-              def camera_rule_is_exact_reenable($anchor_id):
+              def camera_rule_is_exact_update($anchor_id):
                 .change.actions == ["update"]
-                and .change.before.disabled == true
-                and .change.after.disabled == false
                 and .change.before.id != null
                 and .change.after.id == .change.before.id
-                and ((.change.before | .disabled = false) == .change.after)
                 and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
               [.planned_values.root_module.resources[]?
@@ -1666,14 +1660,14 @@ jobs:
                     ($changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera")
                     and (
                       ($changes[0] | camera_rule_is_exact_create($anchor_ids[0]))
-                      or ($changes[0] | camera_rule_is_exact_reenable($anchor_ids[0]))
+                      or ($changes[0] | camera_rule_is_exact_update($anchor_ids[0]))
                     )
                   else
                     false
                   end
                 )
             ' >/dev/null; then
-            echo "The NAS-to-camera plan contains a change other than the exact camera rule create, same-ID re-enable, or an empty plan; refusing to upload it." >&2
+            echo "The NAS-to-camera plan contains a change other than the exact camera rule create, same-ID corrective update, or an empty plan; refusing to upload it." >&2
             exit 1
           fi
       - name: Upload Synology to camera firewall plan
