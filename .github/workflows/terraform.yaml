@@ -1648,7 +1648,12 @@ jobs:
               [.planned_values.root_module.resources[]?
                 | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_camera_anchor")
                 | .values.rules[]?
-                | select(.chain == "forward" and .comment == "sk-firewall/forward/drop-inter-vlan")
+                | select(
+                    .chain == "forward"
+                    and .comment == "sk-firewall/forward/drop-inter-vlan"
+                    and .action == "drop"
+                    and (.disabled == false or .disabled == null)
+                  )
                 | .id] as $anchor_ids
               | [.resource_changes[]?
                 | select((.mode // "managed") == "managed" and .change.actions != ["no-op"])] as $changes
