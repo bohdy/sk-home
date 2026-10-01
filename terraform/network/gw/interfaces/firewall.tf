@@ -117,6 +117,27 @@ locals {
     [for rule in values(routeros_ip_firewall_filter.forward_management) : rule.id],
   )
 
+  # Preserve the router's live filter order for the targeted camera plan.
+  # The narrow exception may be inserted before the inter-VLAN drop only when
+  # that anchor still precedes the terminal unmatched drop.
+  forward_rule_ids = [
+    for rule in data.routeros_ip_firewall.forward_rules.rules : rule.id
+  ]
+  camera_drop_inter_vlan_rule_ids = [
+    for rule in data.routeros_ip_firewall.forward_rules.rules : rule.id
+    if rule.chain == "forward" &&
+    rule.comment == "sk-firewall/forward/drop-inter-vlan" &&
+    rule.action == "drop" &&
+    rule.disabled != true
+  ]
+  camera_drop_unmatched_rule_ids = [
+    for rule in data.routeros_ip_firewall.forward_rules.rules : rule.id
+    if rule.chain == "forward" &&
+    rule.comment == "sk-firewall/forward/drop-unmatched" &&
+    rule.action == "drop" &&
+    rule.disabled != true
+  ]
+
   # NAT has a separate RouterOS table and therefore needs its own strict
   # identity check; importing filter rules alone must not hide an unmanaged
   # masquerade or destination-NAT exception.
@@ -688,6 +709,19 @@ resource "routeros_ip_firewall_filter" "allow_synology_to_camera" {
         try(var.vlans[tostring(var.firewall_policy.surveillance_camera_vlan_id)].interface_name, null) != null
       )
       error_message = "The NAS and surveillance camera must use distinct, routed VLANs present in the gateway inventory."
+    }
+
+    precondition {
+      condition = try(
+        length(local.camera_drop_inter_vlan_rule_ids) == 1 &&
+        length(local.camera_drop_unmatched_rule_ids) == 1 &&
+        local.camera_drop_inter_vlan_rule_ids[0] != null &&
+        local.camera_drop_unmatched_rule_ids[0] != null &&
+        index(local.forward_rule_ids, local.camera_drop_inter_vlan_rule_ids[0]) <
+        index(local.forward_rule_ids, local.camera_drop_unmatched_rule_ids[0]),
+        false,
+      )
+      error_message = "The live forward chain must contain one enabled inter-VLAN drop before one enabled terminal unmatched drop before a NAS-to-camera exception can be planned."
     }
   }
 }
