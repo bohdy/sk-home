@@ -1401,22 +1401,40 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Permit only the exact same-ID re-enable for a rule disabled during documented emergency rollback.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json firewall-tofuplan \
             | jq -e '
+              def camera_rule_has_exact_fields($rule):
+                $rule.action == "accept"
+                and $rule.chain == "forward"
+                and $rule.connection_state == "new"
+                and $rule.src_address == "10.1.100.10"
+                and $rule.dst_address == "10.1.101.20"
+                and $rule.in_interface == "vlan100"
+                and $rule.out_interface == "vlan101"
+                and $rule.comment == "sk-firewall/forward/allow-synology-to-camera"
+                and $rule.protocol == null
+                and $rule.src_port == null
+                and $rule.dst_port == null
+                and $rule.src_address_list == null
+                and $rule.dst_address_list == null
+                and $rule.in_interface_list == null
+                and $rule.out_interface_list == null
+                and ($rule.disabled == false or $rule.disabled == null);
+
               def camera_rule_is_exact:
-                .change.actions == ["create"]
-                and .change.after.action == "accept"
-                and .change.after.chain == "forward"
-                and .change.after.connection_state == "new"
-                and .change.after.src_address == "10.1.100.10"
-                and .change.after.dst_address == "10.1.101.20"
-                and .change.after.in_interface == "vlan100"
-                and .change.after.out_interface == "vlan101"
-                and .change.after.comment == "sk-firewall/forward/allow-synology-to-camera"
-                and .change.after.protocol == null
-                and .change.after.src_port == null
-                and .change.after.dst_port == null
-                and (.change.after.disabled == false or .change.after.disabled == null);
+                if .change.actions == ["create"] then
+                  camera_rule_has_exact_fields(.change.after)
+                elif .change.actions == ["update"] then
+                  .change.before.disabled == true
+                  and .change.after.disabled == false
+                  and .change.before.id != null
+                  and .change.after.id == .change.before.id
+                  and ((.change.before | .disabled = false) == .change.after)
+                  and camera_rule_has_exact_fields(.change.after)
+                else
+                  false
+                end;
 
               [.resource_changes[]? | select(.address == "routeros_ip_firewall_filter.allow_synology_to_camera" and .change.actions != ["no-op"])] as $camera
               | all(.resource_changes[]?.change.actions; index("delete") == null)
@@ -1591,8 +1609,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # A break-glass disabled row may be restored only with a same-ID, fields-identical update and unchanged order.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
             | jq -e '
+              def camera_rule_has_exact_fields($rule):
+                $rule.action == "accept"
+                and $rule.chain == "forward"
+                and $rule.connection_state == "new"
+                and $rule.src_address == "10.1.100.10"
+                and $rule.dst_address == "10.1.101.20"
+                and $rule.in_interface == "vlan100"
+                and $rule.out_interface == "vlan101"
+                and $rule.comment == "sk-firewall/forward/allow-synology-to-camera"
+                and $rule.protocol == null
+                and $rule.src_port == null
+                and $rule.dst_port == null
+                and $rule.src_address_list == null
+                and $rule.dst_address_list == null
+                and $rule.in_interface_list == null
+                and $rule.out_interface_list == null
+                and ($rule.disabled == false or $rule.disabled == null);
+
+              def camera_rule_is_exact_create:
+                .change.actions == ["create"]
+                and .change.after.id == null
+                and .change.after_unknown.id == true
+                and camera_rule_has_exact_fields(.change.after);
+
+              def camera_rule_is_exact_reenable:
+                .change.actions == ["update"]
+                and .change.before.disabled == true
+                and .change.after.disabled == false
+                and .change.before.id != null
+                and .change.after.id == .change.before.id
+                and ((.change.before | .disabled = false) == .change.after)
+                and camera_rule_has_exact_fields(.change.after);
+
               [
                 "routeros_ip_firewall_filter.allow_synology_to_camera",
                 "routeros_move_items.forward_rules"
@@ -1607,30 +1659,16 @@ jobs:
               | ($changes | map(.address) | sort) as $addresses
               | if ($changes | length) == 0 then
                   true
+                elif ($changes | length) == 1 then
+                  ($changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera")
+                  and ($changes[0] | camera_rule_is_exact_reenable)
+                  and ([.resource_changes[]? | select(.address == "routeros_move_items.forward_rules" and .change.actions != ["no-op"])] | length) == 0
                 else
                   ($changes | length) == 2
                   and ($addresses == ($expected | sort))
                   and all($changes[];
                     if .address == "routeros_ip_firewall_filter.allow_synology_to_camera" then
-                      .change.actions == ["create"]
-                      and .change.after.action == "accept"
-                      and .change.after.chain == "forward"
-                      and .change.after.connection_state == "new"
-                      and .change.after.src_address == "10.1.100.10"
-                      and .change.after.dst_address == "10.1.101.20"
-                      and .change.after.in_interface == "vlan100"
-                      and .change.after.out_interface == "vlan101"
-                      and .change.after.comment == "sk-firewall/forward/allow-synology-to-camera"
-                      and .change.after.id == null
-                      and .change.after_unknown.id == true
-                      and .change.after.protocol == null
-                      and .change.after.src_port == null
-                      and .change.after.dst_port == null
-                      and .change.after.src_address_list == null
-                      and .change.after.dst_address_list == null
-                      and .change.after.in_interface_list == null
-                      and .change.after.out_interface_list == null
-                      and (.change.after.disabled == false or .change.after.disabled == null)
+                      camera_rule_is_exact_create
                     elif .address == "routeros_move_items.forward_rules" then
                       .change.actions == ["update"]
                       and .change.after.resource_name == "routeros_ip_firewall_filter"
@@ -1659,7 +1697,7 @@ jobs:
                   )
                 end
             ' >/dev/null; then
-            echo "The NAS-to-camera plan is not exactly the allow create plus forward-order update, or an empty post-apply plan; refusing to upload it." >&2
+            echo "The NAS-to-camera plan is not an exact create plus ordering update, a same-ID re-enable with unchanged order, or an empty plan; refusing to upload it." >&2
             exit 1
           fi
       - name: Upload Synology to camera firewall plan
