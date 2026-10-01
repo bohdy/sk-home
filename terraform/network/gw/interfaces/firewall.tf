@@ -20,6 +20,19 @@ data "routeros_ip_firewall" "forward_rules" {
   }
 }
 
+# Resolve the unique live deny anchor without pulling shared forward ordering
+# into the targeted NAS-to-camera plan.
+data "routeros_ip_firewall" "forward_camera_anchor" {
+  provider = routeros.gw
+
+  rules {
+    filter = {
+      chain   = "forward"
+      comment = "sk-firewall/forward/drop-inter-vlan"
+    }
+  }
+}
+
 data "routeros_ip_firewall" "nat_rules" {
   provider = routeros.gw
 
@@ -661,6 +674,7 @@ resource "routeros_ip_firewall_filter" "allow_synology_to_camera" {
   in_interface     = try(var.vlans[tostring(var.firewall_policy.synology_vlan_id)].interface_name, null)
   out_interface    = try(var.vlans[tostring(var.firewall_policy.surveillance_camera_vlan_id)].interface_name, null)
   comment          = "sk-firewall/forward/allow-synology-to-camera"
+  place_before     = one(data.routeros_ip_firewall.forward_camera_anchor.rules).id
 
   lifecycle {
     precondition {

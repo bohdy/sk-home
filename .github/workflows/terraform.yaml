@@ -1401,7 +1401,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Permit only the exact same-ID re-enable for a rule disabled during documented emergency rollback.
+          # Reject destructive firewall changes and require the exact camera exception fields.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json firewall-tofuplan \
             | jq -e '
               def camera_rule_has_exact_fields($rule):
@@ -1593,7 +1593,6 @@ jobs:
         run: >-
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
           -target=routeros_ip_firewall_filter.allow_synology_to_camera
-          -target=routeros_move_items.forward_rules
           -out=nas-camera-tofuplan
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
@@ -1609,10 +1608,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # A break-glass disabled row may be restored only with a same-ID, fields-identical update and unchanged order.
+          # Accept only the exact anchor-based create, a same-ID disabled-rule re-enable, or an empty plan.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
             | jq -e '
-              def camera_rule_has_exact_fields($rule):
+              def camera_rule_has_exact_fields($rule; $anchor_id):
                 $rule.action == "accept"
                 and $rule.chain == "forward"
                 and $rule.connection_state == "new"
@@ -1621,6 +1620,7 @@ jobs:
                 and $rule.in_interface == "vlan100"
                 and $rule.out_interface == "vlan101"
                 and $rule.comment == "sk-firewall/forward/allow-synology-to-camera"
+                and $rule.place_before == $anchor_id
                 and $rule.protocol == null
                 and $rule.src_port == null
                 and $rule.dst_port == null
@@ -1630,74 +1630,45 @@ jobs:
                 and $rule.out_interface_list == null
                 and ($rule.disabled == false or $rule.disabled == null);
 
-              def camera_rule_is_exact_create:
+              def camera_rule_is_exact_create($anchor_id):
                 .change.actions == ["create"]
                 and .change.after.id == null
                 and .change.after_unknown.id == true
-                and camera_rule_has_exact_fields(.change.after);
+                and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
-              def camera_rule_is_exact_reenable:
+              def camera_rule_is_exact_reenable($anchor_id):
                 .change.actions == ["update"]
                 and .change.before.disabled == true
                 and .change.after.disabled == false
                 and .change.before.id != null
                 and .change.after.id == .change.before.id
                 and ((.change.before | .disabled = false) == .change.after)
-                and camera_rule_has_exact_fields(.change.after);
+                and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
-              [
-                "routeros_ip_firewall_filter.allow_synology_to_camera",
-                "routeros_move_items.forward_rules"
-              ] as $expected
-              | [.planned_values.root_module.resources[]?
-                 | select(.address == "routeros_ip_firewall_filter.forward_drop_inter_vlan")
-                 | .values.id] as $inter_vlan_drop_ids
-              | [.planned_values.root_module.resources[]?
-                 | select(.address == "routeros_ip_firewall_filter.forward_drop_unmatched")
-                 | .values.id] as $terminal_drop_ids
-              | [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
-              | ($changes | map(.address) | sort) as $addresses
-              | if ($changes | length) == 0 then
-                  true
-                elif ($changes | length) == 1 then
-                  ($changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera")
-                  and ($changes[0] | camera_rule_is_exact_reenable)
-                  and ([.resource_changes[]? | select(.address == "routeros_move_items.forward_rules" and .change.actions != ["no-op"])] | length) == 0
-                else
-                  ($changes | length) == 2
-                  and ($addresses == ($expected | sort))
-                  and all($changes[];
-                    if .address == "routeros_ip_firewall_filter.allow_synology_to_camera" then
-                      camera_rule_is_exact_create
-                    elif .address == "routeros_move_items.forward_rules" then
-                      .change.actions == ["update"]
-                      and .change.after.resource_name == "routeros_ip_firewall_filter"
-                      and .change.after.resource_path == "/ip/firewall/filter"
-                      and (.change.after.sequence | type) == "array"
-                      and (.change.after.sequence | length) == ((.change.before.sequence // []) | length) + 1
-                      and ([.change.after.sequence[] | select(. != null)] == (.change.before.sequence // []))
-                      and (
-                        (.change.after.sequence) as $sequence
-                        | [$sequence | to_entries[] | select(.value == null) | .key] as $new_id_positions
-                        | [$sequence | to_entries[] | select(.value == $inter_vlan_drop_ids[0]) | .key] as $inter_vlan_positions
-                        | [$sequence | to_entries[] | select(.value == $terminal_drop_ids[0]) | .key] as $terminal_drop_positions
-                        | ($inter_vlan_drop_ids | length) == 1
-                        and $inter_vlan_drop_ids[0] != null
-                        and ($terminal_drop_ids | length) == 1
-                        and $terminal_drop_ids[0] != null
-                        and ($new_id_positions | length) == 1
-                        and ($inter_vlan_positions | length) == 1
-                        and ($terminal_drop_positions | length) == 1
-                        and $new_id_positions[0] < $inter_vlan_positions[0]
-                        and $new_id_positions[0] < $terminal_drop_positions[0]
-                      )
-                    else
-                      false
-                    end
-                  )
-                end
+              [.planned_values.root_module.resources[]?
+                | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_camera_anchor")
+                | .values.rules[]?
+                | select(.chain == "forward" and .comment == "sk-firewall/forward/drop-inter-vlan")
+                | .id] as $anchor_ids
+              | [.resource_changes[]?
+                | select((.mode // "managed") == "managed" and .change.actions != ["no-op"])] as $changes
+              | ($anchor_ids | length) == 1
+                and $anchor_ids[0] != null
+                and (
+                  if ($changes | length) == 0 then
+                    true
+                  elif ($changes | length) == 1 then
+                    ($changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera")
+                    and (
+                      ($changes[0] | camera_rule_is_exact_create($anchor_ids[0]))
+                      or ($changes[0] | camera_rule_is_exact_reenable($anchor_ids[0]))
+                    )
+                  else
+                    false
+                  end
+                )
             ' >/dev/null; then
-            echo "The NAS-to-camera plan is not an exact create plus ordering update, a same-ID re-enable with unchanged order, or an empty plan; refusing to upload it." >&2
+            echo "The NAS-to-camera plan contains a change other than the exact camera rule create, same-ID re-enable, or an empty plan; refusing to upload it." >&2
             exit 1
           fi
       - name: Upload Synology to camera firewall plan
