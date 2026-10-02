@@ -720,12 +720,12 @@ jobs:
 
           # Evaluate only the state-only contract records. This keeps the live
           # preflight and the later API reconciliation bound to storage.auto.tfvars.
-          tofu -chdir=terraform/${STACK_PATH} plan \
+          tofu -chdir="terraform/${STACK_PATH}" plan \
             -refresh=false \
             -target=terraform_data.proxmox_storage_contract \
             -target=terraform_data.synology_iscsi_contract \
             -out=storage-desired-tofuplan
-          tofu -chdir=terraform/${STACK_PATH} show -json storage-desired-tofuplan |
+          tofu -chdir="terraform/${STACK_PATH}" show -json storage-desired-tofuplan |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -748,14 +748,14 @@ jobs:
                       synology: $desired["terraform_data.synology_iscsi_contract"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/storage-desired.json
+            ' > "terraform/${STACK_PATH}/storage-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
       - name: Preflight live Proxmox and Synology storage
         shell: bash
-        run: bash scripts/proxmox-synology-storage-reconcile.sh check terraform/${STACK_PATH}/storage-desired.json
+        run: bash scripts/proxmox-synology-storage-reconcile.sh check "terraform/${STACK_PATH}/storage-desired.json"
         env:
           PROXMOX_ENDPOINT: https://pve.sk.bohdal.name:8006
           PROXMOX_API_TOKEN: ${{ env.PROXMOX_VE_API_TOKEN }}
@@ -779,7 +779,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! tofu -chdir=terraform/${STACK_PATH} show -json "${TOFU_PLAN_ARTIFACT}" |
+          if ! tofu -chdir="terraform/${STACK_PATH}" show -json "${TOFU_PLAN_ARTIFACT}" |
             jq -e '
               [
                 .resource_changes[]?
@@ -909,7 +909,7 @@ jobs:
           # Read the payload from the exact immutable artifact that will be
           # applied. The live reconciler therefore cannot receive a different
           # contract from the one reviewed by the plan guard.
-          tofu -chdir=terraform/${STACK_PATH} show -json "${TOFU_PLAN_ARTIFACT}" |
+          tofu -chdir="terraform/${STACK_PATH}" show -json "${TOFU_PLAN_ARTIFACT}" |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -932,7 +932,7 @@ jobs:
                       synology: $desired["terraform_data.synology_iscsi_contract"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/storage-desired.json
+            ' > "terraform/${STACK_PATH}/storage-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -945,7 +945,7 @@ jobs:
 
       - name: Reconcile Proxmox and Synology storage
         shell: bash
-        run: bash scripts/proxmox-synology-storage-reconcile.sh apply terraform/${STACK_PATH}/storage-desired.json
+        run: bash scripts/proxmox-synology-storage-reconcile.sh apply "terraform/${STACK_PATH}/storage-desired.json"
         env:
           PROXMOX_ENDPOINT: https://pve.sk.bohdal.name:8006
           PROXMOX_API_TOKEN: ${{ env.PROXMOX_VE_API_TOKEN }}
@@ -2614,12 +2614,12 @@ jobs:
           # Evaluate the state-only qdevice records without refreshing or
           # mutating RouterOS. The live preflight below consumes these values
           # so USB checks and global-path checks cannot drift from qdevice.tf.
-          tofu -chdir=terraform/${STACK_PATH} plan \
+          tofu -chdir="terraform/${STACK_PATH}" plan \
             -refresh=false \
             -target=terraform_data.qdevice_mounts[0] \
             -target=terraform_data.qdevice_container[0] \
             -out=qdevice-desired-tofuplan
-          tofu -chdir=terraform/${STACK_PATH} show -json qdevice-desired-tofuplan |
+          tofu -chdir="terraform/${STACK_PATH}" show -json qdevice-desired-tofuplan |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -2642,7 +2642,7 @@ jobs:
                       container: $desired["terraform_data.qdevice_container[0]"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/qdevice-desired.json
+            ' > "terraform/${STACK_PATH}/qdevice-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -2691,7 +2691,7 @@ jobs:
               ' | curl --config -
           }
 
-          qdevice_desired="$(jq -ce . terraform/${STACK_PATH}/qdevice-desired.json)"
+          qdevice_desired="$(jq -ce . "terraform/${STACK_PATH}/qdevice-desired.json")"
           if ! jq -e '
             def safe_global_path:
               if type != "string" then false
@@ -2747,8 +2747,8 @@ jobs:
             ] | map(select((type == "string") and length > 0)) | unique
           ' <<<"${qdevice_desired}")"
 
-          state_list="$(tofu -chdir=terraform/${STACK_PATH} state list)"
-          if legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
+          state_list="$(tofu -chdir="terraform/${STACK_PATH}" state list)"
+          if _legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
             echo "Legacy provider-managed qdevice mount/container state must be removed by a reviewed migration." >&2
             exit 1
           fi
@@ -2758,19 +2758,19 @@ jobs:
             local import_id="$2"
 
             if grep -Fqx -- "${address}" <<<"${state_list}"; then
-              if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null; then
+              if ! tofu -chdir="terraform/${STACK_PATH}" state show "${address}" >/dev/null; then
                 echo "State lists ${address}, but state show failed; refusing to import or continue." >&2
                 exit 1
               fi
               if [[ "${import_id}" != "." ]]; then
-                state_id="$(tofu -chdir=terraform/${STACK_PATH} state show -no-color "${address}" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
+                state_id="$(tofu -chdir="terraform/${STACK_PATH}" state show -no-color "${address}" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
                 if [[ -z "${state_id}" || "${state_id}" != "${import_id}" ]]; then
                   echo "State identity for ${address} does not match the live RouterOS object; refusing to continue." >&2
                   exit 1
                 fi
               fi
             else
-              tofu -chdir=terraform/${STACK_PATH} import -input=false "${address}" "${import_id}" >/dev/null
+              tofu -chdir="terraform/${STACK_PATH}" import -input=false "${address}" "${import_id}" >/dev/null
             fi
           }
 
@@ -3149,7 +3149,7 @@ jobs:
           printf 'TF_VAR_qdevice=%s\n' "$qdevice_json" >> "$GITHUB_ENV"
 
       - name: OpenTofu init
-        run: tofu -chdir=terraform/$STACK_PATH init
+        run: tofu -chdir="terraform/$STACK_PATH" init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -3167,7 +3167,7 @@ jobs:
           # the reviewed plan changes those paths. Re-read the full container
           # list after the gate so a newly created stopped container cannot be
           # affected by the immutable initial artifact.
-          migration_required="$(tofu -chdir=terraform/$STACK_PATH show -json "$INITIAL_PLAN_FILE" | jq -r '
+          migration_required="$(tofu -chdir="terraform/$STACK_PATH" show -json "$INITIAL_PLAN_FILE" | jq -r '
             def path($value):
               ($value // {}) as $object
               | ($object["layer-dir"] // $object.layer_dir // "") as $layer_dir
@@ -3202,7 +3202,7 @@ jobs:
           fi
 
       - name: Apply initial reviewed qdevice plan
-        run: tofu -chdir=terraform/$STACK_PATH apply -auto-approve "$INITIAL_PLAN_FILE"
+        run: tofu -chdir="terraform/$STACK_PATH" apply -auto-approve "$INITIAL_PLAN_FILE"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -3224,7 +3224,7 @@ jobs:
 
       - name: Create immutable post-recovery qdevice plan
         run: >-
-          tofu -chdir=terraform/$STACK_PATH plan
+          tofu -chdir="terraform/$STACK_PATH" plan
           -target=routeros_interface_veth.qdevice[0]
           -target=routeros_interface_bridge_port.qdevice[0]
           -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
@@ -3233,7 +3233,7 @@ jobs:
           -target=terraform_data.qdevice_mounts[0]
           -target=terraform_data.qdevice_container[0]
           -target=routeros_ip_firewall_filter.allow_qdevice_qnetd[0]
-          -out=$TOFU_PLAN_ARTIFACT
+          -out="$TOFU_PLAN_ARTIFACT"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -3250,7 +3250,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! tofu -chdir=terraform/$STACK_PATH show -json "$TOFU_PLAN_ARTIFACT" |
+          if ! tofu -chdir="terraform/$STACK_PATH" show -json "$TOFU_PLAN_ARTIFACT" |
             jq -e '
               [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
               | [
@@ -3392,7 +3392,7 @@ jobs:
           # state is piped straight to jq and only those two addresses leave
           # the command; no state dump is logged.
           qdevice_desired="$(
-            tofu -chdir=terraform/${STACK_PATH} show -json |
+            tofu -chdir="terraform/${STACK_PATH}" show -json |
               jq -ce '
                 [
                   .values.root_module.resources[]?

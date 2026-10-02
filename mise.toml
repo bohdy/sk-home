@@ -1,6 +1,7 @@
 [tools]
-# Pin workflow lint syntax so local and hosted validation agree.
+# Pin workflow and embedded-shell lint so local and hosted validation agree.
 actionlint = "1.7.12"
+shellcheck = "0.11.0"
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
@@ -26,4 +27,15 @@ run = "node --test .github/scripts/*.test.cjs"
 
 [tasks.workflow-check]
 description = "Validate the catalog, workflow contracts, and GitHub Actions syntax."
-run = ["node .github/scripts/validate-catalog.cjs", "mise run workflow-test", "actionlint"]
+# Resolve the pinned executable explicitly and fail if it is missing; actionlint
+# otherwise silently omits embedded-shell checks when ShellCheck is unavailable.
+run = [
+  "node .github/scripts/validate-catalog.cjs",
+  "mise run workflow-test",
+  """
+  set -eu
+  shellcheck_path="$(mise which shellcheck)"
+  test -x "$shellcheck_path"
+  actionlint -shellcheck "$shellcheck_path"
+  """,
+]
