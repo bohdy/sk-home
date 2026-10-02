@@ -1619,6 +1619,10 @@ jobs:
                 ($value == null or $value == "" or $value == [])
                 or ($name == "log" and $value == false);
 
+              # RouterOS live rows serialize disabled as a string; planned fields use booleans.
+              def firewall_rule_is_enabled($rule):
+                ($rule.disabled == null or $rule.disabled == false or $rule.disabled == "false");
+
               def camera_rule_has_only_declared_behavior($rule):
                 all($rule | to_entries[];
                   . as $entry
@@ -1700,7 +1704,7 @@ jobs:
                 and $rule.in_interface == "vlan100"
                 and $rule.out_interface == "vlan101"
                 and $rule.comment == "sk-firewall/forward/allow-synology-to-camera"
-                and ($rule.disabled == false or $rule.disabled == null)
+                and firewall_rule_is_enabled($rule)
                 and all(["protocol", "src_port", "dst_port", "src_address_list",
                     "dst_address_list", "in_interface_list", "out_interface_list"][];
                   . as $name | camera_rule_value_is_unset($name; $rule[$name]));
@@ -1716,10 +1720,12 @@ jobs:
                 | select((.mode // "managed") == "managed" and .change.actions != ["no-op"])] as $changes
               | (if ($inter_vlan_rows | length) == 1 and ($terminal_rows | length) == 1 then
                   $inter_vlan_rows[0].action == "drop"
-                  and ($inter_vlan_rows[0].disabled == false or $inter_vlan_rows[0].disabled == null)
+                  and $inter_vlan_rows[0].chain == "forward"
+                  and firewall_rule_is_enabled($inter_vlan_rows[0])
                   and $inter_vlan_rows[0].id != null
                   and $terminal_rows[0].action == "drop"
-                  and ($terminal_rows[0].disabled == false or $terminal_rows[0].disabled == null)
+                  and $terminal_rows[0].chain == "forward"
+                  and firewall_rule_is_enabled($terminal_rows[0])
                   and $terminal_rows[0].id != null
                   and (($forward_rules | map(.id) | index($inter_vlan_rows[0].id))
                     < ($forward_rules | map(.id) | index($terminal_rows[0].id)))
