@@ -6,9 +6,15 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      reconcile_stack:
+        description: Reconcile one full stack and initialize its canonical checkpoint
+        required: true
+        default: none
+        type: choice
+        options: [none, gateway, dhcp, talos, storage, cloudflare]
       apply_gateway:
         # Keep network mutation explicitly opt-in while still allowing an
-        # ordinary manual dispatch to refresh plans for every stack.
+        # ordinary manual dispatch to refresh plans for pending consumed inputs.
         description: Apply the reviewed gateway plan from this run
         required: true
         default: false
@@ -213,6 +219,7 @@ jobs:
       APPLY_CLOUDFLARE: ${{ inputs.apply_cloudflare || false }}
       APPLY_PROXMOX_STORAGE: ${{ inputs.apply_proxmox_storage || false }}
       PLAN_PROXMOX_STORAGE: ${{ inputs.plan_proxmox_storage || false }}
+      RECONCILE_STACK: ${{ inputs.reconcile_stack || 'none' }}
       WORKFLOW_REF: ${{ github.ref }}
 
     steps:
@@ -251,10 +258,20 @@ jobs:
             "${APPLY_CLOUDFLARE}" \
             "${APPLY_PROXMOX_STORAGE}" \
             "${PLAN_PROXMOX_STORAGE}"; do
+            if [[ "${mode}" != "true" && "${mode}" != "false" ]]; then
+              echo "Invalid dispatch boolean." >&2
+              exit 1
+            fi
             if [[ "${mode}" == "true" ]]; then
               selected_modes=$((selected_modes + 1))
             fi
           done
+
+          case "${RECONCILE_STACK}" in
+            none) ;;
+            gateway|dhcp|talos|storage|cloudflare) selected_modes=$((selected_modes + 1)) ;;
+            *) echo "Invalid reconciliation stack." >&2; exit 1 ;;
+          esac
 
           if (( selected_modes > 1 )); then
             echo "Select at most one OpenTofu mutation mode per run." >&2
@@ -263,17 +280,27 @@ jobs:
 
   detect-changes:
     name: Detect changed OpenTofu stacks
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: validate-dispatch
-    strategy:
-      matrix:
-        stacks: [network/gw/interfaces, network/gw/dhcp, k3s/talos-cluster, proxmox/storage, cloudflare/tunnel]
-
+    permissions:
+      contents: read
+      deployments: read
+      actions: read
+    outputs:
+      stacks: ${{ steps.select.outputs.stacks }}
+      has_changes: ${{ steps.select.outputs.has_changes }}
     steps:
-      # Check out the repository with full history so the workflow can compare
-      # the current revision against the correct pull request or push base.
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select affected stacks from successful checkpoints
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            await require('./.github/scripts/select-stacks.cjs')({github,context,core});
 
   tofu-plan:
     name: OpenTofu plan
@@ -282,16 +309,15 @@ jobs:
     # Only ordinary main-branch planning may access remote state, provider
     # credentials, or immutable plan artifacts here; targeted modes use their
     # own isolated plan jobs below.
-    if: ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && !(github.event_name == 'workflow_dispatch' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp || inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_unifi_ap || inputs.plan_gateway_unifi_ap || inputs.apply_gateway_nas_camera || inputs.plan_gateway_nas_camera || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard || inputs.apply_gateway_dhcp || inputs.apply_gateway_ipfix || inputs.apply_proxmox_storage || inputs.plan_proxmox_storage))
+    if: needs.detect-changes.outputs.has_changes == 'true'
     strategy:
+      fail-fast: false
       max-parallel: 1
       matrix:
-        # Targeted BGP, firewall, and WireGuard dispatches use dedicated jobs
-        # and omit the provider-sensitive interface stack from this matrix.
-        stacks: ${{ fromJSON((inputs.apply_gateway_bgp || inputs.plan_gateway_bgp || inputs.apply_gateway_firewall || inputs.plan_gateway_firewall || inputs.apply_gateway_unifi_ap || inputs.plan_gateway_unifi_ap || inputs.apply_gateway_nas_camera || inputs.plan_gateway_nas_camera || inputs.apply_gateway_proxmox || inputs.plan_gateway_proxmox || inputs.apply_gateway_qdevice || inputs.plan_gateway_qdevice || inputs.apply_gateway_ether7 || inputs.plan_gateway_ether7 || inputs.apply_gateway_wireguard || inputs.apply_proxmox_storage || inputs.plan_proxmox_storage) && '["network/gw/dhcp","k3s/talos-cluster","cloudflare/tunnel"]' || '["network/gw/interfaces","network/gw/dhcp","k3s/talos-cluster","proxmox/storage","cloudflare/tunnel"]') }}
-    #if: needs.detect-changes.outputs.changed == 'true'
+        stacks: ${{ fromJSON(needs.detect-changes.outputs.stacks) }}
 
     env:
+      STACK_PATH: ${{ matrix.stacks }}
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
 
@@ -308,7 +334,7 @@ jobs:
         env:
           STACK_PATH: ${{ matrix.stacks }}
 
-      - name: Get Secrets
+      - name: Get backend secrets
         uses: bitwarden/sm-action@v3.0.0
         with:
           access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
@@ -316,6 +342,15 @@ jobs:
           secrets: |
             f1a17686-db90-4ae0-80aa-b43701584bab > AWS_ACCESS_KEY_ID
             31f0524c-b94e-4446-ba46-b43701586360 > AWS_SECRET_ACCESS_KEY
+
+
+      - name: Get gateway secrets
+        if: matrix.stacks == 'network/gw/interfaces'
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
             519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
             6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
             2c67255f-36f4-4344-b94d-b459014e9249 > KUBERNETES_BGP_TCP_MD5_KEY
@@ -323,10 +358,37 @@ jobs:
             1ae61563-170c-4a94-9fdf-b48e015b7484 > SNMP_V3_USERNAME
             12e0ba06-701b-400d-821d-b48e015b74cd > SNMP_V3_AUTH_PASSWORD
             90e81979-e50d-46e9-9177-b48e015b751a > SNMP_V3_PRIV_PASSWORD
+
+      - name: Get dhcp secrets
+        if: matrix.stacks == 'network/gw/dhcp'
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
+            519790de-c23d-41f7-a838-b41b00c9444d > MIKROTIK_USERNAME
+            6b950dde-8f31-4d7b-9fdc-b41b00c993ca > MIKROTIK_PASSWORD
+
+      - name: Get talos secrets
+        if: matrix.stacks == 'k3s/talos-cluster'
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
             704a25a3-5cb3-41a5-a0a1-b41c00c83189 > PROXMOX_VE_ENDPOINT
             bec590dc-5777-441f-8f4b-b41c00c84280 > PROXMOX_VE_API_TOKEN
             f6a9155e-b392-45b8-8254-b41c00c87486 > PROXMOX_VE_SSH_USERNAME
             a64de379-c939-4d47-841e-b41c00c8641d > PROXMOX_SSH_PRIVATE_KEY
+            2ea66873-6852-4af9-bca2-b48f00f84a0a > PROXMOX_EXPORTER_API_TOKEN
+
+      - name: Get cloudflare secrets
+        if: matrix.stacks == 'cloudflare/tunnel'
+        uses: bitwarden/sm-action@v3.0.0
+        with:
+          access_token: ${{ secrets.BWS_ACCESS_TOKEN }}
+          base_url: https://vault.bitwarden.com
+          secrets: |
             34461539-ca00-4f0b-b7e0-b41b00c9c243 > CLOUDFLARE_ACCOUNT_ID
             535c2d90-8239-4f6b-a70f-b41b00c9d06c > CLOUDFLARE_API_TOKEN
             483e35d1-7bd1-46df-9946-b48f00b093d8 > GRAFANA_ACCESS_EMAIL
@@ -353,7 +415,9 @@ jobs:
         run: tofu -chdir=terraform/${{ matrix.stacks }} validate
 
       - name: OpenTofu plan
-        run: tofu -chdir=terraform/${{ matrix.stacks }} plan -out=tofuplan
+        id: plan
+        shell: bash
+        run: bash .github/scripts/plan.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -372,7 +436,33 @@ jobs:
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
+      - name: Verify Proxmox exporter token handoff
+        if: matrix.stacks == 'k3s/talos-cluster'
+        # The GitHub Bitwarden identity is intentionally read-only. Compare its
+        # injected value with encrypted state and fail closed on any mismatch.
+        run: |
+          set +x
+          exporter_token="$(tofu -chdir=terraform/${{ matrix.stacks }} output -raw proxmox_exporter_api_token)"
+
+          case "${exporter_token}" in
+            observability@pve!exporter=*) ;;
+            *)
+              echo "Proxmox exporter token output has an unexpected identity." >&2
+              exit 1
+              ;;
+          esac
+
+          echo "::add-mask::${exporter_token}"
+          if [[ "${exporter_token}" != "${PROXMOX_EXPORTER_API_TOKEN}" ]]; then
+            echo "Bitwarden does not match the OpenTofu-managed Proxmox exporter token." >&2
+            exit 1
+          fi
+          unset exporter_token
+        env:
+          PROXMOX_EXPORTER_API_TOKEN: ${{ env.PROXMOX_EXPORTER_API_TOKEN }}
+
       - name: Upload OpenTofu plan artifact
+        if: steps.plan.outputs.exitcode == '2'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
@@ -380,13 +470,67 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Write sanitized stack result
+        if: always()
+        env:
+          PLAN_EXIT: ${{ job.status == 'success' && steps.plan.outputs.exitcode || '1' }}
+          PLAN_SHA: ${{ github.sha }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), crypto = require('node:crypto');
+          const s = require('./.github/scripts/stacks.cjs');
+          const stack = s.catalog().stacks.find(x => x.root === process.env.STACK_PATH);
+          const exit = Number(process.env.PLAN_EXIT);
+          const digest = exit === 2 ? crypto.createHash('sha256').update(fs.readFileSync(`terraform/${stack.root}/tofuplan`)).digest('hex') : '';
+          fs.mkdirSync('stack-results', {recursive:true});
+          fs.writeFileSync(`stack-results/${stack.id}.json`, JSON.stringify(s.result(stack,process.env.PLAN_SHA,exit,digest)));
+          NODE
+      - name: Publish sanitized stack result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stack-result-${{ strategy.job-index }}
+          path: stack-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  collect-stack-results:
+    name: Collect independent stack results
+    if: always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.has_changes == 'true'
+    needs: [detect-changes, tofu-plan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    outputs:
+      talos: ${{ steps.collect.outputs.talos }}
+      gateway: ${{ steps.collect.outputs.gateway }}
+      cloudflare: ${{ steps.collect.outputs.cloudflare }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: stack-result-*
+          path: stack-results
+      - name: Validate results and record independently converged stacks
+        id: collect
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          SELECTED_ROOTS: ${{ needs.detect-changes.outputs.stacks }}
+        with:
+          script: |
+            await require('./.github/scripts/collect-results.cjs')({github,context,core});
+
   tofu-apply:
     name: OpenTofu apply
-    # Talos remains automatically applied only after a main-branch push. A
-    # gateway dispatch must not implicitly mutate this separate stack.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Selected nonempty Talos plans require the production approval gate.
+    # Manual reconciliation can bootstrap its independent checkpoint.
+    if: always() && github.ref == 'refs/heads/main' && needs.collect-stack-results.result == 'success' && needs.collect-stack-results.outputs.talos != '' && (github.event_name == 'push' || inputs.reconcile_stack == 'talos')
     runs-on: self-hosted
-    needs: tofu-plan
+    environment: production
+    needs: collect-stack-results
     strategy:
       max-parallel: 1
       matrix:
@@ -395,7 +539,13 @@ jobs:
         # network and external-access changes have higher operational impact.
         stacks: [k3s/talos-cluster]
 
+    permissions:
+      contents: read
+      deployments: write
+
     env:
+      REVIEWED_DIGEST: ${{ needs.collect-stack-results.outputs.talos }}
+      STACK_PATH: k3s/talos-cluster
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
 
@@ -422,6 +572,13 @@ jobs:
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
           path: terraform/${{ matrix.stacks }}
+
+      - name: Verify same-run plan digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${REVIEWED_DIGEST}" =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  %s\n' "${REVIEWED_DIGEST}" "terraform/${STACK_PATH}/tofuplan" | sha256sum --check --status
 
       - name: Get Secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -483,6 +640,30 @@ jobs:
         env:
           PROXMOX_EXPORTER_API_TOKEN: ${{ env.PROXMOX_EXPORTER_API_TOKEN }}
 
+      - name: Verify full-root convergence
+        shell: bash
+        run: tofu -chdir="terraform/${STACK_PATH}" plan -input=false -detailed-exitcode -no-color
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_proxmox_endpoint: ${{ env.PROXMOX_VE_ENDPOINT }}
+          TF_VAR_proxmox_api_token: ${{ env.PROXMOX_VE_API_TOKEN }}
+          TF_VAR_proxmox_ssh_private_key: ${{ env.PROXMOX_SSH_PRIVATE_KEY }}
+          TF_VAR_proxmox_ssh_username: ${{ env.PROXMOX_VE_SSH_USERNAME }}
+      - name: Record verified full-root checkpoint
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          CHECKPOINT_STACK: talos
+        with:
+          script: |
+            const s = require('./.github/scripts/stacks.cjs');
+            const stack = s.catalog().stacks.find(x => x.id === process.env.CHECKPOINT_STACK);
+            if (context.ref !== 'refs/heads/main') throw Error('Checkpoint requires trusted main');
+            await s.publish(github,context.repo,stack,context.sha,context.runId,'reconciled');
+
   proxmox-storage-plan:
     name: Plan Proxmox shared storage
     # Shared iSCSI storage is isolated from ordinary OpenTofu planning because
@@ -539,12 +720,12 @@ jobs:
 
           # Evaluate only the state-only contract records. This keeps the live
           # preflight and the later API reconciliation bound to storage.auto.tfvars.
-          tofu -chdir=terraform/${STACK_PATH} plan \
+          tofu -chdir="terraform/${STACK_PATH}" plan \
             -refresh=false \
             -target=terraform_data.proxmox_storage_contract \
             -target=terraform_data.synology_iscsi_contract \
             -out=storage-desired-tofuplan
-          tofu -chdir=terraform/${STACK_PATH} show -json storage-desired-tofuplan |
+          tofu -chdir="terraform/${STACK_PATH}" show -json storage-desired-tofuplan |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -567,14 +748,14 @@ jobs:
                       synology: $desired["terraform_data.synology_iscsi_contract"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/storage-desired.json
+            ' > "terraform/${STACK_PATH}/storage-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
 
       - name: Preflight live Proxmox and Synology storage
         shell: bash
-        run: bash scripts/proxmox-synology-storage-reconcile.sh check terraform/${STACK_PATH}/storage-desired.json
+        run: bash scripts/proxmox-synology-storage-reconcile.sh check "terraform/${STACK_PATH}/storage-desired.json"
         env:
           PROXMOX_ENDPOINT: https://pve.sk.bohdal.name:8006
           PROXMOX_API_TOKEN: ${{ env.PROXMOX_VE_API_TOKEN }}
@@ -598,7 +779,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! tofu -chdir=terraform/${STACK_PATH} show -json "${TOFU_PLAN_ARTIFACT}" |
+          if ! tofu -chdir="terraform/${STACK_PATH}" show -json "${TOFU_PLAN_ARTIFACT}" |
             jq -e '
               [
                 .resource_changes[]?
@@ -728,7 +909,7 @@ jobs:
           # Read the payload from the exact immutable artifact that will be
           # applied. The live reconciler therefore cannot receive a different
           # contract from the one reviewed by the plan guard.
-          tofu -chdir=terraform/${STACK_PATH} show -json "${TOFU_PLAN_ARTIFACT}" |
+          tofu -chdir="terraform/${STACK_PATH}" show -json "${TOFU_PLAN_ARTIFACT}" |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -751,7 +932,7 @@ jobs:
                       synology: $desired["terraform_data.synology_iscsi_contract"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/storage-desired.json
+            ' > "terraform/${STACK_PATH}/storage-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -764,7 +945,7 @@ jobs:
 
       - name: Reconcile Proxmox and Synology storage
         shell: bash
-        run: bash scripts/proxmox-synology-storage-reconcile.sh apply terraform/${STACK_PATH}/storage-desired.json
+        run: bash scripts/proxmox-synology-storage-reconcile.sh apply "terraform/${STACK_PATH}/storage-desired.json"
         env:
           PROXMOX_ENDPOINT: https://pve.sk.bohdal.name:8006
           PROXMOX_API_TOKEN: ${{ env.PROXMOX_VE_API_TOKEN }}
@@ -776,12 +957,17 @@ jobs:
     name: Apply reviewed gateway plan
     # Gateway mutation is available only as an explicit manual action against
     # main; pull requests and ordinary main pushes remain plan-only.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
+    if: always() && github.ref == 'refs/heads/main' && needs.collect-stack-results.result == 'success' && needs.collect-stack-results.outputs.gateway != '' && github.event_name == 'workflow_dispatch' && inputs.apply_gateway
     runs-on: self-hosted
-    needs: tofu-plan
+    needs: collect-stack-results
     environment: production
 
+    permissions:
+      contents: read
+      deployments: write
+
     env:
+      REVIEWED_DIGEST: ${{ needs.collect-stack-results.outputs.gateway }}
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
       STACK_PATH: network/gw/interfaces
@@ -803,6 +989,13 @@ jobs:
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
           path: terraform/${{ env.STACK_PATH }}
+
+      - name: Verify same-run plan digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${REVIEWED_DIGEST}" =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  %s\n' "${REVIEWED_DIGEST}" "terraform/${STACK_PATH}/tofuplan" | sha256sum --check --status
 
       - name: Get gateway secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -839,12 +1032,37 @@ jobs:
           TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
           TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
 
+      - name: Verify full-root convergence
+        shell: bash
+        run: tofu -chdir="terraform/${STACK_PATH}" plan -input=false -detailed-exitcode -no-color
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_mikrotik_username: ${{ env.MIKROTIK_USERNAME }}
+          TF_VAR_mikrotik_password: ${{ env.MIKROTIK_PASSWORD }}
+          TF_VAR_kubernetes_bgp_tcp_md5_key: ${{ env.KUBERNETES_BGP_TCP_MD5_KEY }}
+          TF_VAR_snmp_v2_community: ${{ env.SNMP_V2_COMMUNITY }}
+          TF_VAR_snmp_v3_username: ${{ env.SNMP_V3_USERNAME }}
+          TF_VAR_snmp_v3_auth_password: ${{ env.SNMP_V3_AUTH_PASSWORD }}
+          TF_VAR_snmp_v3_priv_password: ${{ env.SNMP_V3_PRIV_PASSWORD }}
+      - name: Record verified full-root checkpoint
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          CHECKPOINT_STACK: gateway
+        with:
+          script: |
+            const s = require('./.github/scripts/stacks.cjs');
+            const stack = s.catalog().stacks.find(x => x.id === process.env.CHECKPOINT_STACK);
+            if (context.ref !== 'refs/heads/main') throw Error('Checkpoint requires trusted main');
+            await s.publish(github,context.repo,stack,context.sha,context.runId,'reconciled');
+
   gateway-snmp-plan:
     name: Plan gateway SNMP adoption
     # A separate targeted artifact avoids planning the provider-broken IP and
     # BGP updates while retaining reviewable, immutable OpenTofu execution.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.apply_gateway_snmp || inputs.plan_gateway_snmp) && !inputs.apply_gateway && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
+    needs: validate-dispatch
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -2396,12 +2614,12 @@ jobs:
           # Evaluate the state-only qdevice records without refreshing or
           # mutating RouterOS. The live preflight below consumes these values
           # so USB checks and global-path checks cannot drift from qdevice.tf.
-          tofu -chdir=terraform/${STACK_PATH} plan \
+          tofu -chdir="terraform/${STACK_PATH}" plan \
             -refresh=false \
             -target=terraform_data.qdevice_mounts[0] \
             -target=terraform_data.qdevice_container[0] \
             -out=qdevice-desired-tofuplan
-          tofu -chdir=terraform/${STACK_PATH} show -json qdevice-desired-tofuplan |
+          tofu -chdir="terraform/${STACK_PATH}" show -json qdevice-desired-tofuplan |
             jq -ce '
               [
                 .planned_values.root_module.resources[]?
@@ -2424,7 +2642,7 @@ jobs:
                       container: $desired["terraform_data.qdevice_container[0]"]
                     }
                 end
-            ' > terraform/${STACK_PATH}/qdevice-desired.json
+            ' > "terraform/${STACK_PATH}/qdevice-desired.json"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -2473,7 +2691,7 @@ jobs:
               ' | curl --config -
           }
 
-          qdevice_desired="$(jq -ce . terraform/${STACK_PATH}/qdevice-desired.json)"
+          qdevice_desired="$(jq -ce . "terraform/${STACK_PATH}/qdevice-desired.json")"
           if ! jq -e '
             def safe_global_path:
               if type != "string" then false
@@ -2529,8 +2747,8 @@ jobs:
             ] | map(select((type == "string") and length > 0)) | unique
           ' <<<"${qdevice_desired}")"
 
-          state_list="$(tofu -chdir=terraform/${STACK_PATH} state list)"
-          if legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
+          state_list="$(tofu -chdir="terraform/${STACK_PATH}" state list)"
+          if _legacy_state="$(grep -E '^(routeros_container_mounts\.qdevice|routeros_container\.qdevice)' <<<"${state_list}")"; then
             echo "Legacy provider-managed qdevice mount/container state must be removed by a reviewed migration." >&2
             exit 1
           fi
@@ -2540,19 +2758,19 @@ jobs:
             local import_id="$2"
 
             if grep -Fqx -- "${address}" <<<"${state_list}"; then
-              if ! tofu -chdir=terraform/${STACK_PATH} state show "${address}" >/dev/null; then
+              if ! tofu -chdir="terraform/${STACK_PATH}" state show "${address}" >/dev/null; then
                 echo "State lists ${address}, but state show failed; refusing to import or continue." >&2
                 exit 1
               fi
               if [[ "${import_id}" != "." ]]; then
-                state_id="$(tofu -chdir=terraform/${STACK_PATH} state show -no-color "${address}" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
+                state_id="$(tofu -chdir="terraform/${STACK_PATH}" state show -no-color "${address}" | awk '$1 == "id" && $2 == "=" {gsub(/^\"|\"$/, "", $3); print $3; exit}')"
                 if [[ -z "${state_id}" || "${state_id}" != "${import_id}" ]]; then
                   echo "State identity for ${address} does not match the live RouterOS object; refusing to continue." >&2
                   exit 1
                 fi
               fi
             else
-              tofu -chdir=terraform/${STACK_PATH} import -input=false "${address}" "${import_id}" >/dev/null
+              tofu -chdir="terraform/${STACK_PATH}" import -input=false "${address}" "${import_id}" >/dev/null
             fi
           }
 
@@ -2931,7 +3149,7 @@ jobs:
           printf 'TF_VAR_qdevice=%s\n' "$qdevice_json" >> "$GITHUB_ENV"
 
       - name: OpenTofu init
-        run: tofu -chdir=terraform/$STACK_PATH init
+        run: tofu -chdir="terraform/$STACK_PATH" init
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -2949,7 +3167,7 @@ jobs:
           # the reviewed plan changes those paths. Re-read the full container
           # list after the gate so a newly created stopped container cannot be
           # affected by the immutable initial artifact.
-          migration_required="$(tofu -chdir=terraform/$STACK_PATH show -json "$INITIAL_PLAN_FILE" | jq -r '
+          migration_required="$(tofu -chdir="terraform/$STACK_PATH" show -json "$INITIAL_PLAN_FILE" | jq -r '
             def path($value):
               ($value // {}) as $object
               | ($object["layer-dir"] // $object.layer_dir // "") as $layer_dir
@@ -2984,7 +3202,7 @@ jobs:
           fi
 
       - name: Apply initial reviewed qdevice plan
-        run: tofu -chdir=terraform/$STACK_PATH apply -auto-approve "$INITIAL_PLAN_FILE"
+        run: tofu -chdir="terraform/$STACK_PATH" apply -auto-approve "$INITIAL_PLAN_FILE"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -3006,7 +3224,7 @@ jobs:
 
       - name: Create immutable post-recovery qdevice plan
         run: >-
-          tofu -chdir=terraform/$STACK_PATH plan
+          tofu -chdir="terraform/$STACK_PATH" plan
           -target=routeros_interface_veth.qdevice[0]
           -target=routeros_interface_bridge_port.qdevice[0]
           -target='routeros_interface_bridge_vlan.bridge_vlan["100"]'
@@ -3015,7 +3233,7 @@ jobs:
           -target=terraform_data.qdevice_mounts[0]
           -target=terraform_data.qdevice_container[0]
           -target=routeros_ip_firewall_filter.allow_qdevice_qnetd[0]
-          -out=$TOFU_PLAN_ARTIFACT
+          -out="$TOFU_PLAN_ARTIFACT"
         env:
           AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
@@ -3032,7 +3250,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! tofu -chdir=terraform/$STACK_PATH show -json "$TOFU_PLAN_ARTIFACT" |
+          if ! tofu -chdir="terraform/$STACK_PATH" show -json "$TOFU_PLAN_ARTIFACT" |
             jq -e '
               [.resource_changes[]? | select(.change.actions != ["no-op"])] as $changes
               | [
@@ -3174,7 +3392,7 @@ jobs:
           # state is piped straight to jq and only those two addresses leave
           # the command; no state dump is logged.
           qdevice_desired="$(
-            tofu -chdir=terraform/${STACK_PATH} show -json |
+            tofu -chdir="terraform/${STACK_PATH}" show -json |
               jq -ce '
                 [
                   .values.root_module.resources[]?
@@ -3977,6 +4195,7 @@ jobs:
     # and BGP stack while preserving immutable review before production apply.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_dhcp && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_ipfix && !inputs.apply_cloudflare
     runs-on: self-hosted
+    needs: validate-dispatch
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -4086,6 +4305,7 @@ jobs:
     # keeping immutable reviewed execution and full mutual exclusion.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_gateway_ipfix && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_cloudflare
     runs-on: self-hosted
+    needs: validate-dispatch
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -4216,12 +4436,17 @@ jobs:
     name: Apply reviewed Cloudflare plan
     # External publication is opt-in and mutually exclusive with every gateway
     # mutation path so one approval always has one operational blast radius.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.apply_cloudflare && !inputs.apply_gateway && !inputs.apply_gateway_snmp && !inputs.plan_gateway_snmp && !inputs.apply_gateway_bgp && !inputs.plan_gateway_bgp && !inputs.apply_gateway_firewall && !inputs.plan_gateway_firewall && !inputs.apply_gateway_wireguard && !inputs.apply_gateway_dhcp && !inputs.apply_gateway_ipfix
+    if: always() && github.ref == 'refs/heads/main' && needs.collect-stack-results.result == 'success' && needs.collect-stack-results.outputs.cloudflare != '' && github.event_name == 'workflow_dispatch' && inputs.apply_cloudflare
     runs-on: self-hosted
-    needs: tofu-plan
+    needs: collect-stack-results
     environment: production
 
+    permissions:
+      contents: read
+      deployments: write
+
     env:
+      REVIEWED_DIGEST: ${{ needs.collect-stack-results.outputs.cloudflare }}
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
       MISE_CACHE_DIR: ${{ github.workspace }}/.mise-cache
       STACK_PATH: cloudflare/tunnel
@@ -4242,6 +4467,13 @@ jobs:
         with:
           name: ${{ env.TOFU_PLAN_ARTIFACT }}
           path: terraform/${{ env.STACK_PATH }}
+
+      - name: Verify same-run plan digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${REVIEWED_DIGEST}" =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  %s\n' "${REVIEWED_DIGEST}" "terraform/${STACK_PATH}/tofuplan" | sha256sum --check --status
 
       - name: Get Cloudflare secrets
         uses: bitwarden/sm-action@v3.0.0
@@ -4269,3 +4501,22 @@ jobs:
           TF_VAR_cloudflare_account_id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           TF_VAR_cloudflare_api_token: ${{ env.CLOUDFLARE_API_TOKEN }}
           TF_VAR_grafana_access_email: ${{ env.GRAFANA_ACCESS_EMAIL }}
+      - name: Verify full-root convergence
+        shell: bash
+        run: tofu -chdir="terraform/${STACK_PATH}" plan -input=false -detailed-exitcode -no-color
+        env:
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_cloudflare_account_id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_api_token: ${{ env.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_access_email: ${{ env.GRAFANA_ACCESS_EMAIL }}
+      - name: Record verified full-root checkpoint
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          CHECKPOINT_STACK: cloudflare
+        with:
+          script: |
+            const s = require('./.github/scripts/stacks.cjs');
+            const stack = s.catalog().stacks.find(x => x.id === process.env.CHECKPOINT_STACK);
+            if (context.ref !== 'refs/heads/main') throw Error('Checkpoint requires trusted main');
+            await s.publish(github,context.repo,stack,context.sha,context.runId,'reconciled');

@@ -85,3 +85,7 @@ Show the user the sanitized deployment evidence and ask for explicit in-chat app
 ## Completion record
 
 Report the task classification, agents run, repair-cycle count, changed files, validation results, firewall status, PR status, and any deployment approval still required. State verification gaps plainly.
+
+## Stack selection validation
+
+For OpenTofu catalog, selector, checkpoint, or workflow changes, run `mise run workflow-check` inside the devcontainer. It verifies all active root/backend-key coverage and dispatch mappings, native decision fixtures, and pinned actionlint with required pinned ShellCheck. Follow the canonical checkpoint and production gate contract in `AGENTS.md`; targeted recovery must never claim full-root convergence. PR validation selects affected roots, so verify the stable `OpenTofu validation complete` aggregate and `OpenTofu repository checks` instead of assuming every historical matrix check is present. Recommend these two checks for branch protection; do not assume the current ruleset already requires them.

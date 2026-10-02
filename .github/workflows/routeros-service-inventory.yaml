@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   inventory-www-ssl:
+    if: github.ref == 'refs/heads/main'
     name: Inventory www-ssl services
     runs-on: self-hosted
 
