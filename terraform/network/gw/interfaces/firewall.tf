@@ -20,6 +20,19 @@ data "routeros_ip_firewall" "forward_rules" {
   }
 }
 
+# Resolve the unique live deny anchor without pulling shared forward ordering
+# into the targeted NAS-to-camera plan.
+data "routeros_ip_firewall" "forward_camera_anchor" {
+  provider = routeros.gw
+
+  rules {
+    filter = {
+      chain   = "forward"
+      comment = "sk-firewall/forward/drop-inter-vlan"
+    }
+  }
+}
+
 data "routeros_ip_firewall" "nat_rules" {
   provider = routeros.gw
 
@@ -87,6 +100,7 @@ locals {
       try(routeros_ip_firewall_filter.forward_allow_smtp_relay_from_printer.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_synology_snmp.id, null),
       try(routeros_ip_firewall_filter.allow_synology_snmp_responses.id, null),
+      try(routeros_ip_firewall_filter.allow_synology_to_camera.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_unifi_snmp.id, null),
       try(routeros_ip_firewall_filter.allow_unifi_snmp_responses.id, null),
       try(routeros_ip_firewall_filter.allow_kubernetes_proxmox.id, null),
@@ -646,6 +660,46 @@ resource "routeros_ip_firewall_filter" "forward_allow_synology_from_vlans" {
   }
 }
 
+# Let only new connections from the Synology host reach its assigned
+# surveillance camera; established/related handling admits stateful replies.
+# Omitting protocol and port matchers intentionally covers every IP protocol
+# within this exact host and VLAN-interface pair.
+resource "routeros_ip_firewall_filter" "allow_synology_to_camera" {
+  provider         = routeros.gw
+  action           = "accept"
+  chain            = "forward"
+  connection_state = "new"
+  src_address      = var.firewall_policy.synology_address
+  dst_address      = var.firewall_policy.surveillance_camera_address
+  in_interface     = try(var.vlans[tostring(var.firewall_policy.synology_vlan_id)].interface_name, null)
+  out_interface    = try(var.vlans[tostring(var.firewall_policy.surveillance_camera_vlan_id)].interface_name, null)
+  comment          = "sk-firewall/forward/allow-synology-to-camera"
+  # Use this only as a create-time hint; the shared forward sequence owns later
+  # ordering and can recover when a managed deny anchor is recreated.
+  place_before = try(one(data.routeros_ip_firewall.forward_camera_anchor.rules).id, null)
+
+  lifecycle {
+    ignore_changes = [place_before]
+
+    precondition {
+      condition = (
+        var.firewall_policy.synology_vlan_id != var.firewall_policy.surveillance_camera_vlan_id &&
+        contains(keys(var.vlans), tostring(var.firewall_policy.synology_vlan_id)) &&
+        contains(keys(var.vlans), tostring(var.firewall_policy.surveillance_camera_vlan_id)) &&
+        try(var.vlans[tostring(var.firewall_policy.synology_vlan_id)].ip_address, null) != null &&
+        try(var.vlans[tostring(var.firewall_policy.surveillance_camera_vlan_id)].ip_address, null) != null &&
+        try(var.vlans[tostring(var.firewall_policy.synology_vlan_id)].interface_name, null) != null &&
+        try(var.vlans[tostring(var.firewall_policy.surveillance_camera_vlan_id)].interface_name, null) != null
+      )
+      error_message = "The NAS and surveillance camera must use distinct, routed VLANs present in the gateway inventory."
+    }
+  }
+
+  # Include the read-only chain snapshot in the isolated plan so its upload
+  # guard can reject unsafe live deny-anchor state before creating an artifact.
+  depends_on = [data.routeros_ip_firewall.forward_rules]
+}
+
 resource "routeros_ip_firewall_filter" "forward_allow_kubernetes_service_vips" {
   provider          = routeros.gw
   count             = var.kubernetes_bgp.enabled ? 1 : 0
@@ -1049,6 +1103,7 @@ resource "routeros_move_items" "forward_rules" {
       for vlan_id in sort(keys(local.synology_routed_vlans)) :
       routeros_ip_firewall_filter.forward_allow_synology_from_vlans[vlan_id].id
     ],
+    [routeros_ip_firewall_filter.allow_synology_to_camera.id],
     [routeros_ip_firewall_filter.forward_allow_trusted_lan_to_wan.id],
     compact([
       for key in local.active_forward_adoption_keys : try(routeros_ip_firewall_filter.adopted_forward[key].id, null)

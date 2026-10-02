@@ -147,10 +147,12 @@ variable "firewall_policy" {
     smtp_relay_source_cidr            = optional(string, "10.1.10.250")
     smtp_relay_service_vip            = optional(string, "10.1.30.58")
     smtp_relay_port                   = optional(string, "587")
-    # Keep the static NAS identity and VLAN association explicit while deriving
-    # the routed source VLAN set from the authoritative VLAN inventory.
+    # Keep the NAS and camera identities tied to explicit VLAN interfaces;
+    # routed NAS access to the camera remains a separate exact exception.
     synology_address              = optional(string, "10.1.100.10")
     synology_vlan_id              = optional(number, 100)
+    surveillance_camera_address   = optional(string, "10.1.101.20")
+    surveillance_camera_vlan_id   = optional(number, 101)
     synology_source_vlan_ids      = optional(set(number), [])
     internal_network_address_list = optional(string, "sk-internal-vlan-networks")
     internal_interface_list       = optional(string, "sk-internal-vlans")
