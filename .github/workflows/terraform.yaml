@@ -1710,10 +1710,23 @@ jobs:
                     "dst_address_list", "in_interface_list", "out_interface_list"][];
                   . as $name | camera_rule_value_is_unset($name; $rule[$name]));
 
-              [.planned_values.root_module.resources[]?
+              # Read the live ordered snapshot from this plan's targeted data-source change.
+              [.resource_changes[]?
                 | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_rules")
-                | .values.rules[]?
-              ] as $forward_rules
+              ] as $forward_rule_sources
+              | (($forward_rule_sources | length) == 1) as $forward_rule_source_count_ok
+              | (try($forward_rule_sources[0].change.actions == ["read"]) catch false) as $forward_rule_source_action_ok
+              | (try(($forward_rule_sources[0].change.after.rules | type) == "array") catch false) as $forward_rule_rules_array_ok
+              | (try(camera_rule_contains_unknown(
+                  $forward_rule_sources[0].change.after_unknown.rules // {}
+                ) == false) catch false) as $forward_rule_rules_known
+              | ($forward_rule_source_count_ok and $forward_rule_source_action_ok
+                and $forward_rule_rules_array_ok and $forward_rule_rules_known) as $forward_rule_source_ok
+              | (if $forward_rule_source_ok then
+                  $forward_rule_sources[0].change.after.rules
+                else
+                  []
+                end) as $forward_rules
               | [$forward_rules[] | select(.comment == "sk-firewall/forward/drop-inter-vlan")] as $inter_vlan_rows
               | [$forward_rules[] | select(.comment == "sk-firewall/forward/drop-unmatched")] as $terminal_rows
               | [$forward_rules[] | select(.comment == "sk-firewall/forward/allow-synology-to-camera")] as $camera_rows
@@ -1769,7 +1782,7 @@ jobs:
                     place_before_anchor: (try($rule.place_before == $anchor_id) catch false),
                     declared_behavior_only: (try(camera_rule_has_only_declared_behavior($rule)) catch false)
                   };
-              (if $anchors_valid then
+              (if $forward_rule_source_ok and $anchors_valid then
                   if ($changes | length) == 0 then
                     $camera_order_valid and live_camera_rule_has_exact_fields($camera_rows[0])
                   elif ($changes | length) == 1 then
@@ -1791,6 +1804,11 @@ jobs:
                 end) as $guard_accepted
               # On rejection, expose only fixed counts and Boolean checks, never plan values.
               | {
+                  forward_rule_source_count: ($forward_rule_sources | length),
+                  forward_rule_source_count_ok: $forward_rule_source_count_ok,
+                  forward_rule_source_action_ok: $forward_rule_source_action_ok,
+                  forward_rule_rules_array_ok: $forward_rule_rules_array_ok,
+                  forward_rule_rules_known: $forward_rule_rules_known,
                   forward_rule_count: ($forward_rules | length),
                   inter_vlan_anchor_count: ($inter_vlan_rows | length),
                   terminal_anchor_count: ($terminal_rows | length),
