@@ -1605,7 +1605,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Accept only the exact anchor-based create, a same-ID correction, or an empty plan.
+          # Require a unique, enabled, correctly ordered pair of live deny anchors
+          # before any artifact is uploaded, including for an otherwise empty plan.
+          # Accept only the exact anchored create, a same-ID correction, or an empty plan.
           # Reject undeclared or unknown policy behavior while ignoring provider metadata.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
             | jq -e '
@@ -1686,32 +1688,40 @@ jobs:
                 and camera_rule_has_exact_fields(.change.after; $anchor_id);
 
               [.planned_values.root_module.resources[]?
-                | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_camera_anchor")
+                | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_rules")
                 | .values.rules[]?
-                | select(
-                    .chain == "forward"
-                    and .comment == "sk-firewall/forward/drop-inter-vlan"
-                    and .action == "drop"
-                    and (.disabled == false or .disabled == null)
-                  )
-                | .id] as $anchor_ids
+              ] as $forward_rules
+              | [$forward_rules[] | select(.comment == "sk-firewall/forward/drop-inter-vlan")] as $inter_vlan_rows
+              | [$forward_rules[] | select(.comment == "sk-firewall/forward/drop-unmatched")] as $terminal_rows
               | [.resource_changes[]?
                 | select((.mode // "managed") == "managed" and .change.actions != ["no-op"])] as $changes
-              | ($anchor_ids | length) == 1
-                and $anchor_ids[0] != null
-                and (
+              | (if ($inter_vlan_rows | length) == 1 and ($terminal_rows | length) == 1 then
+                  $inter_vlan_rows[0].action == "drop"
+                  and ($inter_vlan_rows[0].disabled == false or $inter_vlan_rows[0].disabled == null)
+                  and $inter_vlan_rows[0].id != null
+                  and $terminal_rows[0].action == "drop"
+                  and ($terminal_rows[0].disabled == false or $terminal_rows[0].disabled == null)
+                  and $terminal_rows[0].id != null
+                  and (($forward_rules | map(.id) | index($inter_vlan_rows[0].id))
+                    < ($forward_rules | map(.id) | index($terminal_rows[0].id)))
+                else
+                  false
+                end) as $anchors_valid
+              | if $anchors_valid then
                   if ($changes | length) == 0 then
                     true
                   elif ($changes | length) == 1 then
                     ($changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera")
                     and (
-                      ($changes[0] | camera_rule_is_exact_create($anchor_ids[0]))
-                      or ($changes[0] | camera_rule_is_exact_update($anchor_ids[0]))
+                      ($changes[0] | camera_rule_is_exact_create($inter_vlan_rows[0].id))
+                      or ($changes[0] | camera_rule_is_exact_update($inter_vlan_rows[0].id))
                     )
                   else
                     false
                   end
-                )
+                else
+                  false
+                end
             ' >/dev/null; then
             echo "The NAS-to-camera plan contains a change other than the exact camera rule create, same-ID corrective update, or an empty plan; refusing to upload it." >&2
             exit 1
