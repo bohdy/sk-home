@@ -1710,7 +1710,7 @@ jobs:
                     "dst_address_list", "in_interface_list", "out_interface_list"][];
                   . as $name | camera_rule_value_is_unset($name; $rule[$name]));
 
-              # Read the live ordered snapshot from this plan's targeted data-source change.
+              # Read the live ordered snapshot from the targeted forward-chain data source result.
               [.resource_changes[]?
                 | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_rules")
               ] as $forward_rule_sources
