@@ -137,3 +137,7 @@ Before publishing:
 - confirm `AGENTS.md` and `README.md` were updated when the change required documentation updates
 
 If the branch already has an open PR, update that PR instead of creating a duplicate unless the user asks for a second PR.
+
+## Stack selection validation
+
+For OpenTofu catalog, selector, checkpoint, or workflow changes, run `mise run workflow-check` inside the devcontainer. It verifies all active root/backend-key coverage and dispatch mappings, native decision fixtures, and pinned actionlint. Follow the canonical checkpoint and production gate contract in `AGENTS.md`; targeted recovery must never claim full-root convergence. PR validation selects affected roots, so verify the stable `OpenTofu validation complete` aggregate and `OpenTofu repository checks` instead of assuming every historical matrix check is present. Recommend these two checks for branch protection; do not assume the current ruleset already requires them.

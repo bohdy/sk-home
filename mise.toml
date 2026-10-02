@@ -1,4 +1,6 @@
 [tools]
+# Pin workflow lint syntax so local and hosted validation agree.
+actionlint = "1.7.12"
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
@@ -17,3 +19,11 @@ run = [
 [tasks.smtp-relay-preflight]
 description = "Verify live SMTP relay prerequisites without reading Secret data."
 run = "bash scripts/smtp-relay-preflight.sh"
+
+[tasks.workflow-test]
+description = "Verify stack selection, checkpoints, and workflow trust boundaries."
+run = "node --test .github/scripts/*.test.cjs"
+
+[tasks.workflow-check]
+description = "Validate the catalog, workflow contracts, and GitHub Actions syntax."
+run = ["node .github/scripts/validate-catalog.cjs", "mise run workflow-test", "actionlint"]

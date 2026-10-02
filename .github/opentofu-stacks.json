@@ -1,0 +1,194 @@
+{
+  "bootstrap_comparison_sha": "3207564f7b7485acd94efa78e6f57af5b8f86cf6",
+  "dispatch_modes": {
+    "apply_cloudflare": {
+      "ordinary": true,
+      "stack": "cloudflare"
+    },
+    "apply_gateway": {
+      "ordinary": true,
+      "stack": "gateway"
+    },
+    "apply_gateway_bgp": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_dhcp": {
+      "ordinary": false,
+      "stack": "dhcp"
+    },
+    "apply_gateway_ether7": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_firewall": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_ipfix": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_nas_camera": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_proxmox": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_qdevice": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_snmp": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_unifi_ap": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_gateway_wireguard": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "apply_proxmox_storage": {
+      "ordinary": false,
+      "stack": "storage"
+    },
+    "plan_gateway_bgp": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_ether7": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_firewall": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_nas_camera": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_proxmox": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_qdevice": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_snmp": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_gateway_unifi_ap": {
+      "ordinary": false,
+      "stack": "gateway"
+    },
+    "plan_proxmox_storage": {
+      "ordinary": false,
+      "stack": "storage"
+    }
+  },
+  "schema": 1,
+  "stacks": [
+    {
+      "checkpoint_environment": "infra-checkpoint-gateway",
+      "id": "gateway",
+      "inputs": [
+        "terraform/network/gw/interfaces/**/*.tf",
+        "terraform/network/gw/interfaces/**/*.tfvars",
+        "terraform/network/gw/interfaces/.terraform.lock.hcl",
+        "mise.toml",
+        "scripts/routeros-qdevice-recovery.sh"
+      ],
+      "lifecycle": "ordinary",
+      "root": "network/gw/interfaces",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/gw/terraform.tfstate"
+    },
+    {
+      "checkpoint_environment": "infra-checkpoint-dhcp",
+      "id": "dhcp",
+      "inputs": [
+        "terraform/network/gw/dhcp/**/*.tf",
+        "terraform/network/gw/dhcp/**/*.tfvars",
+        "terraform/network/gw/dhcp/.terraform.lock.hcl",
+        "mise.toml"
+      ],
+      "lifecycle": "manual",
+      "root": "network/gw/dhcp",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/network-core/dhcp/terraform.tfstate"
+    },
+    {
+      "checkpoint_environment": "infra-checkpoint-talos",
+      "id": "talos",
+      "inputs": [
+        "terraform/k3s/talos-cluster/**/*.tf",
+        "terraform/k3s/talos-cluster/**/*.tfvars",
+        "terraform/k3s/talos-cluster/.terraform.lock.hcl",
+        "mise.toml",
+        "terraform/k3s/talos-cluster/image/schematic.yaml"
+      ],
+      "lifecycle": "gated",
+      "root": "k3s/talos-cluster",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/k3s/talos-cluster/terraform.tfstate"
+    },
+    {
+      "checkpoint_environment": "infra-checkpoint-storage",
+      "id": "storage",
+      "inputs": [
+        "terraform/proxmox/storage/**/*.tf",
+        "terraform/proxmox/storage/**/*.tfvars",
+        "terraform/proxmox/storage/.terraform.lock.hcl",
+        "mise.toml",
+        "scripts/proxmox-synology-storage-reconcile.sh"
+      ],
+      "lifecycle": "manual",
+      "root": "proxmox/storage",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/proxmox/storage/terraform.tfstate"
+    },
+    {
+      "checkpoint_environment": "infra-checkpoint-cloudflare",
+      "id": "cloudflare",
+      "inputs": [
+        "terraform/cloudflare/tunnel/**/*.tf",
+        "terraform/cloudflare/tunnel/**/*.tfvars",
+        "terraform/cloudflare/tunnel/.terraform.lock.hcl",
+        "mise.toml"
+      ],
+      "lifecycle": "ordinary",
+      "root": "cloudflare/tunnel",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/cloudflare/tunnel/terraform.tfstate"
+    },
+    {
+      "checkpoint_environment": "infra-checkpoint-certificates",
+      "id": "certificates",
+      "inputs": [
+        "terraform/network/gw/certificates/**/*.tf",
+        "terraform/network/gw/certificates/**/*.tfvars",
+        "terraform/network/gw/certificates/.terraform.lock.hcl",
+        "mise.toml",
+        ".github/workflows/mikrotik-certificates.yaml"
+      ],
+      "lifecycle": "separate",
+      "root": "network/gw/certificates",
+      "shared_inputs": [],
+      "state_key": "sk-home/home/gw/certificates/terraform.tfstate"
+    }
+  ],
+  "validation_inputs": [
+    ".github/opentofu-stacks.json",
+    ".github/scripts/**",
+    ".github/workflows/terraform*.yaml",
+    ".pre-commit-config.yaml"
+  ]
+}

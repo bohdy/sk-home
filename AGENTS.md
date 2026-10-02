@@ -118,6 +118,14 @@ The orchestrator must classify each task before delegating and use the smallest 
 - Do not create or update a pull request when the repo does not yet define the required checks for the changed code; add or document those checks first.
 - Pull request bodies must include a short summary plus a longer description that covers every changed file or logical change area.
 
+## OpenTofu stack selection contract
+
+- `.github/opentofu-stacks.json` is the source of truth for stable stack IDs, existing roots/backend keys, executable inputs, explicit shared consumers, dedicated dispatch mappings, and metadata checkpoint environments. Maintain the catalog and its root/key/dispatch coverage checks when adding a root or consumer; generic CI-only changes must not select every ordinary infrastructure plan.
+- Trusted main selection uses independently successful canonical checkpoints with validated schema, workflow provenance, successful status, and commit ancestry. Uninitialized roots use the committed immutable comparison anchor cumulatively and remain visibly uninitialized; never treat that anchor as convergence or advance a checkpoint after failed/cancelled work. Pending consumed-input changes must remain selected on later documentation-only pushes. Missing checkpoint bootstrap uses a named `reconcile_stack` choice, mutually exclusive with every existing mode.
+- PR selection uses merge-base and both catalog mappings for renamed/deleted inputs without deployment API access. All PR-controlled checks stay on hosted runners without infrastructure credentials, remote backend initialization, binary plans, or artifacts. Run common checks once and preserve the stable aggregate `OpenTofu validation complete` result for branch protection.
+- Empty verified full-root plans may record independent metadata success; nonempty plans require their own immutable same-run digest before any apply. Full Talos applies require the `production` environment. Only full gateway, Cloudflare, and Talos applies followed by empty full-root verification may publish reconciled checkpoints; targeted recovery must never advance a canonical root checkpoint. The existing exporter-token comparison remains mandatory before Talos convergence.
+- Run `mise run workflow-check` for catalog validation, native selector/checkpoint/workflow fixtures, and pinned actionlint. Keep fixed-shape result artifacts and checkpoint logs free of credentials, planned values, and raw API responses. GitHub checkpoint deployments are nonproduction metadata and must never replace production environment gates.
+
 ## Verification
 
 - Verify the changed files after editing them.

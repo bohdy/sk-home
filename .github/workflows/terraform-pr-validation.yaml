@@ -3,6 +3,9 @@ name: OpenTofu
 on:
   pull_request:
     paths:
+      - ".github/workflows/mikrotik-certificates.yaml"
+      - ".github/opentofu-stacks.json"
+      - ".github/scripts/**"
       - "terraform/**"
       - ".github/workflows/terraform.yaml"
       - ".github/workflows/terraform-pr-validation.yaml"
@@ -20,6 +23,40 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  detect-changes:
+    name: Select PR validation roots
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.select.outputs.stacks }}
+      has_changes: ${{ steps.select.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select validation inputs without deployment access
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            await require('./.github/scripts/select-stacks.cjs')({github,context,core});
+
+  common-checks:
+    name: OpenTofu repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4.0.1
+        with:
+          version: 2026.9.2
+          install: true
+      - name: Check formatting and workflow selection contracts
+        run: |
+          tofu fmt -recursive -check -diff
+          mise run workflow-check
+
   tofu-pr-validate:
     # Preserve the existing matrix check context while this job performs only
     # credential-free validation rather than a remote-state plan.
@@ -27,10 +64,13 @@ jobs:
     # Use an ephemeral hosted runner because the matrix evaluates code supplied
     # by an untrusted pull request and must not share the production runner.
     runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
     strategy:
+      fail-fast: false
       max-parallel: 1
       matrix:
-        stacks: [network/gw/interfaces, network/gw/dhcp, k3s/talos-cluster, proxmox/storage, cloudflare/tunnel]
+        stacks: ${{ fromJSON(needs.detect-changes.outputs.stacks) }}
 
     env:
       MISE_DATA_DIR: ${{ github.workspace }}/.mise-data
@@ -99,11 +139,23 @@ jobs:
             fi
           done
 
-      - name: OpenTofu format check
-        run: tofu fmt -recursive -check -diff
-
       - name: OpenTofu init without backend
         run: tofu -chdir=terraform/${{ matrix.stacks }} init -backend=false -input=false
 
       - name: OpenTofu validate
         run: tofu -chdir=terraform/${{ matrix.stacks }} validate -no-color
+
+  validation-complete:
+    name: OpenTofu validation complete
+    if: always()
+    needs: [detect-changes, common-checks, tofu-pr-validate]
+    runs-on: ubuntu-latest
+    env:
+      SELECTOR_RESULT: ${{ needs.detect-changes.result }}
+      COMMON_RESULT: ${{ needs.common-checks.result }}
+      VALIDATION_RESULT: ${{ needs.tofu-pr-validate.result }}
+    steps:
+      - name: Require successful applicable checks
+        run: |
+          [[ "$SELECTOR_RESULT" == success && "$COMMON_RESULT" == success ]]
+          [[ "$VALIDATION_RESULT" == success || "$VALIDATION_RESULT" == skipped ]]

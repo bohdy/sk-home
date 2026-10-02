@@ -2,6 +2,13 @@
 repos:
   - repo: local
     hooks:
+      - id: workflow-check
+        name: workflow and stack selection contracts
+        entry: mise run workflow-check
+        language: system
+        pass_filenames: false
+        files: ^(\.github/|mise.toml|\.pre-commit-config.yaml)
+
       - id: dns-check
         name: dns rendered manifests
         entry: mise run dns-check
