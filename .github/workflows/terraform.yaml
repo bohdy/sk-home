@@ -1745,7 +1745,30 @@ jobs:
                 else
                   false
                 end) as $camera_order_valid
-              | if $anchors_valid then
+              | def camera_rule_field_diagnostics($rule; $anchor_id):
+                  {
+                    required_fields_ok: (try(
+                      $rule.action == "accept"
+                      and $rule.chain == "forward"
+                      and $rule.connection_state == "new"
+                      and $rule.src_address == "10.1.100.10"
+                      and $rule.dst_address == "10.1.101.20"
+                      and $rule.comment == "sk-firewall/forward/allow-synology-to-camera"
+                    ) catch false),
+                    interfaces_ok: (try(
+                      $rule.in_interface == "vlan100"
+                      and $rule.out_interface == "vlan101"
+                    ) catch false),
+                    disabled_enabled: (try(firewall_rule_is_enabled($rule)) catch false),
+                    optional_matchers_unset: (try(
+                      all(["protocol", "src_port", "dst_port", "src_address_list",
+                          "dst_address_list", "in_interface_list", "out_interface_list"][];
+                        . as $name | camera_rule_value_is_unset($name; $rule[$name]))
+                    ) catch false),
+                    place_before_anchor: (try($rule.place_before == $anchor_id) catch false),
+                    declared_behavior_only: (try(camera_rule_has_only_declared_behavior($rule)) catch false)
+                  };
+              (if $anchors_valid then
                   if ($changes | length) == 0 then
                     $camera_order_valid and live_camera_rule_has_exact_fields($camera_rows[0])
                   elif ($changes | length) == 1 then
@@ -1764,6 +1787,80 @@ jobs:
                   end
                 else
                   false
+                end) as $guard_accepted
+              # On rejection, expose only fixed counts and Boolean checks, never plan values.
+              | {
+                  forward_rule_count: ($forward_rules | length),
+                  inter_vlan_anchor_count: ($inter_vlan_rows | length),
+                  terminal_anchor_count: ($terminal_rows | length),
+                  camera_rule_count: ($camera_rows | length),
+                  managed_change_count: ($changes | length),
+                  anchors_valid: $anchors_valid,
+                  inter_vlan_anchor_ok: (try(
+                    ($inter_vlan_rows | length) == 1
+                    and $inter_vlan_rows[0].action == "drop"
+                    and $inter_vlan_rows[0].chain == "forward"
+                    and firewall_rule_is_enabled($inter_vlan_rows[0])
+                    and $inter_vlan_rows[0].id != null
+                  ) catch false),
+                  terminal_anchor_ok: (try(
+                    ($terminal_rows | length) == 1
+                    and $terminal_rows[0].action == "drop"
+                    and $terminal_rows[0].chain == "forward"
+                    and firewall_rule_is_enabled($terminal_rows[0])
+                    and $terminal_rows[0].id != null
+                  ) catch false),
+                  anchor_order_ok: (try(
+                    ($forward_rules | map(.id) | index($inter_vlan_rows[0].id))
+                    < ($forward_rules | map(.id) | index($terminal_rows[0].id))
+                  ) catch false),
+                  live_camera_order_ok: $camera_order_valid,
+                  no_op_camera_exact: (try(
+                    ($changes | length) == 0
+                    and ($camera_rows | length) == 1
+                    and live_camera_rule_has_exact_fields($camera_rows[0])
+                  ) catch false),
+                  target_change_address_ok: (try(
+                    ($changes | length) == 1
+                    and $changes[0].address == "routeros_ip_firewall_filter.allow_synology_to_camera"
+                  ) catch false),
+                  create_action_ok: (try($changes[0].change.actions == ["create"]) catch false),
+                  create_id_null: (try($changes[0].change.after.id == null) catch false),
+                  create_id_unknown: (try($changes[0].change.after_unknown.id == true) catch false),
+                  create_unknown_behavior_ok: (try(
+                    camera_rule_has_no_unknown_behavior($changes[0].change.after_unknown)
+                  ) catch false),
+                  create_fields_exact: (try(
+                    camera_rule_has_exact_fields($changes[0].change.after; $inter_vlan_rows[0].id)
+                  ) catch false),
+                  create_field_checks: (
+                    if ($changes | length) == 1 then
+                      camera_rule_field_diagnostics($changes[0].change.after; $inter_vlan_rows[0].id)
+                    else
+                      {
+                        required_fields_ok: false,
+                        interfaces_ok: false,
+                        disabled_enabled: false,
+                        optional_matchers_unset: false,
+                        place_before_anchor: false,
+                        declared_behavior_only: false
+                      }
+                    end
+                  ),
+                  update_action_ok: (try($changes[0].change.actions == ["update"]) catch false),
+                  update_ids_match: (try(
+                    $changes[0].change.before.id != null
+                    and $changes[0].change.after.id == $changes[0].change.before.id
+                  ) catch false),
+                  update_fields_exact: (try(
+                    camera_rule_has_exact_fields($changes[0].change.after; $inter_vlan_rows[0].id)
+                  ) catch false),
+                  accepted: $guard_accepted
+                } as $guard_diagnostics
+              | if $guard_accepted then
+                  true
+                else
+                  error("NAS camera guard diagnostics: " + ($guard_diagnostics | tojson))
                 end
             ' >/dev/null; then
             echo "The NAS-to-camera plan or live rule identity/order is outside the exact camera policy; refusing to upload it." >&2
