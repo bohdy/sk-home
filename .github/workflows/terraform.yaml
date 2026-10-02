@@ -1609,6 +1609,8 @@ jobs:
           # before any artifact is uploaded, including for an otherwise empty plan.
           # Existing camera rules must already precede both denies: this target cannot
           # repair order. Empty plans also require exact enabled live rule fields.
+          # Match corrections by the immutable live ID so a drifted comment can recover,
+          # while rejecting another row that claims the desired managed comment.
           # Accept only an anchored create without a live duplicate, a same-ID correction,
           # or a verified empty plan; reject undeclared or unknown policy behavior.
           if ! tofu -chdir=terraform/${{ env.STACK_PATH }} show -json nas-camera-tofuplan \
@@ -1724,13 +1726,16 @@ jobs:
                 else
                   false
                 end) as $anchors_valid
-              | (if $anchors_valid and ($camera_rows | length) == 1 then
-                  $camera_rows[0].id != null and $camera_rows[0].id != ""
-                  and ([$forward_rules[] | select(.id == $camera_rows[0].id)] | length) == 1
-                  and (($forward_rules | map(.id) | index($camera_rows[0].id))
+              | def live_camera_id_has_valid_order($id):
+                  $anchors_valid
+                  and $id != null and $id != ""
+                  and ([$forward_rules[] | select(.id == $id)] | length) == 1
+                  and (($forward_rules | map(.id) | index($id))
                     < ($forward_rules | map(.id) | index($inter_vlan_rows[0].id)))
-                  and (($forward_rules | map(.id) | index($camera_rows[0].id))
-                    < ($forward_rules | map(.id) | index($terminal_rows[0].id)))
+                  and (($forward_rules | map(.id) | index($id))
+                    < ($forward_rules | map(.id) | index($terminal_rows[0].id)));
+              (if ($camera_rows | length) == 1 then
+                  live_camera_id_has_valid_order($camera_rows[0].id)
                 else
                   false
                 end) as $camera_order_valid
@@ -1742,8 +1747,10 @@ jobs:
                     and (
                       (($camera_rows | length) == 0
                         and ($changes[0] | camera_rule_is_exact_create($inter_vlan_rows[0].id)))
-                      or ($camera_order_valid
-                        and $camera_rows[0].id == $changes[0].change.before.id
+                      or (live_camera_id_has_valid_order($changes[0].change.before.id)
+                        and (($camera_rows | length) == 0
+                          or (($camera_rows | length) == 1
+                            and $camera_rows[0].id == $changes[0].change.before.id))
                         and ($changes[0] | camera_rule_is_exact_update($inter_vlan_rows[0].id)))
                     )
                   else
