@@ -1589,6 +1589,7 @@ jobs:
       - name: Plan Synology to camera firewall rule
         run: >-
           tofu -chdir=terraform/${{ env.STACK_PATH }} plan
+          -target=data.routeros_ip_firewall.forward_rules
           -target=routeros_ip_firewall_filter.allow_synology_to_camera
           -out=nas-camera-tofuplan
         env:
