@@ -1710,20 +1710,98 @@ jobs:
                     "dst_address_list", "in_interface_list", "out_interface_list"][];
                   . as $name | camera_rule_value_is_unset($name; $rule[$name]));
 
-              # Read the live ordered snapshot from the targeted forward-chain data source result.
-              [.resource_changes[]?
-                | select(.mode == "data" and .address == "data.routeros_ip_firewall.forward_rules")
-              ] as $forward_rule_sources
-              | (($forward_rule_sources | length) == 1) as $forward_rule_source_count_ok
-              | (try($forward_rule_sources[0].change.actions == ["read"]) catch false) as $forward_rule_source_action_ok
-              | (try(($forward_rule_sources[0].change.after.rules | type) == "array") catch false) as $forward_rule_rules_array_ok
-              | (try(camera_rule_contains_unknown(
-                  $forward_rule_sources[0].change.after_unknown.rules // {}
-                ) == false) catch false) as $forward_rule_rules_known
+              # OpenTofu may omit an unchanged data-source read from resource_changes.
+              # Use its prior-state snapshot only when the plan has no matching read row and
+              # both prior state and configuration contain exactly one matching data source.
+              (try(
+                (.resource_changes | type) == "array"
+                and all(.resource_changes[]; type == "object")
+              ) catch false) as $forward_rule_resource_changes_array_ok
+              | (try(
+                (.prior_state.values.root_module.resources | type) == "array"
+                and all(.prior_state.values.root_module.resources[]; type == "object")
+              ) catch false) as $forward_rule_prior_state_resources_array_ok
+              | (try(
+                (.configuration.root_module.resources | type) == "array"
+                and all(.configuration.root_module.resources[]; type == "object")
+              ) catch false) as $forward_rule_configuration_resources_array_ok
+              | [.resource_changes[]?
+                | select(
+                    .address == "data.routeros_ip_firewall.forward_rules"
+                    or (.type == "routeros_ip_firewall" and .name == "forward_rules")
+                  )
+              ] as $forward_rule_read_sources
+              | [.prior_state.values.root_module.resources[]?
+                | select(
+                    .address == "data.routeros_ip_firewall.forward_rules"
+                    or (.type == "routeros_ip_firewall" and .name == "forward_rules")
+                  )
+              ] as $forward_rule_state_sources
+              | [.configuration.root_module.resources[]?
+                | select(
+                    .address == "data.routeros_ip_firewall.forward_rules"
+                    or (.type == "routeros_ip_firewall" and .name == "forward_rules")
+                  )
+              ] as $forward_rule_configuration_sources
+              | ($forward_rule_prior_state_resources_array_ok
+                and $forward_rule_configuration_resources_array_ok
+                and ($forward_rule_state_sources | length) == 1
+                and ($forward_rule_configuration_sources | length) == 1
+                and (try(
+                  $forward_rule_state_sources[0].address == "data.routeros_ip_firewall.forward_rules"
+                  and $forward_rule_state_sources[0].mode == "data"
+                  and $forward_rule_state_sources[0].type == "routeros_ip_firewall"
+                  and $forward_rule_state_sources[0].name == "forward_rules"
+                  and $forward_rule_configuration_sources[0].address == "data.routeros_ip_firewall.forward_rules"
+                  and $forward_rule_configuration_sources[0].mode == "data"
+                  and $forward_rule_configuration_sources[0].type == "routeros_ip_firewall"
+                  and $forward_rule_configuration_sources[0].name == "forward_rules"
+                ) catch false)) as $forward_rule_state_snapshot_unique
+              | (($forward_rule_read_sources | length) == 0
+                and $forward_rule_resource_changes_array_ok
+                and $forward_rule_state_snapshot_unique) as $forward_rule_source_from_state
+              | (if ($forward_rule_read_sources | length) > 0 then
+                  $forward_rule_read_sources
+                elif $forward_rule_source_from_state then
+                  $forward_rule_state_sources
+                else
+                  []
+                end) as $forward_rule_sources
+              | ($forward_rule_resource_changes_array_ok
+                and ($forward_rule_sources | length) == 1) as $forward_rule_source_count_ok
+              | (if ($forward_rule_read_sources | length) == 1 then
+                  (try(
+                    $forward_rule_read_sources[0].address == "data.routeros_ip_firewall.forward_rules"
+                    and $forward_rule_read_sources[0].mode == "data"
+                    and $forward_rule_read_sources[0].type == "routeros_ip_firewall"
+                    and $forward_rule_read_sources[0].name == "forward_rules"
+                    and $forward_rule_read_sources[0].change.actions == ["read"]
+                  ) catch false)
+                elif ($forward_rule_read_sources | length) == 0 then
+                  $forward_rule_state_snapshot_unique
+                else
+                  false
+                end) as $forward_rule_source_action_ok
+              | (if $forward_rule_source_from_state then
+                  (try(($forward_rule_state_sources[0].values.rules | type) == "array") catch false)
+                else
+                  (try(($forward_rule_read_sources[0].change.after.rules | type) == "array") catch false)
+                end) as $forward_rule_rules_array_ok
+              | (if $forward_rule_source_from_state then
+                  $forward_rule_state_snapshot_unique and $forward_rule_rules_array_ok
+                else
+                  (try(camera_rule_contains_unknown(
+                    $forward_rule_read_sources[0].change.after_unknown.rules // {}
+                  ) == false) catch false)
+                end) as $forward_rule_rules_known
               | ($forward_rule_source_count_ok and $forward_rule_source_action_ok
                 and $forward_rule_rules_array_ok and $forward_rule_rules_known) as $forward_rule_source_ok
               | (if $forward_rule_source_ok then
-                  $forward_rule_sources[0].change.after.rules
+                  if $forward_rule_source_from_state then
+                    $forward_rule_state_sources[0].values.rules
+                  else
+                    $forward_rule_read_sources[0].change.after.rules
+                  end
                 else
                   []
                 end) as $forward_rules
@@ -1805,8 +1883,15 @@ jobs:
               # On rejection, expose only fixed counts and Boolean checks, never plan values.
               | {
                   forward_rule_source_count: ($forward_rule_sources | length),
+                  forward_rule_read_source_count: ($forward_rule_read_sources | length),
+                  forward_rule_state_source_count: ($forward_rule_state_sources | length),
+                  forward_rule_configuration_source_count: ($forward_rule_configuration_sources | length),
+                  forward_rule_resource_changes_array_ok: $forward_rule_resource_changes_array_ok,
+                  forward_rule_prior_state_resources_array_ok: $forward_rule_prior_state_resources_array_ok,
+                  forward_rule_configuration_resources_array_ok: $forward_rule_configuration_resources_array_ok,
                   forward_rule_source_count_ok: $forward_rule_source_count_ok,
                   forward_rule_source_action_ok: $forward_rule_source_action_ok,
+                  forward_rule_source_from_state: $forward_rule_source_from_state,
                   forward_rule_rules_array_ok: $forward_rule_rules_array_ok,
                   forward_rule_rules_known: $forward_rule_rules_known,
                   forward_rule_count: ($forward_rules | length),
