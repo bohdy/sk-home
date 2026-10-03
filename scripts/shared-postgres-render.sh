@@ -16,6 +16,7 @@ grep -q 'image:.*1.30.1@sha256:923c267ec29636db3bee20f993d0ec4973fa22998e1adad37
 kubectl kustomize kubernetes/flux/infrastructure/cloudnative-pg >/dev/null
 kubectl kustomize kubernetes/flux/infrastructure/shared-postgres-namespace >/dev/null
 kubectl kustomize kubernetes/flux/apps/shared-postgres >/dev/null
+kubectl kustomize kubernetes/flux/apps/shared-postgres-acl >/dev/null
 kubectl kustomize kubernetes/flux/clusters/sk-talos/infrastructure >/dev/null
 kubectl kustomize kubernetes/flux/clusters/sk-talos/apps >/dev/null
 kubectl kustomize kubernetes/flux/clusters/sk-talos >/dev/null
