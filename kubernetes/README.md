@@ -90,6 +90,8 @@ cert-manager lives in `kubernetes/flux/infrastructure/cert-manager`. The depende
 
 The component README at `kubernetes/flux/infrastructure/cert-manager/README.md` documents the token contract, bootstrap command, validation, and rollback constraints.
 
+The staged NAS TLS component lives in `kubernetes/flux/infrastructure/nas-tls`. Its dedicated namespace and single `nas.bohdal.name` Certificate use the existing production issuer, while separately suspended Flux children own issue, independently trusted bootstrap, recurring DSM delivery, and monitoring. The reconciler mounts the cert-manager Secret and an operator-created DSM auth Secret read-only, connects only to `10.1.100.10:5001`, and preserves the selected DSM certificate id, default flag, and service bindings. Follow its component README for the stdin-only Bitwarden bootstrap and require a fresh read-only DSM TLS/API preflight before enabling any child; this repository claims no live activation acceptance from the staged manifests alone.
+
 ## Cloudflare Tunnel
 
 The reusable connector lives in `kubernetes/flux/infrastructure/cloudflare-tunnel`. It runs two fixed replicas for the remotely managed tunnel created by `terraform/cloudflare/tunnel` and reads its connector token from an externally bootstrapped Kubernetes Secret.

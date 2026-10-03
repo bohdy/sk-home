@@ -1,0 +1,15 @@
+# Keep NAS certificate delivery isolated from the application and observability
+# namespaces.  The reconciler is restricted enough for the restricted Pod
+# Security profile and has no Kubernetes API or service-account requirement.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nas-tls
+  annotations:
+    # Pruning the stage must not remove the cert-manager Secret that an
+    # operator may need for recovery; workload resources remain child-owned.
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

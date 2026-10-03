@@ -17,3 +17,17 @@ run = [
 [tasks.smtp-relay-preflight]
 description = "Verify live SMTP relay prerequisites without reading Secret data."
 run = "bash scripts/smtp-relay-preflight.sh"
+
+[tasks.nas-tls-test]
+description = "Run credential-free offline NAS TLS reconciler tests."
+run = "python3 -m unittest discover -s tests -p 'test_nas_tls*.py'"
+
+[tasks.nas-tls-check]
+description = "Render every staged NAS TLS tree and run its offline tests."
+run = [
+  "mise run nas-tls-test",
+  "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/issue >/dev/null",
+  "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/bootstrap >/dev/null",
+  "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/delivery >/dev/null",
+  "kubectl kustomize kubernetes/flux/observability/nas-tls >/dev/null",
+]

@@ -1,0 +1,8 @@
+# This one-shot bootstrap is separately suspended.  An operator must first
+# establish an independently trusted DSM channel and pin the stable certificate
+# id in the issue-stage ConfigMap; this workload itself always verifies strict
+# DSM TLS and never implements an HTTP or fingerprint-only fallback.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - job.yaml

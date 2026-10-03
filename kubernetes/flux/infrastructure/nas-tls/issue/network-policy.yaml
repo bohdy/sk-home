@@ -1,0 +1,20 @@
+# The one reconciler identity has no ingress and can reach only the NAS DSM
+# HTTPS endpoint.  HostAliases avoids granting DNS egress to this credentialed
+# workload while preserving the canonical SNI and HTTP hostname.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: nas-tls-delivery
+  namespace: nas-tls
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: nas-tls-delivery
+  ingress: []
+  egress:
+    - toCIDR:
+        - 10.1.100.10/32
+      toPorts:
+        - ports:
+            - port: "5001"
+              protocol: TCP

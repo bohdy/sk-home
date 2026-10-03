@@ -1,0 +1,107 @@
+# Source certificate expiry remains covered by cert-manager's existing rules.
+# These rules add an explicit ready-condition gate and cover served-leaf state,
+# the synthetic probe, and the scheduled delivery workload.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: nas-tls
+  namespace: observability
+spec:
+  groups:
+    - name: nas-tls-served
+      rules:
+        - alert: NasTlsServedCertificateExpiringSoon
+          expr: |-
+            (
+              probe_ssl_earliest_cert_expiry{job="blackbox-nas-tls-https"} - time()
+              < 14 * 24 * 60 * 60
+            )
+            and
+            (probe_ssl_earliest_cert_expiry{job="blackbox-nas-tls-https"} - time() > 0)
+          for: 1h
+          labels:
+            severity: warning
+            component: nas-tls
+          annotations:
+            summary: NAS DSM served certificate expires within fourteen days
+            description: The certificate served by nas.bohdal.name on DSM expires within fourteen days.
+
+        - alert: NasTlsServedCertificateExpiringSoon
+          expr: |-
+            (
+              probe_ssl_earliest_cert_expiry{job="blackbox-nas-tls-https"} - time()
+              < 3 * 24 * 60 * 60
+            )
+            and
+            (probe_ssl_earliest_cert_expiry{job="blackbox-nas-tls-https"} - time() > 0)
+          for: 15m
+          labels:
+            severity: critical
+            component: nas-tls
+          annotations:
+            summary: NAS DSM served certificate expires within three days
+            description: The certificate served by nas.bohdal.name on DSM expires within three days.
+
+        - alert: NasTlsProbeMissing
+          expr: absent(probe_success{job="blackbox-nas-tls-https"}) == 1
+          for: 15m
+          labels:
+            severity: critical
+            component: nas-tls
+          annotations:
+            summary: NAS DSM TLS probe is missing
+            description: The NAS strict HTTPS probe has produced no series for fifteen minutes.
+
+        - alert: NasTlsCertificateNotReady
+          expr: |-
+            (
+              certmanager_certificate_ready_status{condition="True",namespace="nas-tls",name="nas-tls"} != 1
+            )
+            or
+            (absent(certmanager_certificate_ready_status{condition="True",namespace="nas-tls",name="nas-tls"}) == 1)
+          for: 15m
+          labels:
+            severity: critical
+            component: nas-tls
+          annotations:
+            summary: NAS source certificate is not ready
+            description: cert-manager has not reported a ready nas-tls Certificate for fifteen minutes.
+
+    - name: nas-tls-delivery
+      rules:
+        - alert: NasTlsDeliveryJobFailed
+          expr: |-
+            max by (namespace, job_name) (
+              kube_job_status_failed{
+                namespace="nas-tls",
+                job_name=~"nas-tls-delivery-[0-9]+"
+              }
+            ) > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: nas-tls
+          annotations:
+            summary: NAS TLS delivery CronJob failed
+            description: A scheduled nas-tls-delivery Job has failed; inspect the sanitized Job result and DSM state.
+
+        - alert: NasTlsDeliveryLastSuccessStale
+          expr: |-
+            (
+              time() - kube_cronjob_status_last_successful_time{
+                namespace="nas-tls",
+                cronjob="nas-tls-delivery"
+              } > 36 * 60 * 60
+            )
+            or
+            (absent(kube_cronjob_status_last_successful_time{
+              namespace="nas-tls",
+              cronjob="nas-tls-delivery"
+            }) == 1)
+          for: 15m
+          labels:
+            severity: critical
+            component: nas-tls
+          annotations:
+            summary: NAS TLS delivery has no recent successful run
+            description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window.

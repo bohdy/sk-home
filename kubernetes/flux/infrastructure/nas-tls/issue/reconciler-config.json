@@ -1,0 +1,15 @@
+{
+  "auth_directory": "/auth",
+  "hostname": "nas.bohdal.name",
+  "minimum_lifetime_seconds": 1209600,
+  "port": 5001,
+  "response_limit_bytes": 262144,
+  "retry_count": 4,
+  "retry_delay_seconds": 5,
+  "source_cert": "/source/tls.crt",
+  "source_key": "/source/tls.key",
+  "target_description": "nas.bohdal.name cert-manager",
+  "target_id": "activation-required",
+  "timeout_seconds": 15,
+  "upload_limit_bytes": 2097152
+}

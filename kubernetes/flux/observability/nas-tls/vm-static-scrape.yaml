@@ -1,0 +1,33 @@
+# Probe an unauthenticated DSM API-info endpoint through the existing strict
+# HTTPS module.  The IP is fixed for routing while hostname supplies HTTP Host,
+# TLS SNI, and certificate verification.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: blackbox-nas-tls-https
+  namespace: observability
+spec:
+  jobName: blackbox-nas-tls-https
+  targetEndpoints:
+    - targets:
+        - https://10.1.100.10:5001/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth
+      labels:
+        instance: nas
+        probe: https
+        availability: always-on
+      path: /probe
+      params:
+        module:
+          - strict_https_200
+        hostname:
+          - nas.bohdal.name
+      interval: 30s
+      scrapeTimeout: 15s
+      sampleLimit: 500
+      seriesLimit: 500
+      relabelConfigs:
+        - sourceLabels:
+            - __address__
+          targetLabel: __param_target
+        - targetLabel: __address__
+          replacement: blackbox-exporter.observability.svc.cluster.local.:9115

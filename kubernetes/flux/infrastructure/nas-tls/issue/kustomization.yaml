@@ -1,0 +1,24 @@
+# The issue stage owns the namespace, source Certificate, delivery policy, and
+# immutable script/config inputs consumed by the separately suspended stages.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - network-policy.yaml
+configMapGenerator:
+  - name: nas-tls-reconciler
+    namespace: nas-tls
+    files:
+      - nas_tls_reconciler.py
+  - name: nas-tls-reconciler-config
+    namespace: nas-tls
+    files:
+      - config.json=reconciler-config.json
+generatorOptions:
+  # Bootstrap and delivery are independent Flux children but share the exact
+  # reviewed code and config names.  Each new Pod reads the current ConfigMap.
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: nas-tls-delivery
+    app.kubernetes.io/component: certificate-delivery

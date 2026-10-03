@@ -1,0 +1,22 @@
+# The monitor depends on the blackbox and metrics CRDs plus the delivery stage,
+# but remains independently suspended until operators accept the live gate.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: observability-nas-tls
+  namespace: flux-system
+spec:
+  suspend: true
+  interval: 30m
+  retryInterval: 2m
+  timeout: 10m
+  path: ./kubernetes/flux/observability/nas-tls
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: observability-metrics
+    - name: observability-blackbox
+    - name: nas-tls-delivery
