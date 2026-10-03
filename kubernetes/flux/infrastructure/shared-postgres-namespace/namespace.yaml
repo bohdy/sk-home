@@ -1,0 +1,7 @@
+# Prevent accidental Flux prune from deleting retained application storage.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: postgres
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled

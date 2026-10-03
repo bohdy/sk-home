@@ -8,3 +8,5 @@ resources:
   - second-brain-kustomization.yaml
   - mcp-grafana-kustomization.yaml
   - mcp-synology-kustomization.yaml
+
+  - shared-postgres-kustomization.yaml
