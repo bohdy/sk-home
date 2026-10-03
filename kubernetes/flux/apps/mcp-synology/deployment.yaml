@@ -54,8 +54,6 @@ spec:
                   key: control-plane-tunnel-id
             - name: SYNOLOGY_ORIGIN
               value: https://nas.bohdal.name:5001
-            - name: SYNOLOGY_EXPECTED_ADDRESS
-              value: 10.1.100.10
             - name: SYNOLOGY_REAL_ROOT
               value: /volume1/Media
             - name: SYNOLOGY_SHARE_NAME

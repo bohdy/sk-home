@@ -825,7 +825,6 @@ class FileStationClient:
         origin: str | None = None,
         username: str | None = None,
         password: str | None = None,
-        expected_address: str | None = None,
         http_client: httpx.Client | None = None,
         limits: Limits | None = None,
     ):
@@ -843,9 +842,6 @@ class FileStationClient:
                 "configuration",
                 "SYNOLOGY_ORIGIN must be the configured HTTPS NAS origin.",
             )
-        self.expected_address = expected_address or os.getenv(
-            "SYNOLOGY_EXPECTED_ADDRESS", "10.1.100.10"
-        )
         self.username = (
             username if username is not None else os.getenv("SYNOLOGY_USERNAME", "")
         )

@@ -46,7 +46,11 @@ jobs:
       - name: Install fixture generator on isolated hosted runner
         run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes ffmpeg
       - name: Validate locked adapter and manifests
-        run: mise run mcp-bootstrap mcp-lint mcp-test mcp-manifest-check
+        run: |
+          mise run mcp-bootstrap
+          mise run mcp-lint
+          mise run mcp-test
+          mise run mcp-manifest-check
       - name: Build pinned runtime images without publishing
         run: mise run mcp-container-build
       - name: Verify Grafana stdio initialization and read-only tool schemas

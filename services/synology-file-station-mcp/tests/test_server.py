@@ -8,8 +8,11 @@ import io
 import json
 import logging
 import subprocess
+import tempfile
+import threading
 import unittest
 import zipfile
+from pathlib import Path
 
 import anyio
 import httpx
@@ -60,6 +63,43 @@ class FakeAdapter:
 
 class ServerProtocolTests(unittest.IsolatedAsyncioTestCase):
     """Exercise a real MCP SDK v2 initialize/list/call session."""
+
+    async def test_cancel_waits_for_worker_cleanup(self):
+        """A cancelled MCP scope must join the bounded worker before returning."""
+        entered = threading.Event()
+        finished = threading.Event()
+        files = []
+
+        class SlowAdapter(FakeAdapter):
+            def read_text(self, path):
+                # Model the parser scratch lifetime without any production data.
+                try:
+                    with tempfile.TemporaryDirectory(
+                        prefix="mcp-cancel-fixture-"
+                    ) as scratch:
+                        source = Path(scratch) / "source"
+                        source.write_bytes(b"fixture")
+                        files.append(source)
+                        entered.set()
+                        threading.Event().wait(0.15)
+                        return {"text": "fixture"}
+                finally:
+                    finished.set()
+
+        server = build_server(SlowAdapter())
+        with anyio.CancelScope() as scope:
+            async with anyio.create_task_group() as group:
+
+                async def cancel_when_running():
+                    while not entered.is_set():
+                        await anyio.sleep(0.005)
+                    scope.cancel()
+
+                group.start_soon(cancel_when_running)
+                await server.call_tool("read_text", {"path": "fixture.txt"})
+        self.assertTrue(finished.is_set())
+        self.assertTrue(files)
+        self.assertFalse(files[0].exists())
 
     async def test_initialize_list_tools_and_call(self):
         server = build_server(FakeAdapter())
@@ -575,7 +615,7 @@ def _pptx_fixture():
     return payload.getvalue()
 
 
-def _minimal_pdf():
+def _minimal_pdf(text=False):
     """Return a small valid one-page PDF for the native preview test."""
 
     objects = [
@@ -584,6 +624,20 @@ def _minimal_pdf():
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << >> >>",
         b"<< /Length 0 >>\nstream\n\nendstream",
     ]
+    if text:
+        # A fixed Helvetica stream proves extraction beyond blank-page acceptance.
+        stream = b"BT /F1 12 Tf 10 40 Td (PDF fixture words) Tj ET"
+        objects[2] = (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"
+        )
+        objects[3] = (
+            b"<< /Length "
+            + str(len(stream)).encode()
+            + b" >>\nstream\n"
+            + stream
+            + b"\nendstream"
+        )
+        objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
     body = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for index, value in enumerate(objects, start=1):

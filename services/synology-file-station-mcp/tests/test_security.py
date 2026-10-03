@@ -9,6 +9,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -244,6 +245,13 @@ class BoundaryTests(unittest.TestCase):
                 )
             self.assertEqual(list(Path(directory).iterdir()), [])
 
+    def test_nonblank_pdf_extracts_actual_words(self):
+        """Ensure the production converter extracts text from a real PDF stream."""
+        self.assertIn(
+            "PDF fixture words",
+            _convert_document(_minimal_pdf(text=True), "fixture.pdf", Limits()),
+        )
+
     def test_pdf_dimensions_rejected_before_render(self):
         with self.assertRaises(AdapterError):
             _pdf_page(_minimal_pdf(), 1, Limits(image_pixels=1))
@@ -401,6 +409,44 @@ class RangeTests(unittest.TestCase):
             self.assertFalse(facade.thread.is_alive())
             with self.assertRaises(httpx.ConnectError):
                 httpx.get(url, trust_env=False)
+        finally:
+            nas.close()
+
+    def test_close_waits_for_blocked_range_and_rejects_late_chunk(self):
+        """Closing the facade joins an in-flight stream and discards late bytes."""
+        nas = self.nas(Limits(media_probe_bytes=100))
+        entered = threading.Event()
+        facade = _RangeFacade(nas.client, "/Media/large.mp4", nas.size)
+        responses = []
+
+        def delayed_download(path, **kwargs):
+            entered.set()
+            if not facade.closed.wait(2):
+                raise AssertionError("Facade did not signal cancellation")
+            kwargs["on_bytes"](1)
+            raise AssertionError("Late NAS data must be rejected")
+
+        try:
+            with patch.object(nas.client, "_download", side_effect=delayed_download):
+                with facade as url:
+                    request = threading.Thread(
+                        target=lambda: responses.append(
+                            httpx.get(
+                                url,
+                                headers={"range": "bytes=0-59"},
+                                trust_env=False,
+                                timeout=3,
+                            ).status_code
+                        )
+                    )
+                    request.start()
+                    self.assertTrue(entered.wait(2))
+                request.join(2)
+            self.assertFalse(request.is_alive())
+            self.assertEqual(responses, [502])
+            self.assertEqual(facade.used, 0)
+            self.assertFalse(facade.active_handlers)
+            self.assertFalse(facade.thread.is_alive())
         finally:
             nas.close()
 

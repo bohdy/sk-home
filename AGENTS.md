@@ -130,7 +130,7 @@ The orchestrator must classify each task before delegating and use the smallest 
 - Summarize what was validated when reporting completed work.
 - Call out any verification gaps or follow-up automation that would improve enforcement.
 
-MCP activation uses two reviewed GitOps phases: independently unsuspend a child with zero replicas to create its namespace and policy, then bootstrap approved Bitwarden credentials and set a verified image digest/tunnel identity before approving one replica. Never create a namespace imperatively merely to bypass a suspended owner. Run `mise run mcp-bootstrap mcp-lint mcp-test mcp-manifest-check mcp-container-build mcp-grafana-check` and focused Ruff hooks; PR validation stays hosted and credential-free.
+MCP activation uses two reviewed GitOps phases: independently unsuspend a child with zero replicas to create its namespace and policy, then bootstrap approved Bitwarden credentials and set a verified image digest/tunnel identity before approving one replica. Never create a namespace imperatively merely to bypass a suspended owner. Run each of the `mcp-bootstrap`, `mcp-lint`, `mcp-test`, `mcp-manifest-check`, `mcp-container-build` and `mcp-grafana-check` mise tasks separately, followed by focused Ruff hooks; PR validation stays hosted and credential-free.
 
 ## Shared PostgreSQL
 

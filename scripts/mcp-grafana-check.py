@@ -1,9 +1,10 @@
-"""Inspect the built Grafana server through real stdio MCP initialization."""
+"""Inspect the built Grafana server through the guarded stdio MCP relay."""
 
 import asyncio
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.shared.exceptions import MCPError
 
 
 async def main() -> None:
@@ -15,15 +16,24 @@ async def main() -> None:
             "--rm",
             "-i",
             "--network=none",
-            "--entrypoint=/usr/local/bin/mcp-grafana",
+            "--entrypoint=/usr/local/bin/grafana-mcp-guard.py",
             "-e",
             "GRAFANA_URL=https://grafana.example.invalid",
             "-e",
             "GRAFANA_SERVICE_ACCOUNT_TOKEN=offline-test-only",
+            "-e",
+            "MCP_GRAFANA_METRICS_DATASOURCE_UID=VictoriaMetrics",
+            "-e",
+            "MCP_GRAFANA_LOGS_DATASOURCE_UID=VictoriaLogs",
             "sk-home-mcp-grafana:validation",
+            # The official binary remains the child and receives the exact
+            # release arguments; the guard owns the policy boundary.
+            "--",
+            "/usr/local/bin/mcp-grafana",
             "--transport=stdio",
-            "--enabled-tools=search,datasource,prometheus,loki,alerting,dashboard,folder,navigation",
+            "--enabled-tools=search,prometheus,loki,alerting,dashboard,folder,navigation",
             "--disable-write",
+            "--disable-datasource",
             "--disable-api",
             "--disable-sql",
             "--disable-admin",
@@ -40,7 +50,7 @@ async def main() -> None:
     ):
         await client.initialize()
         tools = (await client.list_tools()).tools
-        assert len(tools) == 26, "Pinned Grafana tool surface changed"
+        assert len(tools) == 23, "Pinned Grafana tool surface changed"
         assert all(
             tool.annotations and tool.annotations.read_only_hint for tool in tools
         )
@@ -59,9 +69,29 @@ async def main() -> None:
         assert all(operation.startswith("get_") for operation in enums), (
             "Routing mutation is exposed"
         )
-    print(
-        "Grafana MCP: initialized; 26 read-only tools; routing operations are read-only"
-    )
+        for name, arguments in (
+            (
+                "query_prometheus",
+                {
+                    "datasourceUid": "FlowClickHouseIaC",
+                    "expr": "up",
+                    "endTime": "now",
+                },
+            ),
+            (
+                "query_loki_logs",
+                {"datasourceUid": "VictoriaMetrics", "logql": "*"},
+            ),
+        ):
+            try:
+                await client.call_tool(name, arguments)
+            except MCPError as exc:
+                assert str(exc) == "request rejected by policy", (
+                    f"{name} was not rejected by the guard"
+                )
+            else:
+                raise AssertionError(f"{name} crossed the datasource policy")
+    print("Grafana MCP: guarded initialize/list-tools passed; 23 read-only tools")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,16 @@ spec:
                   key: grafana-service-account-token
             - name: DO_NOT_TRACK
               value: "1"
+            - name: MCP_GRAFANA_METRICS_DATASOURCE_UID
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-grafana-config
+                  key: metrics-datasource-uid
+            - name: MCP_GRAFANA_LOGS_DATASOURCE_UID
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-grafana-config
+                  key: logs-datasource-uid
           startupProbe:
             exec:
               command:

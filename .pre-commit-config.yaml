@@ -38,6 +38,6 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^(services/synology-file-station-mcp/.*\.py|scripts/mcp-.*\.py)$
+        files: ^(services/(synology-file-station-mcp|grafana-mcp-runtime)/.*\.py|scripts/mcp-.*\.py)$
       - id: ruff-format
-        files: ^(services/synology-file-station-mcp/.*\.py|scripts/mcp-.*\.py)$
+        files: ^(services/(synology-file-station-mcp|grafana-mcp-runtime)/.*\.py|scripts/mcp-.*\.py)$

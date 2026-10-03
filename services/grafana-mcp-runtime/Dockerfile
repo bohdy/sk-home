@@ -1,7 +1,8 @@
 # This image combines the verified Grafana MCP release with the verified
-# OpenAI tunnel-client runtime. The staged Kubernetes workload remains
-# suspended until the operator records the final image digest and credentials.
-FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
+# OpenAI tunnel-client runtime. Python is used only for the standard-library
+# stdio policy relay; the staged Kubernetes workload remains suspended until
+# the operator records the final image digest and credentials.
+FROM python:3.14.8-slim-trixie@sha256:89fb7d3da20043c370643435258bdd7ab755d326d359001d02988ed15ae5219e
 
 ARG TARGETARCH=arm64
 ARG GRAFANA_VERSION=v2.0.0
@@ -10,7 +11,7 @@ ARG TUNNEL_VERSION=v0.0.15
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends --yes ca-certificates curl unzip tar \
+    && apt-get install --no-install-recommends --yes bash ca-certificates curl unzip tar \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
@@ -33,6 +34,11 @@ RUN set -eux; \
     unzip -p "/tmp/${tunnel_archive}" tunnel-client-runtime > /usr/local/bin/tunnel-client; \
     chmod 0755 /usr/local/bin/tunnel-client; \
     rm -rf /tmp/*
+
+# Keep the official release binary unchanged and place the policy relay beside
+# it. The relay has no third-party runtime dependency.
+COPY grafana_mcp_guard.py /usr/local/bin/grafana-mcp-guard.py
+RUN chmod 0755 /usr/local/bin/grafana-mcp-guard.py
 
 # The workload never needs root. Kubernetes also enforces a read-only root
 # filesystem and a RuntimeDefault seccomp profile at the pod boundary.
