@@ -16,6 +16,8 @@ Before starting any new logical task:
 
 If `/compact` is not supported in the current environment, reduce context load manually and continue without blocking the task.
 
+Before material work in the devcontainer, pass `.devcontainer/fieldbook-access-check.sh`, verify a successful fresh fetch from private Fieldbook `origin/main`, record its exact commit, and actually read that commit's Fieldbook instructions and relevant memory inside the container. The authorized host orchestrator may perform credentialed fetch, signing, and publication without injecting credentials into the container; reconcile concurrent changes before continuing. Stop material changes if access, freshness, or required writes fail. The startup access probe is not per-turn freshness enforcement.
+
 ## Git Workflow
 
 - All git commits in this repository MUST be signed.

@@ -66,6 +66,16 @@ devcontainer up --workspace-folder .
 
 The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository or workflow tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead.
 
+### Shared Fieldbook access
+
+Before starting the devcontainer, the account launching Dev Containers must already have `~/src/fieldbook` (the private clone with its Git metadata and `docs/projects`) and a readable `~/.codex/AGENTS.md`. The bind sources must exist on the actual Docker daemon host; a local Desktop secondary folder does not supply paths on a remote Docker host. For MacMini, use the launcher account's existing clone and global instructions on MacMini. Do not substitute another user's checkout or an independent stale copy.
+
+The declaration mounts `${localEnv:HOME}/src/fieldbook` read/write at `/home/ubuntu/src/fieldbook` and only `${localEnv:HOME}/.codex/AGENTS.md` read-only at `/home/ubuntu/.codex/AGENTS.md`. It does not mount keys, tokens, the whole Codex configuration directory, or runtime secrets. Rebuild/recreate the devcontainer to apply added mounts; an existing container cannot acquire them by rerunning a shell command. Do not restart another task's container without coordinating ownership.
+
+The post-start command runs a fail-closed access probe. Run `bash .devcontainer/fieldbook-access-check.sh` as the normal non-root container user before material work: it reads both instruction files, resolves readable Git metadata, and creates/removes one private temporary file under `docs/projects`. A failure stops material work; fix the declared mount or specific ownership/access issue instead of broadening permissions. Codex CLI inside the container must also permit the mounted Fieldbook path through `--add-dir /home/ubuntu/src/fieldbook` (or an applicable managed writable-root setting); verify actual access from that session, since the shell probe alone does not prove its sandbox permits writes.
+
+The lifecycle probe verifies access, not continuous synchronization or per-turn freshness. Before each material turn, successfully fetch private Fieldbook `origin/main`, record the fetched commit, and actually read that exact commit's instructions and relevant memory inside the container. An authorized host orchestrator may perform credentialed fetch, signed commits and publication while the container performs canonical reads and owned edits; this does not require injecting keys or tokens. Preserve dirty/peer-owned checkouts by using a clean canonical checkout and an owned task worktree accessible in the container, reconcile concurrent changes, and stop if the fetched commit or required read/write access cannot be verified. Publish completed memory to private `origin/main` under the global signed publication and all-instance rollout rules.
+
 ### Environment Setup
 
 1. Create a `.env` file in the repository root with your Bitwarden access token:

@@ -5,8 +5,13 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
+  "mounts": [
+    "source=${localEnv:HOME}/src/fieldbook,target=/home/ubuntu/src/fieldbook,type=bind",
+    "source=${localEnv:HOME}/.codex/AGENTS.md,target=/home/ubuntu/.codex/AGENTS.md,type=bind,readonly"
+  ],
   "name": "OpenTofu Development Environment",
   "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/fieldbook-access-check.sh",
   "runArgs": [
     "--env-file",
     "${localWorkspaceFolder}/.env"
