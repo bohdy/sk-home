@@ -20,6 +20,47 @@ run = [
 description = "Verify live SMTP relay prerequisites without reading Secret data."
 run = "bash scripts/smtp-relay-preflight.sh"
 
+[tasks.mcp-lint]
+description = "Run credential-free syntax checks for the MCP adapters and scripts."
+run = [
+  "python3 -m compileall -q services/synology-file-station-mcp/synology_file_station_mcp services/synology-file-station-mcp/tests services/grafana-mcp-runtime/grafana_mcp_guard.py services/grafana-mcp-runtime/tests scripts/mcp-grafana-check.py",
+  "bash -n scripts/mcp-preflight.sh scripts/mcp-venv.sh",
+]
+
+[tasks.mcp-bootstrap]
+description = "Create the repository-owned, hash-checked MCP adapter environment."
+run = "bash scripts/mcp-venv.sh >/dev/null"
+
+[tasks.mcp-test]
+description = "Run the credential-free MCP protocol, guard, and security tests."
+run = [
+  "MCP_PYTHON=$(bash scripts/mcp-venv.sh | tail -n 1) && cd services/synology-file-station-mcp && PYTHONPATH=. ${MCP_PYTHON} -m unittest discover -s tests -v",
+  "python3 -m unittest discover -s services/grafana-mcp-runtime/tests -v",
+]
+
+[tasks.mcp-container-build]
+description = "Build both staged MCP images locally with verified release checksums."
+run = [
+  "docker build --tag sk-home-mcp-grafana:validation services/grafana-mcp-runtime",
+  "docker run --rm --network=none sk-home-mcp-grafana:validation --help",
+  "docker build --tag sk-home-mcp-synology:validation services/synology-file-station-mcp",
+  "docker run --rm --network=none sk-home-mcp-synology:validation --help",
+]
+
+[tasks.mcp-manifest-check]
+description = "Render both MCP components and the aggregate cluster applications tree."
+run = [
+  "kubectl kustomize kubernetes/flux/apps/mcp-grafana >/dev/null",
+  "kubectl kustomize kubernetes/flux/apps/mcp-synology >/dev/null",
+  "kubectl kustomize kubernetes/flux/clusters/sk-talos/apps >/dev/null",
+  "bash scripts/mcp-preflight.sh --static",
+  "kubectl kustomize kubernetes/flux/clusters/sk-talos >/dev/null",
+]
+
+[tasks.mcp-grafana-check]
+description = "Initialize the pinned Grafana runtime and inspect its read-only tool schemas."
+run = ".venv/mcp/bin/python scripts/mcp-grafana-check.py"
+
 [tasks.shared-postgres-render]
 description = "Render the pinned PostgreSQL chart and Flux trees without credentials."
 run = "bash scripts/shared-postgres-render.sh"

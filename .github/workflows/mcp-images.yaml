@@ -1,0 +1,86 @@
+name: MCP images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/grafana-mcp-runtime/**"
+      - "services/synology-file-station-mcp/**"
+      - ".github/workflows/mcp-images.yaml"
+  workflow_dispatch:
+
+# This trusted main-only workflow publishes image digests for later review. It
+# does not unsuspend Flux or mutate the cluster and never retrieves infra secrets.
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    # Dispatches from feature refs never receive package-publishing authority.
+    if: github.ref == 'refs/heads/main'
+    name: Build and publish ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: grafana
+            context: services/grafana-mcp-runtime
+            file: services/grafana-mcp-runtime/Dockerfile
+          - name: synology
+            context: services/synology-file-station-mcp
+            file: services/synology-file-station-mcp/Dockerfile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Emulate the second architecture on the isolated hosted runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: amd64,arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push immutable image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: build
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/sk-home-mcp-${{ matrix.name }}:${{ github.sha }}
+          provenance: true
+          sbom: true
+          outputs: type=registry
+          cache-from: type=gha,scope=mcp-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=mcp-${{ matrix.name }}
+
+      - name: Report image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${IMAGE_DIGEST}"
+          {
+            echo "### MCP image digest"
+            echo "- component: \`${{ matrix.name }}\`"
+            echo "- commit: \`${GITHUB_SHA}\`"
+            echo "- digest: \`ghcr.io/${{ github.repository_owner }}/sk-home-mcp-${{ matrix.name }}@${IMAGE_DIGEST}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

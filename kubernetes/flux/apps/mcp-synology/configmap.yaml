@@ -1,0 +1,28 @@
+# Non-secret adapter and tunnel configuration. Credentials come from the
+# separately bootstrapped Secret and are never rendered into this file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-synology-config
+  namespace: mcp-synology
+data:
+  control-plane-tunnel-id: activation-required
+  tunnel-client.yaml: |-
+    config_version: 1
+    control_plane:
+      base_url: https://api.openai.com
+      api_key: env:CONTROL_PLANE_API_KEY
+    log:
+      level: error
+      format: json
+    health:
+      listen_addr: 127.0.0.1:8080
+      url_file: /run/tunnel-client/health-url
+    process:
+      pid_file: /run/tunnel-client/tunnel-client.pid
+    mcp:
+      max_concurrent_requests: 1
+      stdio_send_initialized_notification: true
+      commands:
+        - channel: main
+          command: /usr/local/bin/synology-file-station-mcp

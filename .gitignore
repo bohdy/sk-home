@@ -8,6 +8,10 @@ __pycache__/
 
 .env
 
+# Repository-owned virtual environments are reproducible from the MCP lockfile
+# but remain local build output rather than committed project content.
+.venv/
+
 # Local OpenTofu working directories
 .terraform/
 
@@ -25,3 +29,10 @@ tofuplan-*
 
 .terraform.lock.hcl
 .local.auto.tfvars
+
+# Local MCP validation environments and packaging artifacts.
+.venv/
+**/__pycache__/
+**/*.pyc
+services/*/build/
+services/*/*.egg-info/

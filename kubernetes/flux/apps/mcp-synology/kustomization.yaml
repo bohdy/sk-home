@@ -1,0 +1,10 @@
+# Keep the staged adapter resources explicit and free of a Service, ingress,
+# PVC, or LoadBalancer VIP.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - network-policy.yaml

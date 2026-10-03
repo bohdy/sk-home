@@ -6,5 +6,8 @@ resources:
   - smtp-relay-kustomization.yaml
   - unifi-kustomization.yaml
   - second-brain-kustomization.yaml
+  - mcp-grafana-kustomization.yaml
+  - mcp-synology-kustomization.yaml
+
   - shared-postgres-kustomization.yaml
   - shared-postgres-acl-kustomization.yaml

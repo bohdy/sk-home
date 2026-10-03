@@ -27,6 +27,8 @@ RUN apt-get update \
     mise \
     jq \
     python3-yaml \
+    python3-venv \
+    ffmpeg \
     ripgrep \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
