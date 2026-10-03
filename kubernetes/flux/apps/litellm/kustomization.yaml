@@ -1,0 +1,11 @@
+# Native manifests keep image pins and the small single-worker topology explicit.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - persistent-volume-claim.yaml
+  - database.yaml
+  - application.yaml
+  - services.yaml
+  - network-policy.yaml

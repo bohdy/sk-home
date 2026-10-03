@@ -6,7 +6,7 @@ Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` r
 
 ## Bootstrap order
 
-Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Manager CLI, `jq`, and the DNS utility `dig`. Use the repo devcontainer when those tools are available there; otherwise install them on the local workstation before starting.
+Bootstrap requires `kubectl`, Helm, Bitwarden Secrets Manager CLI, `jq`, and the DNS utility `dig` inside the repository devcontainer. Run all bootstrap and validation tools there; if a tool is missing, add it to the devcontainer or repository mise configuration and rebuild rather than installing it on the host.
 
 1. Apply the Talos Terraform stack so the cluster starts without the Talos default CNI or kube-proxy.
 2. Retrieve kubeconfig into a local ignored path:
@@ -146,3 +146,7 @@ mise run dns-check
 Flux applies the committed rendered manifests from `kubernetes/flux/infrastructure/dns/rendered`. Do not edit rendered DNS files directly.
 
 Before MikroTik DHCP hands out `10.1.30.53`, validate the VIP with direct `dig @10.1.30.53` tests from LAN clients on each relevant VLAN. DHCP changes should be a follow-up after the Kubernetes DNS path is healthy.
+
+## LiteLLM OSS gateway
+
+The native [LiteLLM component](flux/apps/litellm/README.md) stages a single-worker authenticated proxy with a dedicated PostgreSQL 18 database for usage/spend tracking. Images are pinned by digest; the database uses a retained Synology CSI claim. Its Flux child stays suspended until safe Bitwarden Secret bootstrap and approved production activation through GitOps. Initial access uses a localhost port-forward to the ClusterIP Service, with no new public route or network-device change. The model list starts empty; actual provider keys and models are configured through authenticated administration later. Redis is omitted for one worker and one replica; scaling requires a reviewed coordination design. The operator deferred backups for this task.

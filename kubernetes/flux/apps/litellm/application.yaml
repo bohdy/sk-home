@@ -1,0 +1,173 @@
+# One replica and one worker keep coordination local. Recreate avoids overlapping
+# startup migrations and processes; scaling requires a reviewed Redis design.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: litellm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Copy dotfiles too, preserving the official UI pre-restructuring marker.
+        - name: setup-ui
+          image: ghcr.io/berriai/litellm-non_root:v1.103.2@sha256:bee25ffdd3952562401cd1cb844f2b925f006ea8102d719b6d311cc844594d6c
+          command: [sh, -ec]
+          args:
+            - |
+              cp -R /var/lib/litellm/ui/. /runtime/ui/
+              cp -R /var/lib/litellm/assets/. /runtime/assets/
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+              ephemeral-storage: 256Mi
+            limits:
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+          volumeMounts:
+            - name: ui
+              mountPath: /runtime/ui
+            - name: assets
+              mountPath: /runtime/assets
+      containers:
+        - name: proxy
+          image: ghcr.io/berriai/litellm-non_root:v1.103.2@sha256:bee25ffdd3952562401cd1cb844f2b925f006ea8102d719b6d311cc844594d6c
+          # Preserve the image entrypoint and its offline Prisma migration setup.
+          args: [--config, /etc/litellm/config.yaml, --port, "4000", --num_workers, "1"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            # Explicit non-optional refs fail closed on incomplete bootstrap.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-runtime
+                  key: DATABASE_URL
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-runtime
+                  key: LITELLM_MASTER_KEY
+            - name: LITELLM_SALT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-runtime
+                  key: LITELLM_SALT_KEY
+            - name: UI_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-runtime
+                  key: UI_USERNAME
+            - name: UI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-runtime
+                  key: UI_PASSWORD
+            # Keep payload-bearing debug logs disabled; accounting lives in DB.
+            - name: LITELLM_LOG
+              value: ERROR
+            - name: STORE_MODEL_IN_DB
+              value: "True"
+            - name: LITELLM_NON_ROOT
+              value: "true"
+            - name: LITELLM_UI_PATH
+              value: /runtime/ui
+            - name: LITELLM_ASSETS_PATH
+              value: /runtime/assets
+            - name: LITELLM_MIGRATION_DIR
+              value: /runtime/migrations
+            - name: XDG_CACHE_HOME
+              value: /runtime/cache
+            # The pinned image carries Prisma engines at /opt/prisma; retain its
+            # baked PRISMA_* paths instead of hiding them with an empty cache.
+            - name: HOME
+              value: /runtime/cache
+          ports:
+            - name: http
+              containerPort: 4000
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+              ephemeral-storage: 512Mi
+            limits:
+              memory: 2Gi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/litellm
+              readOnly: true
+            - name: ui
+              mountPath: /runtime/ui
+            - name: assets
+              mountPath: /runtime/assets
+            - name: migrations
+              mountPath: /runtime/migrations
+            - name: cache
+              mountPath: /runtime/cache
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config
+        - name: ui
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: assets
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: migrations
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

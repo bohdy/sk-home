@@ -1,0 +1,29 @@
+# Local port-forward is the initial UI/API access path; no public address exists.
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: litellm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+---
+# Headless discovery belongs only to the database StatefulSet and proxy policy.
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-db
+  namespace: litellm
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: litellm-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

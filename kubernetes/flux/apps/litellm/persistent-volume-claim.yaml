@@ -1,0 +1,14 @@
+# Claim pruning is disabled; Retain storage protects data, but is not a backup.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: litellm-database
+  namespace: litellm
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: synology-iscsi-retain
+  resources:
+    requests:
+      storage: 10Gi
