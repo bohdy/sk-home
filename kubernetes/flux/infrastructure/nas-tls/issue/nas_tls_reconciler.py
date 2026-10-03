@@ -43,6 +43,9 @@ DEFAULT_MINIMUM_LIFETIME_SECONDS = 14 * 24 * 60 * 60
 ACTIVATION_PLACEHOLDER = "activation-required"
 EXPECTED_HOSTNAME = "nas.bohdal.name"
 EXPECTED_PORT = 5001
+MAX_CERTIFICATE_ID_LENGTH = 128
+MAX_CERTIFICATE_DESCRIPTION_LENGTH = 256
+MAX_SERVICE_FIELD_LENGTH = 256
 
 _PEM_CERTIFICATE = re.compile(
     rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
@@ -528,18 +531,100 @@ class TargetSnapshot:
             self.certificate_id == other.certificate_id
             and self.description == other.description
             and self.is_default == other.is_default
-            and self.services == other.services
+            and _normalize_services(self.services) == _normalize_services(other.services)
         )
 
 
-def _service_identity(service: Any) -> str:
-    """Return the stable DSM service key for global binding validation."""
+ServiceIdentity = tuple[str, str, bool]
 
-    if isinstance(service, str) and service:
-        return service
-    if isinstance(service, dict) and isinstance(service.get("service"), str) and service["service"]:
-        return service["service"]
+
+def _wire_text(value: Any, limit: int) -> str:
+    """Accept bounded DSM text without allowing control characters in state."""
+
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > limit
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    ):
+        _fail("certificate_list_schema_invalid")
+    return value
+
+
+def _service_flag(value: Any) -> bool:
+    """Normalize the bool forms accepted by the provider's DSM parser."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.lower() in {"true", "false", "1", "0"}:
+        return value.lower() in {"true", "1"}
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and value in {0, 1}:
+        return bool(value)
     _fail("certificate_list_schema_invalid")
+
+
+def _service_identity(service: Any) -> ServiceIdentity:
+    """Return owner/service/package identity used to detect duplicate bindings.
+
+    The maintained provider parses DSM service objects with ``service``,
+    ``display_name``, ``owner``, and ``isPkg`` fields.  A service label alone is
+    not globally unique when different owners share it, so owner and package
+    status remain part of the identity.  Legacy string fixtures are retained as
+    the empty-owner, non-package form.
+    """
+
+    if isinstance(service, str):
+        return ("", _wire_text(service, MAX_SERVICE_FIELD_LENGTH), False)
+    if not isinstance(service, dict):
+        _fail("certificate_list_schema_invalid")
+    service_name = _wire_text(service.get("service"), MAX_SERVICE_FIELD_LENGTH)
+    owner_value = service.get("owner", "")
+    display_name = service.get("display_name", "")
+    if not isinstance(owner_value, str) or len(owner_value) > MAX_SERVICE_FIELD_LENGTH:
+        _fail("certificate_list_schema_invalid")
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in owner_value):
+        _fail("certificate_list_schema_invalid")
+    if not isinstance(display_name, str) or len(display_name) > MAX_SERVICE_FIELD_LENGTH:
+        _fail("certificate_list_schema_invalid")
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in display_name):
+        _fail("certificate_list_schema_invalid")
+    is_package = _service_flag(service.get("isPkg", False))
+    return (owner_value, service_name, is_package)
+
+
+def _normalize_services(services: Any) -> tuple[Any, ...]:
+    """Canonicalize service objects and reject duplicate composite bindings."""
+
+    if not isinstance(services, (list, tuple)):
+        _fail("certificate_list_schema_invalid")
+    seen: set[ServiceIdentity] = set()
+    normalized: list[tuple[ServiceIdentity, str, Any]] = []
+    for service in services:
+        identity = _service_identity(service)
+        if identity in seen:
+            _fail("certificate_inventory_ambiguous")
+        seen.add(identity)
+        if isinstance(service, dict):
+            # Normalize parser-supported aliases while retaining every raw
+            # field so before/after comparison still covers the whole binding.
+            canonical = dict(service)
+            canonical["service"] = identity[1]
+            canonical["owner"] = identity[0]
+            canonical["display_name"] = service.get("display_name", "")
+            canonical["isPkg"] = identity[2]
+        else:
+            canonical = service
+        try:
+            encoded = json.dumps(
+                canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            )
+        except (TypeError, ValueError):
+            _fail("certificate_list_schema_invalid")
+        if len(encoded.encode("utf-8")) > 16 * 1024:
+            _fail("certificate_list_schema_invalid")
+        normalized.append((identity, encoded, canonical))
+    normalized.sort(key=lambda item: (item[0], item[1]))
+    return tuple(item[2] for item in normalized)
 
 
 def _inventory_signature(certificates: list[TargetSnapshot]) -> tuple[Any, ...]:
@@ -548,7 +633,7 @@ def _inventory_signature(certificates: list[TargetSnapshot]) -> tuple[Any, ...]:
     if not certificates:
         _fail("certificate_list_schema_invalid")
     seen_ids: set[str] = set()
-    seen_services: set[str] = set()
+    seen_services: set[ServiceIdentity] = set()
     defaults = 0
     signature: list[tuple[str, str, bool, str]] = []
     for certificate in certificates:
@@ -557,13 +642,12 @@ def _inventory_signature(certificates: list[TargetSnapshot]) -> tuple[Any, ...]:
         seen_ids.add(certificate.certificate_id)
         if certificate.is_default:
             defaults += 1
-        normalized_services = []
-        for service in certificate.services:
+        normalized_services = _normalize_services(certificate.services)
+        for service in normalized_services:
             identity = _service_identity(service)
             if identity in seen_services:
                 _fail("certificate_inventory_ambiguous")
             seen_services.add(identity)
-            normalized_services.append(service)
         try:
             services_json = json.dumps(
                 normalized_services, sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -830,16 +914,9 @@ class DsmClient:
                 or not isinstance(services, list)
             ):
                 _fail("certificate_list_schema_invalid")
-            # JSON round-tripping provides a deterministic comparison while
-            # retaining DSM's full service objects without rebuilding bindings.
-            try:
-                stable_services = tuple(
-                    json.loads(
-                        json.dumps(services, sort_keys=True, separators=(",", ":"))
-                    )
-                )
-            except (TypeError, ValueError):
-                _fail("certificate_list_schema_invalid")
+            _wire_text(certificate_id, MAX_CERTIFICATE_ID_LENGTH)
+            _wire_text(description, MAX_CERTIFICATE_DESCRIPTION_LENGTH)
+            stable_services = _normalize_services(services)
             result.append(
                 TargetSnapshot(
                     certificate_id=certificate_id,

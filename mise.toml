@@ -1,6 +1,7 @@
 [tools]
 # Helm renders the pinned CNPG operator chart during credential-free validation.
 helm = "4.3.0"
+"aqua:prometheus/prometheus" = "3.15.0"
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
@@ -24,10 +25,20 @@ run = "bash scripts/smtp-relay-preflight.sh"
 description = "Run credential-free offline NAS TLS reconciler tests."
 run = "python3 -m unittest discover -s tests -p 'test_nas_tls*.py'"
 
+[tasks.nas-tls-bootstrap-check]
+description = "Run synthetic create-only NAS TLS Bitwarden bootstrap checks without credentials."
+run = "python3 scripts/test-nas-tls-bootstrap.py"
+
+[tasks.nas-tls-alerts-check]
+description = "Run native promtool semantic tests for NAS TLS alert rules."
+run = "python3 scripts/nas-tls-alerts-check.py"
+
 [tasks.nas-tls-check]
 description = "Render every staged NAS TLS tree and run its offline tests."
 run = [
   "mise run nas-tls-test",
+  "mise run nas-tls-bootstrap-check",
+  "mise run nas-tls-alerts-check",
   "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/issue >/dev/null",
   "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/bootstrap >/dev/null",
   "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/delivery >/dev/null",

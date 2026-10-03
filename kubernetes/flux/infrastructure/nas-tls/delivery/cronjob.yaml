@@ -9,6 +9,9 @@ metadata:
     app.kubernetes.io/name: nas-tls-delivery
     app.kubernetes.io/component: certificate-delivery
 spec:
+  # Rollback commits set this to true while the Flux child remains active so
+  # the API receives the suspension before the child itself is suspended.
+  suspend: false
   schedule: "17 2 * * *"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 1800
@@ -16,7 +19,10 @@ spec:
   failedJobsHistoryLimit: 2
   jobTemplate:
     spec:
-      backoffLimit: 1
+      # A completed import followed by a failed read-back must remain a
+      # visible failed Job; a retry could observe the new leaf and hide the
+      # inventory/binding failure as a misleading no-op success.
+      backoffLimit: 0
       activeDeadlineSeconds: 300
       ttlSecondsAfterFinished: 604800
       template:
@@ -30,7 +36,10 @@ spec:
             - ip: 10.1.100.10
               hostnames:
                 - nas.bohdal.name
-          restartPolicy: OnFailure
+          # The reconciler already polls DSM within one bounded run.  Never
+          # restart a process that may have completed an import before failing
+          # its post-import verification.
+          restartPolicy: Never
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532

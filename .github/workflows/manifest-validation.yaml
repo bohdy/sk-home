@@ -47,6 +47,8 @@ jobs:
 
           # Synthetic tests never retrieve credentials or invoke live bootstrap.
           python3 scripts/test-shared-postgres-bootstrap.py
+          mise run nas-tls-bootstrap-check
+          mise run nas-tls-alerts-check
           bash scripts/shared-postgres-render.sh
           python3 scripts/render-dns.py --check
           kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null

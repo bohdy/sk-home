@@ -8,12 +8,14 @@ network access is required.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import http.client
 import importlib.util
 import io
 import json
 import os
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -312,6 +314,172 @@ class ReconcilerTests(unittest.TestCase):
         self.assertTrue(client.imported)
         self.assertTrue(client.logged_out)
 
+    def test_provider_shaped_bindings_use_owner_service_package_identity(self) -> None:
+        first = {
+            "service": "shared-label",
+            "display_name": "Owner A",
+            "owner": "owner-a",
+            "isPkg": False,
+        }
+        second = {
+            "service": "shared-label",
+            "display_name": "Owner B",
+            "owner": "owner-b",
+            "isPkg": False,
+        }
+        reversed_services = RECONCILER._normalize_services([second, first])
+        self.assertEqual(
+            reversed_services,
+            RECONCILER._normalize_services([first, second]),
+        )
+        certificates = [
+            RECONCILER.TargetSnapshot("default", "Default", True, (first,)),
+            RECONCILER.TargetSnapshot("target", "Target", False, (second,)),
+        ]
+        # Different owners may share DSM's service label; both bindings remain
+        # part of the global inventory comparison.
+        self.assertTrue(RECONCILER._inventory_signature(certificates))
+        duplicate = [
+            RECONCILER.TargetSnapshot("default", "Default", True, (first,)),
+            RECONCILER.TargetSnapshot("target", "Target", False, (dict(first),)),
+        ]
+        with self.assertRaisesRegex(
+            RECONCILER.ReconcileError, "certificate_inventory_ambiguous"
+        ):
+            RECONCILER._inventory_signature(duplicate)
+
+    def test_multipart_import_preserves_validated_snapshot_and_wire_contract(self) -> None:
+        records: list[dict[str, Any]] = []
+        config = self.fixture.config()
+        snapshot = RECONCILER.load_source_snapshot(config)
+        RECONCILER.validate_source_snapshot(config, snapshot)
+        client = RECONCILER.DsmClient(
+            config,
+            connection_factory=lambda _config, _context: FakeConnection(
+                FakeResponse(b'{"success":true,"data":{}}'), records
+            ),
+        )
+        default_target = RECONCILER.TargetSnapshot(
+            "stable-id", config.target_description, True, ()
+        )
+        client.import_certificate(
+            RECONCILER.Session("SID-secret", "TOKEN-secret"),
+            default_target,
+            snapshot,
+        )
+        request = records[0]
+        content_type = request["headers"]["Content-Type"]
+        boundary = content_type.split("boundary=", 1)[1].encode("ascii")
+        parts: dict[str, bytes] = {}
+        for chunk in request["body"].split(b"--" + boundary):
+            if b"Content-Disposition:" not in chunk:
+                continue
+            headers, value = chunk.split(b"\r\n\r\n", 1)
+            # Remove only the multipart framing CRLF; certificate and key PEM
+            # snapshots intentionally retain their own final newline byte.
+            self.assertTrue(value.endswith(b"\r\n"))
+            value = value[:-2]
+            marker = b'name="'
+            start = headers.index(marker) + len(marker)
+            name = headers[start : headers.index(b'"', start)].decode("ascii")
+            parts[name] = value
+        self.assertEqual(
+            set(parts),
+            {"key", "cert", "inter_cert", "id", "desc", "api", "method", "version", "as_default"},
+        )
+        self.assertEqual(parts["key"], snapshot.key_pem)
+        self.assertEqual(parts["cert"], snapshot.leaf_pem)
+        self.assertEqual(parts["inter_cert"], snapshot.intermediate_pem)
+        self.assertEqual(parts["id"], b"stable-id")
+        self.assertEqual(parts["desc"], config.target_description.encode("utf-8"))
+        self.assertEqual(parts["api"], b"SYNO.Core.Certificate")
+        self.assertEqual(parts["method"], b"import")
+        self.assertEqual(parts["version"], b"1")
+        self.assertEqual(parts["as_default"], b"true")
+        self.assertNotIn(b"SID-secret", request["path"].encode() + request["body"])
+        self.assertNotIn(b"TOKEN-secret", request["path"].encode() + request["body"])
+        self.assertEqual(request["headers"]["Cookie"], "id=SID-secret")
+        self.assertEqual(request["headers"]["X-SYNO-TOKEN"], "TOKEN-secret")
+
+        records.clear()
+        non_default_target = dataclasses.replace(default_target, is_default=False)
+        client.import_certificate(
+            RECONCILER.Session("SID-secret", "TOKEN-secret"),
+            non_default_target,
+            dataclasses.replace(snapshot, intermediate_pem=b""),
+        )
+        non_default_body = records[0]["body"]
+        self.assertNotIn(b'name="inter_cert"', non_default_body)
+        self.assertNotIn(b'name="as_default"', non_default_body)
+
+    def test_valid_source_then_remote_tls_failure_makes_no_auth_or_import_calls(self) -> None:
+        config = self.fixture.config()
+        snapshot = RECONCILER.load_source_snapshot(config)
+        # Prove the mounted source is valid before injecting the independent
+        # remote peer failure.
+        RECONCILER.validate_source_snapshot(config, snapshot)
+        calls = {"discover": 0, "login": 0, "import": 0}
+
+        def failing_socket(_address: tuple[str, int], _timeout: float) -> Any:
+            raise ssl.SSLError("hostile remote peer")
+
+        class CountingClient(RECONCILER.DsmClient):
+            def discover(self) -> Any:
+                calls["discover"] += 1
+                raise AssertionError("authentication discovery must not run")
+
+            def login(self, _discovery: Any, _username: str, _password: str) -> Any:
+                calls["login"] += 1
+                raise AssertionError("login must not run")
+
+            def import_certificate(self, _session: Any, _target: Any, _source: Any) -> None:
+                calls["import"] += 1
+                raise AssertionError("import must not run")
+
+        client = CountingClient(config, socket_factory=failing_socket)
+        with self.assertRaisesRegex(
+            RECONCILER.ReconcileError, "dsm_tls_verification_failed"
+        ):
+            RECONCILER.reconcile(config, client=client)
+        self.assertEqual(calls, {"discover": 0, "login": 0, "import": 0})
+
+    def test_hostile_bounds_are_sanitized(self) -> None:
+        records: list[dict[str, Any]] = []
+        config = self.fixture.config(response_limit_bytes=4096)
+        oversized = FakeResponse(b"x" * 4097)
+        client = RECONCILER.DsmClient(
+            config,
+            connection_factory=lambda _config, _context: FakeConnection(oversized, records),
+        )
+        with self.assertRaisesRegex(RECONCILER.ReconcileError, "response_too_large"):
+            client.discover()
+        hostile_id = "x" * (RECONCILER.MAX_CERTIFICATE_ID_LENGTH + 1)
+        response = FakeResponse(
+            json.dumps(
+                {
+                    "success": True,
+                    "data": {
+                        "certificates": [
+                            {
+                                "id": hostile_id,
+                                "desc": "desc",
+                                "is_default": True,
+                                "services": [],
+                            }
+                        ]
+                    },
+                }
+            ).encode()
+        )
+        bounded_client = RECONCILER.DsmClient(
+            self.fixture.config(),
+            connection_factory=lambda _config, _context: FakeConnection(response, []),
+        )
+        with self.assertRaisesRegex(
+            RECONCILER.ReconcileError, "certificate_list_schema_invalid"
+        ):
+            bounded_client.list_certificates(RECONCILER.Session("sid", "token"))
+
     def test_source_key_mismatch_chain_and_snapshot_change_fail_closed(self) -> None:
         other = Fixture(self.root / "other")
         mismatch_key = self.fixture.source / "mismatch.key"
@@ -497,6 +665,8 @@ class ReconcilerTests(unittest.TestCase):
             / "vm-rules.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn('condition="True",namespace="nas-tls",name="nas-tls"', rule)
+        self.assertIn("kube_cronjob_created", rule)
+        self.assertIn("bootstrap Job does not populate this CronJob metric", rule)
 
         def fires(series: dict[str, float]) -> bool:
             # cert-manager emits one ready gauge per condition.  Only the True
@@ -507,6 +677,17 @@ class ReconcilerTests(unittest.TestCase):
         self.assertFalse(fires({"True": 1, "False": 0, "Unknown": 0}))
         self.assertTrue(fires({"True": 0, "False": 1, "Unknown": 0}))
         self.assertTrue(fires({}))
+
+    def test_completed_import_is_not_blindly_retried_by_kubernetes(self) -> None:
+        for relative in (
+            "infrastructure/nas-tls/delivery/cronjob.yaml",
+            "infrastructure/nas-tls/bootstrap/job.yaml",
+        ):
+            manifest = (
+                MODULE_PATH.parents[3] / relative
+            ).read_text(encoding="utf-8")
+            self.assertIn("backoffLimit: 0", manifest)
+            self.assertIn("restartPolicy: Never", manifest)
 
 
 if __name__ == "__main__":

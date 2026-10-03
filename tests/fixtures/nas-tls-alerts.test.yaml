@@ -1,0 +1,115 @@
+# Public Prometheus rule-unit cases for the committed NAS TLS VMRule.
+# The minute samples keep KSM series present across the full lookback window.
+rule_files:
+  - nas-tls-rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # Extra scrape labels on kube_cronjob_created must still match the absent-success fallback.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '3600+0x2236'
+    alert_rule_test:
+      # The condition has been true for fourteen minutes, so the 15-minute hold is pending.
+      - eval_time: 37h15m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts: []
+      # The condition has crossed the 15-minute hold and must include only its matched labels.
+      - eval_time: 37h16m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: nas-tls
+              namespace: nas-tls
+              cronjob: nas-tls-delivery
+            exp_annotations:
+              summary: NAS TLS delivery has no recent successful run
+              description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window; the bootstrap Job does not populate this CronJob metric.
+
+  # A newly created CronJob without a first success stays quiet during the 36-hour grace period.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '0+0x735'
+    alert_rule_test:
+      - eval_time: 12h15m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts: []
+
+  # A recent successful run stays quiet even though the creation series is also present.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '0+0x735'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '39600+0x735'
+    alert_rule_test:
+      - eval_time: 12h15m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts: []
+
+  # A completed run older than 36 hours must alert and retain the KSM scrape labels.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '0+0x2236'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '3600+0x2236'
+    alert_rule_test:
+      - eval_time: 37h15m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts: []
+      - eval_time: 37h16m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: nas-tls
+              namespace: nas-tls
+              cronjob: nas-tls-delivery
+              job: kube-state-metrics
+              instance: ksm:8080
+            exp_annotations:
+              summary: NAS TLS delivery has no recent successful run
+              description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window; the bootstrap Job does not populate this CronJob metric.
+
+  # A missing creation series must alert even when the last-success series is recent.
+  - interval: 1m
+    input_series:
+      - series: 'kube_cronjob_status_last_successful_time{namespace="nas-tls",cronjob="nas-tls-delivery",job="kube-state-metrics",instance="ksm:8080"}'
+        values: '0+60x15'
+    alert_rule_test:
+      # The missing-created condition has been true for fourteen minutes, so the hold is pending.
+      - eval_time: 14m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts: []
+      # A recent successful run cannot hide a missing CronJob creation metric.
+      - eval_time: 15m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: nas-tls
+              namespace: nas-tls
+              cronjob: nas-tls-delivery
+            exp_annotations:
+              summary: NAS TLS delivery has no recent successful run
+              description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window; the bootstrap Job does not populate this CronJob metric.
+
+  # With all relevant KSM series absent, the explicit missing-CronJob branch must alert.
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 37h16m
+        alertname: NasTlsDeliveryLastSuccessStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: nas-tls
+              namespace: nas-tls
+              cronjob: nas-tls-delivery
+            exp_annotations:
+              summary: NAS TLS delivery has no recent successful run
+              description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window; the bootstrap Job does not populate this CronJob metric.

@@ -94,14 +94,30 @@ spec:
               } > 36 * 60 * 60
             )
             or
-            (absent(kube_cronjob_status_last_successful_time{
-              namespace="nas-tls",
-              cronjob="nas-tls-delivery"
-            }) == 1)
+            (
+              absent(kube_cronjob_status_last_successful_time{
+                namespace="nas-tls",
+                cronjob="nas-tls-delivery"
+              }) == 1
+              and on(namespace, cronjob)
+              (
+                time() - kube_cronjob_created{
+                  namespace="nas-tls",
+                  cronjob="nas-tls-delivery"
+                } > 36 * 60 * 60
+              )
+            )
+            or
+            (
+              absent(kube_cronjob_created{
+                namespace="nas-tls",
+                cronjob="nas-tls-delivery"
+              }) == 1
+            )
           for: 15m
           labels:
             severity: critical
             component: nas-tls
           annotations:
             summary: NAS TLS delivery has no recent successful run
-            description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window.
+            description: The nas-tls-delivery CronJob has not completed successfully within its expected daily window; the bootstrap Job does not populate this CronJob metric.
