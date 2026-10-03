@@ -4,7 +4,7 @@ This component installs cert-manager v1.20.1 from the upstream Jetstack OCI Helm
 
 ## Cloudflare token
 
-Bitwarden Secrets Manager item `CLOUDFLARE_API_TOKEN` (`535c2d90-8239-4f6b-a70f-b41b00c9d06c`) contains the Cloudflare API token. The token must be limited to `Zone:DNS:Edit` and `Zone:Zone:Read` for the `bohdal.name` zone.
+Bitwarden Secrets Manager item `CLOUDFLARE_API_TOKEN` (`535c2d90-8239-4f6b-a70f-b41b00c9d06c`) contains the Cloudflare API token. The DNS-01 path requires `Zone:DNS:Edit` and `Zone:Zone:Read` for both the existing `bohdal.name` zone and the new `bohdy.sk` zone before certificates are requested for both names. These are the required permissions for those zones; this page does not assert that the shared token has no other approved scope or that its policy export has been verified.
 
 Create the Kubernetes Secret before reconciling the `certificates` component:
 

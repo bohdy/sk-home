@@ -1,0 +1,20 @@
+# The first DSM import has an independent operator approval and trusted-channel
+# precondition.  Keep this child suspended even after source issuance is ready.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: nas-tls-bootstrap
+  namespace: flux-system
+spec:
+  suspend: true
+  interval: 10m
+  retryInterval: 1m
+  timeout: 10m
+  path: ./kubernetes/flux/infrastructure/nas-tls/bootstrap
+  prune: true
+  wait: true
+  dependsOn:
+    - name: nas-tls-issue
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

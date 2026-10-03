@@ -1,0 +1,8 @@
+# Monitoring is a separate suspended child so it can be activated only after
+# the DSM bootstrap and recurring delivery gates are intentionally accepted.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vm-static-scrape.yaml
+  - network-policy.yaml
+  - vm-rules.yaml

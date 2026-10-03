@@ -60,7 +60,7 @@ Prerequisites for the bootstrap host are `kubectl`, Helm, Bitwarden Secrets Mana
 
    Bitwarden Secrets Manager item `SK-TALOS-SYNO-CSI` stores only the DSM password. The committed documentation owns the non-secret endpoint and username. Do not commit `client-info.yml` or print it in logs.
 
-6. Create the Cloudflare DNS-01 token Secret for cert-manager. Bitwarden item `CLOUDFLARE_API_TOKEN` must contain a token restricted to `Zone:DNS:Edit` and `Zone:Zone:Read` for `bohdal.name`.
+6. Create the Cloudflare DNS-01 token Secret for cert-manager. Bitwarden item `CLOUDFLARE_API_TOKEN` must provide `Zone:DNS:Edit` and `Zone:Zone:Read` for both `bohdal.name` and `bohdy.sk`; these are the required permissions for those zones, and the repository does not claim that token scopes have been verified here.
 
    ```bash
    kubectl --kubeconfig /tmp/sk-talos-kubeconfig create namespace cert-manager --dry-run=client -o yaml \
@@ -89,6 +89,8 @@ Keep shell tracing disabled while a Bitwarden value is present. Do not commit ku
 cert-manager lives in `kubernetes/flux/infrastructure/cert-manager`. The dependent `certificates` component owns the production Let's Encrypt ClusterIssuer and uses Cloudflare DNS-01 validation without requiring an ingress controller.
 
 The component README at `kubernetes/flux/infrastructure/cert-manager/README.md` documents the token contract, bootstrap command, validation, and rollback constraints.
+
+The staged NAS TLS component lives in `kubernetes/flux/infrastructure/nas-tls`. Its dedicated namespace and single `nas.bohdy.sk` Certificate retain `nas.bohdal.name` as the second compatibility SAN and use the existing production issuer, while four separately suspended Flux children own issue, the reviewed read-only inventory through the explicitly approved unverified first-import channel, recurring DSM delivery, and monitoring. The reconciler mounts the cert-manager Secret and an operator-created DSM auth Secret read-only, connects only to `10.1.100.10:5001`, and preserves the selected DSM certificate id, default flag, and service bindings. Follow its component README and `scripts/nas-tls-bootstrap.py` for the create-only Bitwarden preflight/apply boundary, rollback sequence, and fresh RouterOS/pod-path TLS gates; this repository claims no live activation acceptance from the staged manifests alone.
 
 ## Cloudflare Tunnel
 
@@ -138,7 +140,7 @@ The service should receive a `10.1.30.x` external IP and be reachable from a LAN
 
 ## DNS
 
-The DNS stack lives in `kubernetes/flux/infrastructure/dns`. Blocky is exposed through Cilium LB IPAM at `10.1.30.53` and forwards to a dedicated internal CoreDNS instance. CoreDNS serves the internal `bohdal.name` split-DNS zone and forwards public recursion to DNS4EU Protective + Ad Blocking over DNS-over-TLS.
+The DNS stack lives in `kubernetes/flux/infrastructure/dns`. Blocky is exposed through Cilium LB IPAM at `10.1.30.53` and forwards to a dedicated internal CoreDNS instance. CoreDNS serves the internal `bohdal.name` and `bohdy.sk` split-DNS zones and forwards public recursion to DNS4EU Protective + Ad Blocking over DNS-over-TLS.
 
 The detailed decision record is `docs/dns-design.md`. The DNS component README at `kubernetes/flux/infrastructure/dns/README.md` documents source versus rendered files, record updates, smoke tests, and rollback.
 

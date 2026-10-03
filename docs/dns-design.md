@@ -4,11 +4,11 @@ This file records the current DNS design decisions so the Kubernetes implementat
 
 ## Goal
 
-Run the home DNS path on Kubernetes with a stable BGP-advertised service address. LAN clients should use one DNS endpoint that provides internal `bohdal.name` resolution, query visibility, local policy overrides, caching, and protected upstream resolution.
+Run the home DNS path on Kubernetes with a stable BGP-advertised service address. LAN clients should use one DNS endpoint that provides internal `bohdal.name` and `bohdy.sk` resolution, query visibility, local policy overrides, caching, and protected upstream resolution.
 
 ## Traffic flow
 
-LAN clients query Blocky at `10.1.30.53`. Blocky forwards to CoreDNS inside the cluster. CoreDNS serves the internal `bohdal.name` zone and forwards public recursion to DNS4EU Protective + Ad Blocking over DNS-over-TLS.
+LAN clients query Blocky at `10.1.30.53`. Blocky forwards to CoreDNS inside the cluster. CoreDNS serves the internal `bohdal.name` and `bohdy.sk` zones and forwards public recursion to DNS4EU Protective + Ad Blocking over DNS-over-TLS.
 
 ```text
 LAN client -> Blocky LoadBalancer VIP 10.1.30.53 -> CoreDNS -> DNS4EU DoT noads.joindns4.eu
@@ -76,13 +76,13 @@ Document rollback before changing DHCP. Before DHCP points clients at `10.1.30.5
 
 Blocky is the front DNS service. It should provide client-facing query handling, query logging, client visibility, caching, and local allow/deny overrides. Blocky should not duplicate large public ad-block lists at the start; broad protective and ad-block filtering is delegated to the DNS4EU upstream path through CoreDNS.
 
-`bohdal.name` should bypass Blocky ad filtering and local block policies so internal service discovery remains predictable. Any public fallback for `bohdal.name` should also bypass Blocky ad filtering.
+`bohdal.name` and `bohdy.sk` should bypass Blocky ad filtering and local block policies so internal service discovery remains predictable. Any public fallback for those zones should also bypass Blocky ad filtering.
 
-Blocky should forward all DNS queries to CoreDNS as its default upstream. Do not add separate Blocky upstream groups for `bohdal.name` or public recursion; CoreDNS owns that split. Blocky should only define the bypass behavior needed to keep `bohdal.name` out of local blocking and deny rules. Blocky resolver entries use `[net:]host:[port]` syntax, so the CoreDNS upstream should be written as `tcp+udp:coredns.dns-system.svc.cluster.local:53`, not URL-style `tcp+udp://...`.
+Blocky should forward all DNS queries to CoreDNS as its default upstream. Do not add separate Blocky upstream groups for `bohdal.name`, `bohdy.sk`, or public recursion; CoreDNS owns that split. Blocky should only define the bypass behavior needed to keep both internal zones out of local blocking and deny rules. Blocky resolver entries use `[net:]host:[port]` syntax, so the CoreDNS upstream should be written as `tcp+udp:coredns.dns-system.svc.cluster.local:53`, not URL-style `tcp+udp://...`.
 
 Disable Blocky's special-use domain blocking while CoreDNS is the only upstream. Private reverse zones such as `30.1.10.in-addr.arpa` and `100.1.10.in-addr.arpa` must be forwarded to CoreDNS for LAN PTR records instead of being answered as special-use NXDOMAINs by Blocky.
 
-Local Blocky allow/deny overrides should apply before forwarding to CoreDNS. Deny overrides should return NXDOMAIN initially. Support exact and wildcard override entries if Blocky's config format makes that straightforward, but keep the initial override files empty. Add comments explaining exact versus wildcard syntax and noting that `bohdal.name` is intentionally excluded from deny policy.
+Local Blocky allow/deny overrides should apply before forwarding to CoreDNS. Deny overrides should return NXDOMAIN initially. Support exact and wildcard override entries if Blocky's config format makes that straightforward, but keep the initial override files empty. Add comments explaining exact versus wildcard syntax and noting that `bohdal.name` and `bohdy.sk` are intentionally excluded from deny policy.
 
 Blocky should write logs to stdout only in the first implementation. Persistent DNS query log storage should wait for the observability stack because DNS logs can expose sensitive client behavior.
 
@@ -94,15 +94,15 @@ Blocky should cache DNS responses for client-facing latency and repeated LAN que
 
 ## CoreDNS responsibilities
 
-CoreDNS is authoritative for the internal `bohdal.name` zone. Internal records for `bohdal.name` should be committed in Git and reconciled by Flux with the rest of the Kubernetes add-ons.
+CoreDNS is authoritative for the internal `bohdal.name` and `bohdy.sk` zones. Internal records for both zones should be committed in Git and reconciled by Flux with the rest of the Kubernetes add-ons.
 
-If the internal `bohdal.name` authority is unavailable or does not answer, the intended fail-open behavior is public resolution for `bohdal.name` through the upstream resolver path.
+If an internal zone authority is unavailable or does not answer, the intended fail-open behavior is public resolution for that zone through the upstream resolver path.
 
 CoreDNS is also responsible for forwarding non-local public DNS recursion to DNS4EU.
 
 This CoreDNS instance must be separate from the cluster's built-in `kube-system` CoreDNS. The built-in Kubernetes DNS service should not be modified for LAN/internal DNS.
 
-The separate CoreDNS instance should resolve only the internal `bohdal.name` zone, reverse DNS zones, and public recursion. It should not expose Kubernetes service discovery names such as `*.svc.cluster.local` to LAN clients.
+The separate CoreDNS instance should resolve only the internal `bohdal.name` and `bohdy.sk` zones, reverse DNS zones, and public recursion. It should not expose Kubernetes service discovery names such as `*.svc.cluster.local` to LAN clients.
 
 CoreDNS should also cache responses, with modest TTLs while iterating. The CoreDNS cache primarily reduces repeated upstream recursion and smooths internal zone lookups.
 
@@ -127,15 +127,16 @@ Do not enable local DNSSEC validation initially. Future DNSSEC work should evalu
 
 ## Split DNS
 
-The internal DNS zone is `bohdal.name`. Public records for the same domain are hosted outside the cluster, while CoreDNS serves the internal view inside the LAN. This is a split-DNS design.
+The internal DNS zones are `bohdal.name` and `bohdy.sk`. Public records for those domains are hosted outside the cluster, while CoreDNS serves the internal view inside the LAN. This is a split-DNS design.
 
-CoreDNS should be treated as authoritative for the internal view of `bohdal.name`. Public fallback is allowed by design when the internal path cannot answer, but the implementation must make that behavior explicit and testable.
+CoreDNS should be treated as authoritative for the internal views of `bohdal.name` and `bohdy.sk`. Public fallback is allowed by design when the internal path cannot answer, but the implementation must make that behavior explicit and testable.
 
 The initial forward records should include:
 
 - `dns.bohdal.name. A 10.1.30.53`
 - `blocky.bohdal.name. A 10.1.30.53`
 - `gw.bohdal.name. A 10.1.100.1`
+- `nas.bohdy.sk. A 10.1.100.10`
 - `smtp.internal.bohdal.name. A 10.1.30.58`
 - `printer.sk.bohdal.name. A 10.1.10.250`
 
@@ -149,6 +150,7 @@ Reverse DNS should always be created for committed infrastructure records. The i
 
 - `53.30.1.10.in-addr.arpa. PTR dns.bohdal.name.`
 - `1.100.1.10.in-addr.arpa. PTR gw.bohdal.name.`
+- `10.100.1.10.in-addr.arpa. PTR nas.bohdy.sk.`
 
 Broader reverse-zone coverage can be added as more internal records are committed.
 

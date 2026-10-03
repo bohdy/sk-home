@@ -26,7 +26,7 @@ spec:
         app.kubernetes.io/name: blocky
         app.kubernetes.io/component: dns-front
       annotations:
-        sk-home/config-checksum: "a1f5c3ab76916650065b08c68e16820312a80339f9b5b026c297f61037529b60"
+        sk-home/config-checksum: "0266783f1c1b2a348c62cc391a0891bd9dd39aa7113de629bfe9f7f0f9725962"
     spec:
       serviceAccountName: blocky
       automountServiceAccountToken: false

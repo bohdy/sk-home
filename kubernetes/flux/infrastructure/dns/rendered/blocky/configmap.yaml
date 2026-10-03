@@ -50,10 +50,12 @@ data:
         local-deny:
           - /config/allow.txt
           - |
-            # Keep the split DNS zone out of local deny policy even when future
+            # Keep the split DNS zones out of local deny policy even when future
             # wildcard rules are added to the local override files.
             bohdal.name
             *.bohdal.name
+            bohdy.sk
+            *.bohdy.sk
       clientGroupsBlock:
         default:
           - local-deny
@@ -68,5 +70,5 @@ data:
     # Local deny overrides for Blocky. Denied names return NXDOMAIN.
     # Use exact domains such as blocked.example.com.
     # Use wildcards such as *.blocked.example.com only after reviewing the
-    # blast radius. Do not add bohdal.name here; the split DNS zone is allowed
-    # explicitly in config.yml.
+    # blast radius. Do not add bohdal.name or bohdy.sk here; split DNS zones are
+    # allowed explicitly in config.yml.

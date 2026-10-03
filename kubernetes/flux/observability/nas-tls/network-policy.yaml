@@ -1,0 +1,20 @@
+# This policy is additive to the existing blackbox default-deny policy.  It
+# grants the exporter only the NAS DSM tuple and leaves all existing modules
+# unchanged.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blackbox-nas-tls
+  namespace: observability
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: blackbox-exporter
+  ingress: []
+  egress:
+    - toCIDR:
+        - 10.1.100.10/32
+      toPorts:
+        - ports:
+            - port: "5001"
+              protocol: TCP

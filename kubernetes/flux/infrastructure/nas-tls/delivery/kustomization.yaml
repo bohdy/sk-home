@@ -1,0 +1,7 @@
+# Recurring delivery is a separate suspended child so source issuance,
+# independently approved bootstrap, and steady-state rotation can be enabled
+# and reviewed at different gates.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cronjob.yaml
