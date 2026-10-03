@@ -4,7 +4,8 @@
 # the operator records the final image digest and credentials.
 FROM python:3.14.8-slim-trixie@sha256:89fb7d3da20043c370643435258bdd7ab755d326d359001d02988ed15ae5219e
 
-ARG TARGETARCH=arm64
+# Consume BuildKit automatic target architecture for native and multi-platform release selection.
+ARG TARGETARCH
 ARG GRAFANA_VERSION=v2.0.0
 ARG TUNNEL_VERSION=v0.0.15
 

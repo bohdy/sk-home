@@ -41,7 +41,8 @@ RUN ./configure \
 
 FROM ${PYTHON_BASE_IMAGE}
 
-ARG TARGETARCH=arm64
+# Consume BuildKit automatic target architecture for native and multi-platform release selection.
+ARG TARGETARCH
 ARG TUNNEL_VERSION=v0.0.15
 
 ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PIP_DISABLE_PIP_VERSION_CHECK=1
