@@ -10,3 +10,4 @@ resources:
   - mcp-synology-kustomization.yaml
 
   - shared-postgres-kustomization.yaml
+  - shared-postgres-acl-kustomization.yaml

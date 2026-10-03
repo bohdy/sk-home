@@ -1,0 +1,19 @@
+# Do not consume ACL Job retries while CNPG provisions the core instances.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shared-postgres-acl
+  namespace: flux-system
+spec:
+  suspend: false
+  interval: 10m
+  retryInterval: 1m
+  timeout: 15m
+  path: ./kubernetes/flux/apps/shared-postgres-acl
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: shared-postgres
