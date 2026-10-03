@@ -1,0 +1,5 @@
+# Owner ACL runs only after the dependent core reports database readiness.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - litellm-acl-job.yaml
