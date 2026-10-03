@@ -1,0 +1,95 @@
+# Empty rules select every pod and deny both directions until role-specific
+# policies below permit them. Explicit database ingress permits only proxy pods.
+# Cilium also inherits local-node/hostNetwork ingress trust because the cluster
+# does not set allow-localhost=policy; these rules do not enforce host isolation.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: litellm-default-deny
+  namespace: litellm
+spec:
+  endpointSelector: {}
+  ingress: []
+  egress: []
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: litellm-proxy
+  namespace: litellm
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  ingress:
+    # Kubelet probes and localhost operator port-forward terminate on nodes.
+    - fromEntities: [host, remote-node]
+      toPorts:
+        - ports:
+            - port: "4000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: litellm
+            k8s:app.kubernetes.io/name: litellm-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # Providers must use public IPv4 HTTPS; local, private and special-use
+    # destinations are excluded. No IPv6 or HTTP egress is granted.
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 0.0.0.0/8
+            - 10.0.0.0/8
+            - 100.64.0.0/10
+            - 127.0.0.0/8
+            - 169.254.0.0/16
+            - 172.16.0.0/12
+            - 192.0.0.0/24
+            - 192.0.2.0/24
+            - 192.31.196.0/24
+            - 192.52.193.0/24
+            - 192.88.99.0/24
+            - 192.175.48.0/24
+            - 192.168.0.0/16
+            - 198.18.0.0/15
+            - 198.51.100.0/24
+            - 203.0.113.0/24
+            - 224.0.0.0/4
+            - 240.0.0.0/4
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: litellm-database
+  namespace: litellm
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: litellm-db
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: litellm
+            k8s:app.kubernetes.io/name: litellm
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

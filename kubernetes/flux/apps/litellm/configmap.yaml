@@ -1,0 +1,16 @@
+# Models and provider credentials are added through the authenticated UI later.
+# Preserve spend accounting while excluding prompts and provider error payloads.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: litellm
+data:
+  config.yaml: |
+    model_list: []
+    litellm_settings:
+      turn_off_message_logging: true
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      store_prompts_in_spend_logs: false
+      disable_error_logs: true
