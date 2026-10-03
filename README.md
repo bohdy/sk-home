@@ -66,6 +66,19 @@ devcontainer up --workspace-folder .
 
 The devcontainer post-create step trusts the repository `mise.toml`, installs the configured tools, installs the Git pre-commit hook through `mise exec`, and enables mise for later interactive bash sessions. The devcontainer image also provides repository tools such as `git`, `act`, `bws`, and `jq`. Do not install repository or workflow tools on the host; add missing tools to `.devcontainer/Dockerfile`, `.devcontainer/devcontainer.json`, or `mise.toml` instead.
 
+### CloudNativePG kubectl plugin
+
+The devcontainer image provides the official CloudNativePG `kubectl-cnpg` plugin pinned to version `1.30.1` for `amd64` and `arm64`; after changing `.devcontainer/Dockerfile`, use the normal Dev Containers rebuild action so it rebuilds from the configured Dockerfile, then reopen the container. Reopening an existing container alone does not rebuild its image.
+
+From the repository root, use a credential-free BuildKit rebuild with the repository `.devcontainer` directory as its context, repeating the build for each supported platform:
+
+```bash
+docker buildx build --load --platform linux/amd64 --file .devcontainer/Dockerfile --tag sk-home-devcontainer:cnpg-1.30.1-amd64 .devcontainer
+docker buildx build --load --platform linux/arm64 --file .devcontainer/Dockerfile --tag sk-home-devcontainer:cnpg-1.30.1-arm64 .devcontainer
+```
+
+These credential-free BuildKit commands create validation images; their custom tags are not referenced by `.devcontainer/devcontainer.json`, so start each tagged image explicitly as a devcontainer before verifying it. From inside each started image, run `kubectl-cnpg version` or, after the configured mise tools are available, `mise exec -- kubectl cnpg version`; the command must report CloudNativePG plugin version `1.30.1`.
+
 ### Environment Setup
 
 1. Create a `.env` file in the repository root with your Bitwarden access token:
