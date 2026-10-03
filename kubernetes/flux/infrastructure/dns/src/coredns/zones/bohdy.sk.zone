@@ -1,4 +1,4 @@
-$ORIGIN 100.1.10.in-addr.arpa.
+$ORIGIN bohdy.sk.
 $TTL 300
 @ IN SOA dns.bohdal.name. hostmaster.bohdal.name. (
     2026100301 ; serial
@@ -7,8 +7,5 @@ $TTL 300
     1209600    ; expire
     60         ; negative cache TTL
 )
-@ IN NS  dns.bohdal.name.
-1 IN PTR gw.bohdal.name.
-10 IN PTR nas.bohdy.sk.
-250 IN PTR printer.sk.bohdal.name.
-201 IN PTR pve.bohdal.name.
+@   IN NS dns.bohdal.name.
+nas IN A  10.1.100.10

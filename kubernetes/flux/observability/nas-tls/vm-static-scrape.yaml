@@ -20,7 +20,7 @@ spec:
         module:
           - strict_https_200
         hostname:
-          - nas.bohdal.name
+          - nas.bohdy.sk
       interval: 30s
       scrapeTimeout: 15s
       sampleLimit: 500

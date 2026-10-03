@@ -41,7 +41,7 @@ DEFAULT_RETRY_COUNT = 4
 DEFAULT_RETRY_DELAY_SECONDS = 5.0
 DEFAULT_MINIMUM_LIFETIME_SECONDS = 14 * 24 * 60 * 60
 ACTIVATION_PLACEHOLDER = "activation-required"
-EXPECTED_HOSTNAME = "nas.bohdal.name"
+EXPECTED_HOSTNAME = "nas.bohdy.sk"
 EXPECTED_PORT = 5001
 MAX_CERTIFICATE_ID_LENGTH = 128
 MAX_CERTIFICATE_DESCRIPTION_LENGTH = 256
@@ -138,7 +138,7 @@ class Config:
     source_cert: str = "/source/tls.crt"
     source_key: str = "/source/tls.key"
     auth_directory: str = "/auth"
-    target_description: str = "nas.bohdal.name cert-manager"
+    target_description: str = "nas.bohdy.sk cert-manager"
     target_id: str = ACTIVATION_PLACEHOLDER
     minimum_lifetime_seconds: int = DEFAULT_MINIMUM_LIFETIME_SECONDS
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS

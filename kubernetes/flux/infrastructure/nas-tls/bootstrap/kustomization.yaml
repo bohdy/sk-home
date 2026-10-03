@@ -1,8 +1,17 @@
-# This one-shot bootstrap is separately suspended.  An operator must first
-# establish an independently trusted DSM channel and pin the stable certificate
-# id in the issue-stage ConfigMap; this workload itself always verifies strict
-# DSM TLS and never implements an HTTP or fingerprint-only fallback.
+# The wrapper is owned by this one-shot child and is mounted only by its
+# inspect/import Job.  The strict reconciler remains issue-owned and shared by
+# the recurring delivery path.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - job.yaml
+configMapGenerator:
+  - name: nas-tls-bootstrap
+    namespace: nas-tls
+    files:
+      - nas_tls_bootstrap.py
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: nas-tls-delivery
+    app.kubernetes.io/component: certificate-delivery-bootstrap

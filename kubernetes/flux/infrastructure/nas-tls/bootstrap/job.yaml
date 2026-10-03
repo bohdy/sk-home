@@ -1,9 +1,9 @@
-# Run only after the independently approved DSM bootstrap precondition is
-# satisfied.  The Job uses the same strict reconciler as recurring delivery.
+# The default inspect revision is read-only.  The explicit --import-once
+# mode is a separately reviewed exception for the first DSM certificate import.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: nas-tls-bootstrap
+  name: nas-tls-bootstrap-inspect-v1
   namespace: nas-tls
   labels:
     app.kubernetes.io/name: nas-tls-delivery
@@ -11,7 +11,9 @@ metadata:
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 300
-  ttlSecondsAfterFinished: 604800
+  # Keep this versioned terminal Job for sanitized evidence and explicit review.
+  # A TTL would delete the result and let active Flux recreate this one-shot
+  # authentication/import attempt before a reviewed GitOps retirement.
   template:
     metadata:
       labels:
@@ -22,6 +24,7 @@ spec:
       hostAliases:
         - ip: 10.1.100.10
           hostnames:
+            - nas.bohdy.sk
             - nas.bohdal.name
       restartPolicy: Never
       securityContext:
@@ -38,7 +41,7 @@ spec:
           imagePullPolicy: IfNotPresent
           command:
             - /usr/local/bin/python3
-            - /app/nas_tls_reconciler.py
+            - /bootstrap/nas_tls_bootstrap.py
             - --config
             - /etc/nas-tls/config.json
           env:
@@ -70,6 +73,9 @@ spec:
             - name: reconciler
               mountPath: /app
               readOnly: true
+            - name: bootstrap
+              mountPath: /bootstrap
+              readOnly: true
             - name: reconciler-config
               mountPath: /etc/nas-tls
               readOnly: true
@@ -87,6 +93,13 @@ spec:
             items:
               - key: nas_tls_reconciler.py
                 path: nas_tls_reconciler.py
+        - name: bootstrap
+          configMap:
+            name: nas-tls-bootstrap
+            defaultMode: 0444
+            items:
+              - key: nas_tls_bootstrap.py
+                path: nas_tls_bootstrap.py
         - name: reconciler-config
           configMap:
             name: nas-tls-reconciler-config

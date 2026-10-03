@@ -11,6 +11,7 @@ spec:
     kind: ClusterIssuer
     name: letsencrypt-production
   dnsNames:
+    - nas.bohdy.sk
     - nas.bohdal.name
   # Keep the renewal window explicit so the delivery CronJob has a full,
   # bounded period to observe a refreshed Secret before expiry.

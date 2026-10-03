@@ -1,6 +1,6 @@
 # DNS infrastructure
 
-This component deploys the LAN DNS path for the `sk-talos` cluster. Blocky is the only LAN-facing resolver at `10.1.30.53`; CoreDNS stays internal and serves the split `bohdal.name` view plus DNS4EU forwarding.
+This component deploys the LAN DNS path for the `sk-talos` cluster. Blocky is the only LAN-facing resolver at `10.1.30.53`; CoreDNS stays internal and serves the split `bohdal.name` and `bohdy.sk` views plus DNS4EU forwarding.
 
 The detailed design record is [docs/dns-design.md](../../../../docs/dns-design.md). Operational notes that should inform future work, including observability stack inputs, are kept in [docs/project-memory.md](../../../../docs/project-memory.md).
 
@@ -37,7 +37,8 @@ Initial internal records:
 - `smtp.internal.bohdal.name` -> `10.1.30.58`
 - `unifi.bohdal.name` -> `10.1.30.56`
 - `gw.bohdal.name` -> `10.1.100.1`
-- `nas.bohdal.name` -> `10.1.100.10`
+- `nas.bohdy.sk` -> `10.1.100.10` (canonical NAS name)
+- `nas.bohdal.name` -> `10.1.100.10` (compatibility alias)
 - `pve.bohdal.name` -> `10.1.100.201`
 - `pve.sk.bohdal.name` -> `10.1.100.201` (compatibility alias)
 - `unifi.ap.sk.bohdal.name` -> `10.1.30.1`
@@ -56,6 +57,7 @@ dig @10.1.30.53 grafana.bohdal.name A
 dig @10.1.30.53 grafana.internal.bohdal.name A
 dig @10.1.30.53 unifi.bohdal.name A
 dig @10.1.30.53 gw.bohdal.name A
+dig @10.1.30.53 nas.bohdy.sk A
 dig @10.1.30.53 nas.bohdal.name A
 dig @10.1.30.53 pve.bohdal.name A
 dig @10.1.30.53 pve.sk.bohdal.name A

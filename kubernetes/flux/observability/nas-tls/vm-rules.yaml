@@ -24,7 +24,7 @@ spec:
             component: nas-tls
           annotations:
             summary: NAS DSM served certificate expires within fourteen days
-            description: The certificate served by nas.bohdal.name on DSM expires within fourteen days.
+            description: The certificate served by nas.bohdy.sk on DSM expires within fourteen days.
 
         - alert: NasTlsServedCertificateExpiringSoon
           expr: |-
@@ -40,7 +40,7 @@ spec:
             component: nas-tls
           annotations:
             summary: NAS DSM served certificate expires within three days
-            description: The certificate served by nas.bohdal.name on DSM expires within three days.
+            description: The certificate served by nas.bohdy.sk on DSM expires within three days.
 
         - alert: NasTlsProbeMissing
           expr: absent(probe_success{job="blackbox-nas-tls-https"}) == 1

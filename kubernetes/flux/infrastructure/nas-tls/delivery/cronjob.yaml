@@ -35,6 +35,7 @@ spec:
           hostAliases:
             - ip: 10.1.100.10
               hostnames:
+                - nas.bohdy.sk
                 - nas.bohdal.name
           # The reconciler already polls DSM within one bounded run.  Never
           # restart a process that may have completed an import before failing

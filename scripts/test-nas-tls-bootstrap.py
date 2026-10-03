@@ -22,7 +22,6 @@ class BootstrapTests(unittest.TestCase):
     """Exercise the helper with synthetic Bitwarden and kubectl responses."""
 
     def setUp(self) -> None:
-        self.item_id = "item-123"
         self.project_id = "project-123"
         self.namespace_uid = "namespace-123"
         self.calls: list[tuple[list[str], str | None, dict[str, str]]] = []
@@ -54,16 +53,12 @@ class BootstrapTests(unittest.TestCase):
             self.assertNotIn("synthetic-password", config)
             if "project" in argv:
                 return json.dumps([{"name": "sk-home", "id": self.project_id}])
-            self.assertEqual(argv[-1], self.item_id)
-            value = {
-                "username": "synthetic-user",
-                "password": "synthetic-password",
-            }
+            self.assertEqual(argv[-1], BOOTSTRAP.BITWARDEN_ITEM_ID)
             result = item or {
-                "id": self.item_id,
+                "id": BOOTSTRAP.BITWARDEN_ITEM_ID,
                 "key": BOOTSTRAP.BITWARDEN_ITEM_KEY,
                 "projectId": self.project_id,
-                "value": json.dumps(value),
+                "value": "synthetic-password",
             }
             return json.dumps(result)
 
@@ -87,7 +82,7 @@ class BootstrapTests(unittest.TestCase):
             created = json.loads(payload or "")
             self.assertEqual(
                 created,
-                BOOTSTRAP.expected_secret("synthetic-user", "synthetic-password"),
+                BOOTSTRAP.expected_secret(BOOTSTRAP.BITWARDEN_USERNAME, "synthetic-password"),
             )
             self.created = created
             return "secret/nas-tls-dsm-auth"
@@ -135,7 +130,6 @@ class BootstrapTests(unittest.TestCase):
             return BOOTSTRAP.bootstrap(
                 "/synthetic/kubeconfig",
                 uid or self.namespace_uid,
-                self.item_id,
                 apply=apply,
                 runner=runner,
             )
@@ -156,7 +150,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertTrue(all(not key.startswith("BWS_") for env in kubernetes_envs for key in env))
 
     def test_existing_secret_is_verified_without_mutation(self) -> None:
-        existing = BOOTSTRAP.expected_secret("synthetic-user", "synthetic-password")
+        existing = BOOTSTRAP.expected_secret(BOOTSTRAP.BITWARDEN_USERNAME, "synthetic-password")
         self.assertEqual(self.run_bootstrap(existing=existing, apply=True), "Existing Secret verified; unchanged")
         self.assertFalse(any("create" in argv for argv, _payload, _env in self.calls))
 
@@ -196,28 +190,33 @@ class BootstrapTests(unittest.TestCase):
                 self.run_bootstrap(apply=True, stored_change=change)
             self.assertNotIn("synthetic-password", str(error.exception))
 
-    def test_bitwarden_item_identity_and_exact_json_contract(self) -> None:
+    def test_bitwarden_item_identity_and_scalar_password_contract(self) -> None:
         for change in (
             {"id": "other-item"},
             {"key": "OTHER_ITEM"},
             {"projectId": "other-project"},
-            {"value": json.dumps({"username": "u", "password": "p", "extra": "x"})},
-            {"value": json.dumps({"username": "", "password": "p"})},
-            {
-                "value": '{"username":"first","username":"second","password":"p"}'
-            },
+            {"value": ""},
+            {"value": "password\nwith-control"},
+            {"value": 42},
         ):
             item = {
-                "id": self.item_id,
+                "id": BOOTSTRAP.BITWARDEN_ITEM_ID,
                 "key": BOOTSTRAP.BITWARDEN_ITEM_KEY,
                 "projectId": self.project_id,
-                "value": json.dumps(
-                    {"username": "synthetic-user", "password": "synthetic-password"}
-                ),
+                "value": "synthetic-password",
             }
             item.update(change)
             with self.assertRaises(BOOTSTRAP.BootstrapError):
                 self.run_bootstrap(item=item)
+
+    def test_bitwarden_source_is_fixed_and_username_is_not_selectable(self) -> None:
+        self.run_bootstrap()
+        secret_calls = [
+            argv for argv, _payload, _env in self.calls if argv[0] == "bws" and "secret" in argv
+        ]
+        self.assertEqual(len(secret_calls), 1)
+        self.assertEqual(secret_calls[0][-1], BOOTSTRAP.BITWARDEN_ITEM_ID)
+        self.assertEqual(BOOTSTRAP.BITWARDEN_USERNAME, "synology-csi")
 
     def test_subprocess_failures_timeout_and_output_are_redacted(self) -> None:
         with patch.object(

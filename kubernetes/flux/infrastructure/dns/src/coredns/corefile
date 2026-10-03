@@ -1,12 +1,16 @@
 # One CoreDNS instance handles internal zones, reverse zones, and public
-# recursion. The file plugin falls through for unknown bohdal.name records so
-# public split-DNS records can still resolve through DNS4EU.
+# recursion. The file plugin falls through for unknown split-DNS records so
+# public records can still resolve through DNS4EU.
 .:1053 {
     errors
     health :8080
     ready :8181
     prometheus :9153
 
+    file /zones/bohdy.sk.zone bohdy.sk {
+        reload 30s
+        fallthrough
+    }
     file /zones/bohdal.name.zone bohdal.name {
         reload 30s
         fallthrough

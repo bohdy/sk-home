@@ -52,10 +52,21 @@ def run_openssl(*args: str) -> None:
     )
 
 
+CANONICAL_HOSTNAME = "nas.bohdy.sk"
+COMPATIBILITY_HOSTNAME = "nas.bohdal.name"
+
+
 class Fixture:
     """Private CA and leaf chain used by every source validation test."""
 
-    def __init__(self, root: Path, *, hostname: str = "nas.bohdal.name", days: int = 30) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        hostname: str = CANONICAL_HOSTNAME,
+        hostnames: tuple[str, ...] | None = None,
+        days: int = 30,
+    ) -> None:
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
         self.source = root / "source"
@@ -83,9 +94,18 @@ class Fixture:
         )
         self.key = self.source / "tls.key"
         self.cert = self.source / "tls.crt"
-        self._issue_leaf(hostname, days)
+        # The staged cert-manager contract keeps the former internal name as
+        # its second SAN while all strict clients validate the new canonical
+        # name.  Wrong-name and compatibility-only tests can request one SAN.
+        self.hostnames = hostnames or (
+            (hostname, COMPATIBILITY_HOSTNAME)
+            if hostname == CANONICAL_HOSTNAME
+            else (hostname,)
+        )
+        self._issue_leaf(self.hostnames, days)
 
-    def _issue_leaf(self, hostname: str, days: int) -> None:
+    def _issue_leaf(self, hostnames: tuple[str, ...], days: int) -> None:
+        hostname = hostnames[0]
         csr = self.root / "leaf.csr"
         ext = self.root / "leaf.ext"
         ext.write_text(
@@ -93,7 +113,7 @@ class Fixture:
             "basicConstraints=critical,CA:FALSE\n"
             "keyUsage=critical,digitalSignature,keyEncipherment\n"
             "extendedKeyUsage=serverAuth\n"
-            f"subjectAltName=DNS:{hostname}\n",
+            f"subjectAltName={','.join(f'DNS:{name}' for name in hostnames)}\n",
             encoding="ascii",
         )
         run_openssl(
@@ -133,12 +153,12 @@ class Fixture:
 
     def config(self, **overrides: Any) -> Any:
         values = dict(
-            hostname="nas.bohdal.name",
+            hostname=CANONICAL_HOSTNAME,
             port=5001,
             source_cert=str(self.cert),
             source_key=str(self.key),
             auth_directory=str(self.root / "auth"),
-            target_description="nas.bohdal.name cert-manager",
+            target_description=f"{CANONICAL_HOSTNAME} cert-manager",
             target_id="stable-id",
             minimum_lifetime_seconds=24 * 60 * 60,
             timeout_seconds=3,
@@ -509,6 +529,18 @@ class ReconcilerTests(unittest.TestCase):
         with self.assertRaises(RECONCILER.ReconcileError):
             RECONCILER.validate_source_snapshot(wrong_config, RECONCILER.load_source_snapshot(wrong_config))
 
+    def test_dual_san_source_accepts_canonical_name_and_old_only_leaf_fails(self) -> None:
+        dual = self.fixture.config()
+        self.assertEqual(self.fixture.hostnames, (CANONICAL_HOSTNAME, COMPATIBILITY_HOSTNAME))
+        RECONCILER.validate_source_snapshot(dual, RECONCILER.load_source_snapshot(dual))
+
+        old_only = Fixture(self.root / "old-only", hostnames=(COMPATIBILITY_HOSTNAME,))
+        old_only_config = old_only.config()
+        with self.assertRaisesRegex(RECONCILER.ReconcileError, "source_tls_invalid"):
+            RECONCILER.validate_source_snapshot(
+                old_only_config, RECONCILER.load_source_snapshot(old_only_config)
+            )
+
     def test_missing_duplicate_and_pinned_target(self) -> None:
         config = self.fixture.config()
         target = RECONCILER.TargetSnapshot("id", config.target_description, False, ())
@@ -524,12 +556,12 @@ class ReconcilerTests(unittest.TestCase):
         config_path.write_text(
             json.dumps(
                 {
-                    "hostname": "nas.bohdal.name",
+                    "hostname": CANONICAL_HOSTNAME,
                     "port": 5001,
                     "source_cert": str(self.fixture.cert),
                     "source_key": str(self.fixture.key),
                     "auth_directory": str(self.root / "auth"),
-                    "target_description": "nas.bohdal.name cert-manager",
+                    "target_description": f"{CANONICAL_HOSTNAME} cert-manager",
                     "target_id": "stable-id",
                     "ca_file": str(self.fixture.ca_cert),
                 }

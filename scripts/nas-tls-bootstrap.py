@@ -22,7 +22,9 @@ from typing import Any, Callable, Mapping
 
 
 BITWARDEN_PROJECT_NAME = "sk-home"
-BITWARDEN_ITEM_KEY = "NAS_TLS_DSM_AUTH"
+BITWARDEN_ITEM_ID = "3c76c84f-2fec-455c-b212-b46e00f63952"
+BITWARDEN_ITEM_KEY = "SK-TALOS-SYNO-CSI"
+BITWARDEN_USERNAME = "synology-csi"
 SECRET_NAME = "nas-tls-dsm-auth"
 NAMESPACE_NAME = "nas-tls"
 COMMAND_TIMEOUT_SECONDS = 60
@@ -181,13 +183,11 @@ def _private_value(value: Any, field: str) -> str:
 
 
 def read_bitwarden_secret(
-    item_id: str,
     *,
     runner: Callable[..., str] = execute,
 ) -> tuple[str, str]:
-    """Read and validate the operator-approved item from the trusted project."""
+    """Read the existing storage account password without selecting a source."""
 
-    item_id = _bounded_identifier(item_id, "Bitwarden item identity invalid")
     raw_token = os.environ.get("BWS_ACCESS_TOKEN")
     token = token_value(raw_token)
     with tempfile.TemporaryDirectory(prefix="nas-tls-bws-") as directory:
@@ -221,24 +221,21 @@ def read_bitwarden_secret(
         project_id = _bounded_identifier(
             project.get("id"), "Bitwarden project identity invalid"
         )
-        item = document(runner(bws + ["secret", "get", item_id], env=bws_env))
+        item = document(
+            runner(bws + ["secret", "get", BITWARDEN_ITEM_ID], env=bws_env)
+        )
         if not isinstance(item, dict):
-            raise BootstrapError("Bitwarden Secret response shape invalid")
+            raise BootstrapError("Bitwarden response shape invalid")
         if (
-            item.get("id") != item_id
+            item.get("id") != BITWARDEN_ITEM_ID
             or item.get("key") != BITWARDEN_ITEM_KEY
             or item.get("projectId") != project_id
         ):
-            raise BootstrapError("Bitwarden Secret identity or value invalid")
-        value = item.get("value")
-        if not isinstance(value, str) or not value or len(value) > MAX_COMMAND_OUTPUT_BYTES:
-            raise BootstrapError("Bitwarden Secret identity or value invalid")
-        payload = document(value)
-        if not isinstance(payload, dict) or set(payload) != {"username", "password"}:
-            raise BootstrapError("Bitwarden Secret JSON contract invalid")
-        return _private_value(payload.get("username"), "username"), _private_value(
-            payload.get("password"), "password"
-        )
+            raise BootstrapError("Bitwarden Secret identity invalid")
+        # The existing storage item intentionally stores only the password.
+        # The non-secret username is fixed by the DSM account contract.
+        password = _private_value(item.get("value"), "password")
+        return BITWARDEN_USERNAME, password
 
 
 def verify_namespace(value: Any, namespace_uid: str) -> None:
@@ -292,7 +289,6 @@ def _kubernetes_environment() -> dict[str, str]:
 def bootstrap(
     kubeconfig: str,
     namespace_uid: str,
-    item_id: str,
     *,
     apply: bool = False,
     runner: Callable[..., str] = execute,
@@ -300,7 +296,6 @@ def bootstrap(
     """Verify the target and Secret, creating it only when explicitly allowed."""
 
     _bounded_identifier(namespace_uid, "Expected namespace identity invalid")
-    _bounded_identifier(item_id, "Bitwarden item identity invalid")
     if not isinstance(kubeconfig, str) or not kubeconfig or "\x00" in kubeconfig:
         raise BootstrapError("Kubeconfig path invalid")
     kube_env = _kubernetes_environment()
@@ -309,7 +304,7 @@ def bootstrap(
         runner(kube + ["get", "namespace", NAMESPACE_NAME, "-o", "json"], env=kube_env)
     )
     verify_namespace(namespace, namespace_uid)
-    username, password = read_bitwarden_secret(item_id, runner=runner)
+    username, password = read_bitwarden_secret(runner=runner)
     expected = expected_secret(username, password)
     raw = runner(
         kube
@@ -355,13 +350,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kubeconfig", required=True)
     parser.add_argument("--namespace-uid", required=True)
     parser.add_argument(
-        "--bitwarden-item-id",
-        "--item-id",
-        dest="item_id",
-        required=True,
-        help="Actual operator-approved Bitwarden item ID; never a credential value.",
-    )
-    parser.add_argument(
         "--apply-secret",
         action="store_true",
         help="Create the absent Secret only after the approved production gate.",
@@ -372,7 +360,6 @@ def main(argv: list[str] | None = None) -> int:
             bootstrap(
                 args.kubeconfig,
                 args.namespace_uid,
-                args.item_id,
                 apply=args.apply_secret,
             )
         )
