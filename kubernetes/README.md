@@ -2,7 +2,7 @@
 
 This directory contains the Kubernetes-side configuration for the `sk-talos` cluster. Terraform still owns the infrastructure outside Kubernetes, while Flux owns in-cluster add-ons after the first Cilium bootstrap.
 
-Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, the shared Cloudflare Tunnel connector depends on policy and Cilium, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP. The CloudNativePG operator depends on policy and Cilium. The suspended shared PostgreSQL application depends on that operator, Cilium and Synology CSI storage; both operator installation and later database activation require reviewed production approval.
+Cluster infrastructure add-ons are reconciled as separate Flux `Kustomization` resources so dependencies are explicit. Shared cluster policy reconciles first, Cilium reconciles the LoadBalancer/BGP resources, cert-manager installs before the production ACME issuer, the shared Cloudflare Tunnel connector depends on policy and Cilium, generic Synology CSI storage reconciles after policy and Cilium, and DNS depends on policy and Cilium before publishing the Blocky resolver VIP. The CloudNativePG operator depends on policy and Cilium. The unsuspended namespace-only `shared-postgres-namespace` prerequisite creates the protected `postgres` Namespace for Secret bootstrap. The suspended shared PostgreSQL application depends on that prerequisite, the operator, Cilium and Synology CSI storage; namespace/operator installation and later database activation require reviewed production approval.
 
 ## Bootstrap order
 
@@ -114,7 +114,7 @@ Stateful application workloads live in `kubernetes/flux/apps` and reconcile thro
 
 The [shared PostgreSQL contract](flux/apps/shared-postgres/README.md) defines three CloudNativePG instances on distinct nodes, retained Synology claims and a separate limited database/role for each approved application. LiteLLM is the first configured consumer. The service is internal-only; it creates no public ingress, service VIP or DNS publication. One synchronous standby is required for writes, while all three volumes share the same NAS failure domain. Backups and restore testing are deferred.
 
-The database Flux child stays suspended until secure Bitwarden Secret bootstrap, current cluster/storage checks and a separately reviewed activation change. Installing the operator is also a production change requiring approval before merge. Run `mise run shared-postgres-render` for credential-free chart and Kustomize validation; successful rendering does not establish deployment or live acceptance.
+The database Flux child stays suspended until secure Bitwarden Secret bootstrap, current cluster/storage checks and a separately reviewed activation change. The unsuspended namespace prerequisite allows Secret bootstrap without activating database workloads; it is the sole owner of the prune-protected `postgres` Namespace. Installing that prerequisite and the operator are production changes requiring approval before merge. Run `mise run shared-postgres-render` for credential-free chart and Kustomize validation; successful rendering does not establish deployment or live acceptance.
 
 ## Storage
 

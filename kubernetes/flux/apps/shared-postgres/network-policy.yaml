@@ -67,10 +67,13 @@ spec:
               protocol: TCP
             - port: "8000"
               protocol: TCP
+    # Allow the API Service port and its control-plane backend port.
     - toEntities:
         - kube-apiserver
       toPorts:
         - ports:
+            - port: "443"
+              protocol: TCP
             - port: "6443"
               protocol: TCP
     - toEndpoints:

@@ -16,6 +16,7 @@ spec:
     kind: GitRepository
     name: flux-system
   dependsOn:
+    - name: shared-postgres-namespace
     - name: cloudnative-pg
     - name: storage-synology-csi
     - name: cilium

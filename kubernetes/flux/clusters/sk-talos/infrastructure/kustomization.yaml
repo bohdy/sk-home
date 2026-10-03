@@ -11,3 +11,4 @@ resources:
   - storage-synology-csi-kustomization.yaml
   - dns-kustomization.yaml
   - cloudnative-pg-kustomization.yaml
+  - shared-postgres-namespace-kustomization.yaml
