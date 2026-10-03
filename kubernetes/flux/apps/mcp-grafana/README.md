@@ -1,0 +1,9 @@
+# Grafana MCP runtime
+
+This child is an independent, suspended Flux workload. It starts one non-root tunnel-client PID 1 and one Grafana MCP stdio child per Deployment, with no Kubernetes Service, ingress, persistent volume, or VIP. The image is staged as `activation-required`; activation requires a trusted GHCR digest, a successful Grafana HTTPS Viewer-token preflight, a valid canonical certificate, and the external Secret bootstrap.
+
+The MCP command enables only search, datasource, Prometheus, Loki, alerting, dashboard, folder, and navigation categories. It uses `--disable-write`, `--disable-api`, `--disable-sql`, `--disable-admin`, `--disable-proxied`, `--disable-runpanelquery`, and disabled usage telemetry. Grafana is reached through `https://grafana.bohdal.name`; Cilium allows the `10.1.30.55:443` VIP and the translated metrics Grafana pod on port 3000.
+
+The external bootstrap contract is a Secret named `mcp-grafana-credentials` with `control-plane-api-key` and `grafana-service-account-token`, plus a non-secret `control-plane-tunnel-id` key in the ConfigMap. The tunnel Control Plane key is limited to runtime Read and Use permissions; manager permissions and account provisioning are outside this repository. A Viewer token is required and must not be placed in Git or logs.
+
+Before activation, verify the installed MCP binary with initialize/list-tools and confirm that no write, SQL, admin, proxied, run-panel-query, or generic API tools are registered. Query output remains bounded by the upstream server timeout and Grafana datasource limits; VictoriaLogs/LogsQL guardrails are documented as bounded query behavior and do not claim a universal byte budget. Rollback scales the Deployment to zero or deletes the workload and revokes its runtime key; suspending Flux alone does not stop an already-running process.

@@ -1,0 +1,9 @@
+# Synology File Station MCP adapter
+
+The adapter exposes only `list_entries`, `search_by_name`, `stat`, `read_text`, `read_document`, `preview_image`, `preview_pdf_page`, and `media_info`. It uses the official Synology File Station API guide and verifies `SYNO.FileStation.List` `list_share` output before accepting the configured `Media` share: the returned virtual path must resolve to `/volume1/Media`, and every returned entry must provide a segment-safe `additional.real_path` beneath that root.
+
+The adapter authenticates with a dedicated non-admin read-only File Station identity, keeps the SID in memory, rejects redirects, disables proxy environment variables, and accepts only `https://nas.bohdal.name:5001`. The current NAS certificate is invalid for that hostname, so the Flux child remains suspended until the separate certificate-renewal work is complete; TLS verification is never disabled.
+
+File Station search tasks are stopped and cleaned up on success, timeout, error, or cancellation. Paths reject absolute, backslash, NUL, empty, dot, dot-dot, encoded, and double-encoded traversal. Download, parser, archive, PDF page, image pixel, response, temporary disk, and subprocess time limits are enforced. MarkItDown runs with plugins disabled and no LLM or macro execution. Large media is inspected through a verified HTTP range response or an explicitly documented localhost range proxy; when a verifiable range is unavailable the tool returns basic metadata with `inspection_limited: true` and never downloads the full file as a fallback.
+
+External bootstrap must provide `SYNOLOGY_USERNAME`, `SYNOLOGY_PASSWORD`, `CONTROL_PLANE_API_KEY`, and `CONTROL_PLANE_TUNNEL_ID` through the deployment Secret/configuration contract. No Secret object, account ID, tunnel ID, or password is committed here.

@@ -109,6 +109,12 @@ source .env && act --workflows .github/workflows/terraform.yaml \
 
 `.github/workflows/terraform.yaml` is trusted-only. It runs for pushes to `main` and manual dispatches from `main`, retrieves Bitwarden values only for those trusted events, and creates immutable plan artifacts only during trusted runs for the production-gated apply jobs. A manual dispatch pointed at any other ref fails before credential retrieval, and multiple mutation inputs fail closed. The targeted Proxmox storage jobs retrieve the R2 backend credentials plus the Proxmox API token and Synology password; the pull-request path never has any of those infrastructure credentials.
 
+### MCP integrations
+
+The staged MCP integrations live under `services/` and `kubernetes/flux/apps/mcp-*`. Each child is independently suspended and runs one non-root OpenAI tunnel-client PID 1 with exactly one stdio MCP server, with no Service, ingress, PVC, or VIP. `mise run mcp-lint`, `mise run mcp-test`, `mise run mcp-manifest-check`, and `mise run mcp-container-build` provide the local checks; the PR workflow is hosted and credential-free, while the main-only image workflow publishes trusted GHCR digests for review.
+
+The Grafana runtime is read-only and exposes only the reviewed search, datasource, Prometheus, Loki, alerting, dashboard, folder, and navigation categories. The Synology runtime exposes bounded read-only File Station tools rooted only after `list_share` verifies the Media real path. Activation requires external Secret bootstrap metadata, a reviewed immutable image digest, live TLS and identity preflights, and explicit operator approval; the repository does not provision accounts, tunnel IDs, Viewer tokens, or passwords.
+
 ### Running OpenTofu Locally
 
 To run OpenTofu outside GitHub Actions, use the repository devcontainer. Do not install or run OpenTofu, the Bitwarden Secrets Manager CLI (`bws`), or `jq` directly on the host. Load the same Bitwarden token from `.env` before fetching secrets. Use `set -a` while sourcing `.env` so child processes such as `bws` can read `BWS_ACCESS_TOKEN`:

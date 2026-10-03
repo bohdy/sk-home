@@ -1,0 +1,135 @@
+# One tunnel-client process owns one stdio Grafana MCP child. The workload is
+# Recreate because tunnel sessions are stateful and there is no Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-grafana
+  namespace: mcp-grafana
+  labels:
+    app.kubernetes.io/name: mcp-grafana
+    app.kubernetes.io/component: mcp-runtime
+spec:
+  # Stage namespace/policy before Secret bootstrap; activation sets this to one.
+  replicas: 0
+  revisionHistoryLimit: 2
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-grafana
+        app.kubernetes.io/component: mcp-runtime
+    spec:
+      serviceAccountName: mcp-grafana
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: tunnel-client
+          image: ghcr.io/bohdy/sk-home-mcp-grafana:activation-required
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/tunnel-client
+          args:
+            - run
+            - --config
+            - /etc/mcp/tunnel-client.yaml
+          env:
+            - name: CONTROL_PLANE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-grafana-credentials
+                  key: control-plane-api-key
+            - name: CONTROL_PLANE_TUNNEL_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-grafana-config
+                  key: control-plane-tunnel-id
+            - name: GRAFANA_URL
+              value: https://grafana.bohdal.name
+            - name: GRAFANA_SERVICE_ACCOUNT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-grafana-credentials
+                  key: grafana-service-account-token
+            - name: DO_NOT_TRACK
+              value: "1"
+          startupProbe:
+            exec:
+              command:
+                - /usr/bin/curl
+                - --fail
+                - --silent
+                - --show-error
+                - http://127.0.0.1:8080/healthz
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /usr/bin/curl
+                - --fail
+                - --silent
+                - --show-error
+                - http://127.0.0.1:8080/readyz
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /usr/bin/curl
+                - --fail
+                - --silent
+                - --show-error
+                - http://127.0.0.1:8080/healthz
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mcp
+              readOnly: true
+            - name: runtime
+              mountPath: /run/tunnel-client
+            - name: scratch
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: mcp-grafana-config
+            items:
+              - key: tunnel-client.yaml
+                path: tunnel-client.yaml
+        - name: runtime
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+        - name: scratch
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

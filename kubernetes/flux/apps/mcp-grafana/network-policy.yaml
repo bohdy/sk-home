@@ -1,0 +1,49 @@
+# Egress is limited to the OpenAI control plane, the canonical Grafana VIP,
+# and the selected Grafana pod backend after Cilium service translation.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mcp-grafana
+  namespace: mcp-grafana
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-grafana
+  ingress: []
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchName: api.openai.com
+              - matchName: grafana.bohdal.name
+    - toFQDNs:
+        - matchName: api.openai.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toCIDR:
+        - 10.1.30.55/32
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Cilium enforces the translated Grafana backend in addition to its VIP.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: observability
+            k8s:app.kubernetes.io/instance: metrics
+            k8s:app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP

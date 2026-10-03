@@ -1,0 +1,55 @@
+name: MCP validation
+
+on:
+  pull_request:
+    paths:
+      - "services/**"
+      - "kubernetes/flux/apps/mcp-*/**"
+      - "kubernetes/flux/clusters/sk-talos/**"
+      - "scripts/mcp-*"
+      - "mise.toml"
+      - ".github/workflows/mcp-*.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "kubernetes/flux/apps/mcp-*/**"
+      - "scripts/mcp-*"
+      - "mise.toml"
+      - ".github/workflows/mcp-*.yaml"
+
+# PR-controlled code runs only on a hosted runner without infrastructure
+# credentials, remote state, binary plans, package writes or uploaded artifacts.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOCKER_BUILD_SUMMARY: false
+  DOCKER_BUILD_RECORD_UPLOAD: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - uses: jdx/mise-action@v4.0.1
+        with:
+          version: 2026.9.2
+          install: true
+      - name: Install fixture generator on isolated hosted runner
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes ffmpeg
+      - name: Validate locked adapter and manifests
+        run: mise run mcp-bootstrap mcp-lint mcp-test mcp-manifest-check
+      - name: Build pinned runtime images without publishing
+        run: mise run mcp-container-build
+      - name: Verify Grafana stdio initialization and read-only tool schemas
+        run: mise run mcp-grafana-check
+      - name: Verify source hygiene
+        run: mise exec -- pre-commit run --all-files

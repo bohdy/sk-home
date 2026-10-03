@@ -1,0 +1,11 @@
+# Stage the namespace under restricted pod security before activation.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-synology
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+  labels:
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

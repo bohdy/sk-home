@@ -1,0 +1,39 @@
+# Egress is limited to OpenAI tunnel control, DNS, and the NAS File Station
+# HTTPS endpoint. Health checks run inside the container over loopback.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mcp-synology
+  namespace: mcp-synology
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-synology
+  ingress: []
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchName: api.openai.com
+              - matchName: nas.bohdal.name
+    - toFQDNs:
+        - matchName: api.openai.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toCIDR:
+        - 10.1.100.10/32
+      toPorts:
+        - ports:
+            - port: "5001"
+              protocol: TCP

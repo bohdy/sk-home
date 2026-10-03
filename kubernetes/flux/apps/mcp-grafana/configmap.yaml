@@ -1,0 +1,33 @@
+# Non-secret tunnel and Grafana policy. Account credentials are bootstrapped
+# separately and are never stored in this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-grafana-config
+  namespace: mcp-grafana
+data:
+  control-plane-tunnel-id: activation-required
+  tunnel-client.yaml: |-
+    config_version: 1
+    control_plane:
+      base_url: https://api.openai.com
+      api_key: env:CONTROL_PLANE_API_KEY
+    log:
+      level: error
+      format: json
+    health:
+      listen_addr: 127.0.0.1:8080
+      url_file: /run/tunnel-client/health-url
+    process:
+      pid_file: /run/tunnel-client/tunnel-client.pid
+    mcp:
+      max_concurrent_requests: 1
+      stdio_send_initialized_notification: true
+      commands:
+        - channel: main
+          command: >-
+            /usr/local/bin/mcp-grafana --transport stdio
+            --enabled-tools=search,datasource,prometheus,loki,alerting,dashboard,folder,navigation
+            --disable-write --disable-api --disable-sql --disable-admin
+            --disable-proxied --disable-runpanelquery --usage-stats=disabled
+            --log-level=error --grafana-timeout=15s --max-loki-log-limit=100
