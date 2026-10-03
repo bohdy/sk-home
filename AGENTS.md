@@ -127,3 +127,7 @@ The orchestrator must classify each task before delegating and use the smallest 
 - For workflow changes, inspect the pull-request path separately and verify it cannot initialize remote state, retrieve Bitwarden values, create binary plans, upload artifacts, or execute on a shared infrastructure runner.
 - Summarize what was validated when reporting completed work.
 - Call out any verification gaps or follow-up automation that would improve enforcement.
+
+## Shared PostgreSQL
+
+CloudNativePG operator installation and shared PostgreSQL activation require reviewed production approval through GitOps. Run `mise run shared-postgres-render` for chart/source validation. Keep the protected `postgres` Namespace owned by the unsuspended namespace-only infrastructure prerequisite so bootstrap can precede activation; the suspended database child must depend on it and must not duplicate Namespace ownership. Preserve database suspension until secure Secret bootstrap and live capacity/cluster checks pass. Protect retained namespaces/Cluster/PVs, keep separate limited roles/databases and exact TLS/SCRAM HBA pairs, and use versioned owner ACL Jobs for each real consumer. Do not rotate existing Bitwarden values during topology changes. Backups/PITR are explicitly deferred; replication and retention are not backups. Prove role flags, allowed/denied access, three instances/PVC retention and approved failover persistence before reporting deployment complete.

@@ -1,0 +1,7 @@
+# Keep operator installation isolated from application database storage.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled

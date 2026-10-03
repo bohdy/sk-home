@@ -1,0 +1,8 @@
+# No credentials are rendered: basic-auth is securely bootstrapped out of Git.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cluster.yaml
+  - network-policy.yaml
+  - litellm-acl-job.yaml
+  - litellm-database.yaml

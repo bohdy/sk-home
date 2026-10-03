@@ -1,0 +1,22 @@
+# Activation follows reviewed Secret bootstrap, capacity checks and approval.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: shared-postgres
+  namespace: flux-system
+spec:
+  suspend: true
+  interval: 10m
+  retryInterval: 1m
+  timeout: 15m
+  path: ./kubernetes/flux/apps/shared-postgres
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  dependsOn:
+    - name: shared-postgres-namespace
+    - name: cloudnative-pg
+    - name: storage-synology-csi
+    - name: cilium

@@ -1,4 +1,6 @@
 [tools]
+# Helm renders the pinned CNPG operator chart during credential-free validation.
+helm = "4.3.0"
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
@@ -17,3 +19,11 @@ run = [
 [tasks.smtp-relay-preflight]
 description = "Verify live SMTP relay prerequisites without reading Secret data."
 run = "bash scripts/smtp-relay-preflight.sh"
+
+[tasks.shared-postgres-render]
+description = "Render the pinned PostgreSQL chart and Flux trees without credentials."
+run = "bash scripts/shared-postgres-render.sh"
+
+[tasks.shared-postgres-bootstrap-check]
+description = "Run synthetic Secret bootstrap safety tests without credentials."
+run = "python3 scripts/test-shared-postgres-bootstrap.py"

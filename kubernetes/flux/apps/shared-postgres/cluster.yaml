@@ -1,0 +1,74 @@
+# Three node-separated instances survive a pod/node failure, not a NAS failure.
+# Retained volumes and replication are not backups; backup/PITR is deferred.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: shared-postgres
+  namespace: postgres
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: disabled
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie@sha256:99bc64e413d59b017d169ce2ff25746f1d68c5d7210a19f12c0464a109216ee1
+  enableSuperuserAccess: false
+  storage:
+    storageClass: synology-iscsi-retain
+    size: 10Gi
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: 256MB
+      # Do not emit statement payloads, including authentication/credential SQL.
+      log_statement: none
+      log_min_duration_statement: "-1"
+      log_min_error_statement: panic
+    # CNPG fixed local-peer and replication-cert rules precede these rules.
+    # Every application pair is explicit; terminal rejection shadows the default.
+    pg_hba:
+      - hostssl litellm litellm all scram-sha-256
+      - host all all all reject
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+  bootstrap:
+    initdb:
+      database: litellm
+      owner: litellm
+      secret:
+        name: litellm-postgres-auth
+      # These one-time bootstrap ACLs must not be mistaken for drift reconciliation.
+      postInitSQL:
+        - REVOKE CONNECT ON DATABASE postgres FROM PUBLIC
+        - REVOKE CONNECT ON DATABASE template1 FROM PUBLIC
+      postInitApplicationSQL:
+        - REVOKE ALL ON DATABASE litellm FROM PUBLIC
+        - GRANT CONNECT ON DATABASE litellm TO litellm
+        - REVOKE ALL ON SCHEMA public FROM PUBLIC
+        - GRANT USAGE, CREATE ON SCHEMA public TO litellm
+  # Inline managed.roles is the sole ongoing role owner after initdb creates it.
+  # Never add a DatabaseRole with the same name; it would conflict with this owner.
+  managed:
+    roles:
+      - name: litellm
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        createrole: false
+        replication: false
+        bypassrls: false
+        inherit: false
+        connectionLimit: 30
+        passwordSecret:
+          name: litellm-postgres-auth
