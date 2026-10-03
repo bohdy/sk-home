@@ -31,6 +31,32 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install the official CNPG kubectl plugin from a pinned release. Keep each
+# architecture and checksum pair together and reject unsupported builders so a
+# mismatched or moving artifact cannot enter the development image.
+RUN set -eu; \
+    case "${TARGETARCH:-}" in \
+        amd64) \
+            cnpg_arch="linux_x86_64"; \
+            cnpg_sha256="12a54d93c1fcf6b3b37deba5cd2c5c6fe4fbd2029dc5cb1f7c02d5e93fa14838"; \
+            ;; \
+        arm64) \
+            cnpg_arch="linux_arm64"; \
+            cnpg_sha256="232f6b65a94637a4c81d3a6471bfce5de3bd3750e5c9fe6af27b80f84bb3a719"; \
+            ;; \
+        *) \
+            echo "Unsupported TARGETARCH=${TARGETARCH:-}" >&2; \
+            exit 1; \
+            ;; \
+    esac; \
+    cnpg_deb="/tmp/kubectl-cnpg_1.30.1_${cnpg_arch}.deb"; \
+    trap 'rm -f "${cnpg_deb}"' EXIT; \
+    curl --fail --show-error --silent --location --proto '=https' --tlsv1.2 \
+        "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.30.1/kubectl-cnpg_1.30.1_${cnpg_arch}.deb" \
+        --output "${cnpg_deb}"; \
+    printf '%s  %s\n' "${cnpg_sha256}" "${cnpg_deb}" | sha256sum --check --status -; \
+    dpkg --install "${cnpg_deb}"
+
 # Keep the container user stable across Ubuntu base image changes. Some Ubuntu
 # images include this user and others do not, so create it only when needed.
 RUN id -u ubuntu >/dev/null 2>&1 || useradd --create-home --shell /bin/bash ubuntu
