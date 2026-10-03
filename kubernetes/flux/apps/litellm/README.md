@@ -21,6 +21,19 @@ The database uses `docker.io/library/postgres:18.6-bookworm`, pinned to OCI inde
 
 Both Secrets belong in namespace `litellm` and must be provisioned from Bitwarden Secrets Manager through the approved operator bootstrap. There is no Secret payload or new secret-controller installation in this component. Verify Secret names, key names and types only; never print values, place passwords in command arguments, commit connection URLs containing credentials, or capture them in CI artifacts. Percent-encode password characters correctly when preparing `DATABASE_URL`. Preserve the salt alongside the database; replacing it can make stored provider credentials unreadable. Keep provider keys in Bitwarden as their source of truth and supply actual values only through the authenticated Admin UI after activation.
 
+The approved internal credential bootstrap uses these Bitwarden item names in the existing sk-home project; creation and Kubernetes provisioning are separate steps:
+
+| Bitwarden item name | Kubernetes Secret | Key |
+| --- | --- | --- |
+| `LITELLM_DATABASE_URL` | `litellm-runtime` | `DATABASE_URL` |
+| `LITELLM_MASTER_KEY` | `litellm-runtime` | `LITELLM_MASTER_KEY` |
+| `LITELLM_SALT_KEY` | `litellm-runtime` | `LITELLM_SALT_KEY` |
+| `LITELLM_UI_USERNAME` | `litellm-runtime` | `UI_USERNAME` |
+| `LITELLM_UI_PASSWORD` | `litellm-runtime` | `UI_PASSWORD` |
+| `LITELLM_POSTGRES_PASSWORD` | `litellm-postgres-auth` | `POSTGRES_PASSWORD` |
+
+This bounded creation-only bootstrap is an approved exception because the repository has no declarative Bitwarden Secret ownership path. Generate internal credentials in process memory and pass them directly to the official Bitwarden SDK; keep values out of command arguments, files and logs. Derive the database URL from the same PostgreSQL password and verify the stored values privately before Kubernetes provisioning. Preserve existing items and the salt; never automatically overwrite or rotate them. Recover a partial creation by checking existing metadata before retrying. This bootstrap does not create provider API keys or models and does not activate Flux or provision Kubernetes Secrets.
+
 The empty model list is intentional. A healthy gateway and UI do not prove upstream inference or spend accounting: add an actual provider and model supplied by the operator, then verify an authenticated request and its usage/spend record. `store_prompts_in_spend_logs: false`, `disable_error_logs: true`, and `turn_off_message_logging: true` retain spend tracking while excluding prompt/response logging and the database error-log view. Do not enable payload logs or debugging while diagnosing credentials. Verify the pinned version actually honours these settings before production use with sensitive prompts.
 
 The proxy runs as UID/GID 65534 and PostgreSQL as UID/GID 999, with no service-account token, privilege escalation or Linux capabilities. Both root filesystems are read-only. The proxy init container copies UI/assets, including dotfiles, from the official image into bounded writable emptyDir volumes; runtime paths also provide migrations, general cache and temporary storage. Baked image Prisma engine paths under `/opt/prisma` remain intact. PostgreSQL receives writable socket and temporary volumes alongside its data claim. Ephemeral limits bound writable scratch space; resource sizes are initial committed defaults and should be adjusted from observed usage in a reviewed change.
