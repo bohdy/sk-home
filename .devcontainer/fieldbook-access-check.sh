@@ -32,8 +32,10 @@ for instructions in "${fieldbook_path}/AGENTS.md" "${global_instructions}"; do
 done
 
 # Reject an incomplete mount while avoiding network access or credential loading.
-git_dir=$(git -C "${fieldbook_path}" rev-parse --absolute-git-dir) || fail 'Cannot resolve Fieldbook Git metadata'
-git_common_dir=$(git -C "${fieldbook_path}" rev-parse --path-format=absolute --git-common-dir) || fail 'Cannot resolve shared Fieldbook Git metadata'
+# The operator authorizes this exact bind mount; macOS/container UIDs may differ.
+# Trust it only for these invocations, without global or wildcard safe.directory.
+git_dir=$(git -c safe.directory="${fieldbook_path}" -C "${fieldbook_path}" rev-parse --absolute-git-dir) || fail 'Cannot resolve Fieldbook Git metadata'
+git_common_dir=$(git -c safe.directory="${fieldbook_path}" -C "${fieldbook_path}" rev-parse --path-format=absolute --git-common-dir) || fail 'Cannot resolve shared Fieldbook Git metadata'
 [[ -d "${git_dir}" && -r "${git_dir}" && -x "${git_dir}" ]] || fail "Cannot access Git directory: ${git_dir}"
 [[ -d "${git_common_dir}" && -r "${git_common_dir}" && -x "${git_common_dir}" ]] || fail "Cannot access shared Git directory: ${git_common_dir}"
 
