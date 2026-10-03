@@ -1,0 +1,8 @@
+# Operator lifecycle is separate from databases and retained data.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - oci-repository.yaml
+  - helm-release.yaml
+  - network-policy.yaml

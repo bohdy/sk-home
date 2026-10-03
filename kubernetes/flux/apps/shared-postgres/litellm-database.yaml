@@ -1,0 +1,18 @@
+# Adopt the initdb database for ongoing declarative ownership (ALTER DATABASE
+# for existing databases); retain it if this Kubernetes resource is removed.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: shared-postgres-litellm
+  namespace: postgres
+spec:
+  name: litellm
+  owner: litellm
+  ensure: present
+  databaseReclaimPolicy: retain
+  cluster:
+    name: shared-postgres
+  schemas:
+    - name: public
+      owner: litellm
+      ensure: present

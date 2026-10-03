@@ -10,3 +10,4 @@ resources:
   - cloudflare-tunnel-kustomization.yaml
   - storage-synology-csi-kustomization.yaml
   - dns-kustomization.yaml
+  - cloudnative-pg-kustomization.yaml

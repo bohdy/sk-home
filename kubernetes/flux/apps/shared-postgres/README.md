@@ -1,0 +1,39 @@
+# Shared PostgreSQL
+
+The `shared-postgres` Flux child is staged with `suspend: true`. Installing the separate `cloudnative-pg` infrastructure child is itself a production mutation and requires reviewed production approval before merge. Database activation requires a subsequent approved GitOps change after Secret bootstrap and live preflight. Successful rendering does not prove deployment.
+
+CloudNativePG 1.30.1 (chart 0.29.1) officially supports Kubernetes 1.36 and PostgreSQL 18. The chart OCI manifest, operator image and PostgreSQL 18.6 system-trixie image are pinned by digest. The public chart archive checksum is checked by `mise run shared-postgres-render`; Helm 4.3.0 is pinned. See [supported releases](https://cloudnative-pg.io/docs/1.30/supported_releases/), [networking](https://cloudnative-pg.io/docs/1.30/networking/), [database management](https://cloudnative-pg.io/docs/1.30/declarative_database_management/) and [role management](https://cloudnative-pg.io/docs/1.30/declarative_role_management/).
+
+Three instances in namespace `postgres` require different nodes and one `synology-iscsi-retain` ReadWriteOnce claim of `10Gi` each. Database requests total 750m CPU and 1.5Gi memory; memory limits total 3Gi, plus operator requests of 100m/256Mi. Namespace and Cluster are protected from Flux pruning; the live StorageClass must retain PVs. Expansion is supported by the class. Pod/node failover is possible, but all volumes share one NAS failure domain. One synchronous standby is required to acknowledge commits; writes stop if no standby is available. Retention and replication are not backups or PITR. Backups and restore testing are explicitly deferred.
+
+## Consumer contract
+
+| Consumer | Database / role | Service | Credential source |
+| --- | --- | --- | --- |
+| LiteLLM | `litellm` / `litellm` | `shared-postgres-rw.postgres.svc.cluster.local:5432` | Existing Bitwarden `LITELLM_POSTGRES_PASSWORD` |
+
+Bootstrap requires `postgres/litellm-postgres-auth` of type `kubernetes.io/basic-auth`, keys `username` (`litellm`) and `password`, with label `cnpg.io/reload: "true"`. Inject the existing Bitwarden password securely without rotation, stdout, plaintext files or credential-bearing argv. Values never enter Git, render validation or PR CI. Remote superuser access is disabled. The application URL uses this service, percent-encoded existing credentials, database `litellm` and `sslmode=require`; updating the existing Bitwarden URL is a separately reviewed topology change. `sslmode=require` encrypts traffic without verifying server identity; CA distribution and `verify-full` would require a further reviewed contract.
+
+Initdb creates the first database and role. The Database resource then reconciles the existing database owner using `ALTER DATABASE` and explicitly retains it on resource deletion. Inline `managed.roles` is the sole ongoing role owner; do not add a conflicting `DatabaseRole`. The role denies superuser, create-database, create-role, replication, bypass-RLS and inherited membership privileges and limits connections to 30. Bootstrap revokes `PUBLIC` database/schema privileges. The owner-run `litellm-acl-v1` Job reapplies the application ACL transactionally. It runs once per reviewed Job revision, not continuously on drift; ACL changes must bump the Job name revision. The owner may manage its own schema for migrations. CNPG fixed local-peer and replication-certificate HBA rules precede the exact TLS/SCRAM `litellm`/`litellm` pair; the terminal reject blocks other remote role/database combinations before the default rule, including `postgres` and `template1`.
+
+Application ingress requires namespace `litellm` and `app.kubernetes.io/name=litellm` on TCP 5432. The ACL Job has its own exact identity. Operator and cluster-pod control/replication paths allow only their required TCP 8000/5432 ports; API and DNS paths are restricted separately; operator webhook and node probes use TCP 9443. Cilium can implicitly trust local nodes or hostNetwork paths, so this is not total host isolation. SQL authentication and privileges remain essential. Only CNPG ClusterIP services are created: no public ingress, VIP, DNS publication, gateway changes, VM or Redis.
+
+## Another application
+
+Add only a real approved consumer, with a separate Bitwarden-backed basic-auth Secret, limited inline role, Database with explicit owner and `databaseReclaimPolicy=retain`, exact TLS/SCRAM HBA pair before terminal rejection and exact namespace/label policy. Include a versioned owner-run ACL Job for its own database/schema, following the initial Job. Database/role resources do not revoke `PUBLIC` access; initdb SQL does not reconcile later databases. Verify new fields against the pinned CRDs and do not add placeholder consumers or production test databases.
+
+## Approval and acceptance
+
+Before activation, recheck six Ready nodes, Flux/Cilium/Synology CSI health, Retain/WaitForFirstConsumer/expansion on the class and live NAS Volume1 free capacity. Intake observed about 3.2TiB free on healthy Volume1; StoragePool unallocated capacity is a different metric, and the StorageClass does not pin a DSM volume. Recheck the current sample before apply. Confirm Secret metadata/type/keys without payload output, review the exact Git revision and preserve existing production gates.
+
+After activation, prove three Ready instances on distinct nodes, two streaming replicas, three Bound 10Gi claims and retained PVs, successful ACL Job and role flags. Test own-database login, rejected `postgres`/other-database access and allowed/denied namespace/label identities. Write a harmless marker, perform an approved controlled failover, verify the marker and role access afterward, then remove it. Record actual evidence before declaring deployment complete.
+
+For rollback, suspend reconciliation through a reviewed Git change and preserve Namespace, Cluster, claims and Database retention. Do not delete the operator before assessing retained instances or uninstall CRDs as an operational shortcut. Restoring an older chart/image is a reviewed compatibility decision, not an automatic database downgrade. Namespace prune protection does not protect against intentional deletion.
+
+Validation uses `mise run shared-postgres-render` to check the public archive checksum, Helm lint/template with CRDs, pinned operator image and all affected Kustomize trees. Hosted PR validation receives no infrastructure credentials, Bitwarden values, backend access or plan artifacts.
+
+## Secret bootstrap interface
+
+After production-approved Namespace creation, independently verify its UID in the approved target cluster. Run `python3 scripts/shared-postgres-bootstrap.py --kubeconfig /path/to/protected/kubeconfig --namespace-uid VERIFIED_UID` inside the repository devcontainer with the existing securely injected `BWS_ACCESS_TOKEN` environment. The default checks the unique `sk-home` Bitwarden project/item and namespace identity, then privately compares any existing Secret. It never mutates. CLI state caching is disabled through isolated non-secret configuration; values stay in process memory.
+
+Only after explicit production approval, repeat with `--apply-secret`. This atomically creates only an absent `postgres/litellm-postgres-auth`; mismatches and races fail closed without rotation or overwrite. It does not create namespaces, update `LITELLM_DATABASE_URL` or activate workloads. Never supply token/password arguments, enable shell tracing or save CLI responses. Run `mise run shared-postgres-bootstrap-check` for credential-free synthetic safety tests; CI runs only these tests.
