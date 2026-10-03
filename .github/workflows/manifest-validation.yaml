@@ -45,6 +45,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Synthetic tests never retrieve credentials or invoke live bootstrap.
+          python3 scripts/test-shared-postgres-bootstrap.py
+          bash scripts/shared-postgres-render.sh
           python3 scripts/render-dns.py --check
           kubectl kustomize kubernetes/flux/infrastructure/dns/rendered >/dev/null
           kubectl kustomize kubernetes/flux/infrastructure/certificates >/dev/null
@@ -61,7 +64,7 @@ jobs:
           kubectl kustomize kubernetes/flux/observability/flow-collector >/dev/null
           kubectl kustomize kubernetes/flux/observability/flow-geoip >/dev/null
           kubectl kustomize kubernetes/flux/clusters/sk-talos/observability >/dev/null
-          bash -n .devcontainer/post-create.sh scripts/smtp-relay-preflight.sh
+          bash -n .devcontainer/post-create.sh scripts/smtp-relay-preflight.sh scripts/shared-postgres-render.sh
           sh -n kubernetes/flux/observability/flow-geoip/geoip-refresh.sh
           jq empty kubernetes/flux/observability/dashboards/sk-flow.json
           python3 -m unittest discover -s tests -p 'test_nas_tls*.py'

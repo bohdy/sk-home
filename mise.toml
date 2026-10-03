@@ -1,4 +1,6 @@
 [tools]
+# Helm renders the pinned CNPG operator chart during credential-free validation.
+helm = "4.3.0"
 kubectl = "latest"
 "aqua:opentofu/opentofu" = "1.12.1"
 pre-commit = "latest"
@@ -31,3 +33,11 @@ run = [
   "kubectl kustomize kubernetes/flux/infrastructure/nas-tls/delivery >/dev/null",
   "kubectl kustomize kubernetes/flux/observability/nas-tls >/dev/null",
 ]
+
+[tasks.shared-postgres-render]
+description = "Render the pinned PostgreSQL chart and Flux trees without credentials."
+run = "bash scripts/shared-postgres-render.sh"
+
+[tasks.shared-postgres-bootstrap-check]
+description = "Run synthetic Secret bootstrap safety tests without credentials."
+run = "python3 scripts/test-shared-postgres-bootstrap.py"
