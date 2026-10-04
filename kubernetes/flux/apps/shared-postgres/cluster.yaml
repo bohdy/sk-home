@@ -48,8 +48,25 @@ spec:
       secret:
         name: litellm-postgres-auth
       # These one-time bootstrap ACLs must not be mistaken for drift reconciliation.
+      # CNPG 1.30.1 creates this reserved role later in instance permission
+      # reconciliation, while replica joins connect to postgres with it. Create
+      # it only when absent so CNPG remains the ongoing owner of its attributes.
       postInitSQL:
+        - |
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_catalog.pg_roles
+              WHERE rolname = 'streaming_replica'
+            ) THEN
+              CREATE ROLE streaming_replica LOGIN REPLICATION;
+              COMMENT ON ROLE streaming_replica IS 'Special user for streaming replication created by CloudNativePG';
+            END IF;
+          END;
+          $$;
         - REVOKE CONNECT ON DATABASE postgres FROM PUBLIC
+        - GRANT CONNECT ON DATABASE postgres TO streaming_replica
         - REVOKE CONNECT ON DATABASE template1 FROM PUBLIC
       postInitApplicationSQL:
         - REVOKE ALL ON DATABASE litellm FROM PUBLIC
