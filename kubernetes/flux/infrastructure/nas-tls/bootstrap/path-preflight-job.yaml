@@ -1,0 +1,80 @@
+# This versioned terminal Job proves only fixed-endpoint TLS reachability.
+# It mounts no Kubernetes credential, source certificate, or private key.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nas-tls-path-preflight-v1
+  namespace: nas-tls
+  labels:
+    app.kubernetes.io/name: nas-tls-delivery
+    app.kubernetes.io/component: certificate-path-preflight
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  # Keep this versioned terminal Job for sanitized path evidence. A TTL would
+  # remove the result and let active Flux recreate the one-shot preflight.
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nas-tls-delivery
+        app.kubernetes.io/component: certificate-path-preflight
+    spec:
+      automountServiceAccountToken: false
+      hostAliases:
+        - ip: 10.1.100.10
+          hostnames:
+            - nas.bohdy.sk
+            - nas.bohdal.name
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: path-preflight
+          image: docker.io/library/python:3.14.8-slim-bookworm@sha256:c8137f4c460908c8763f281c8f22c431eb5c538514ba9553fc3a89c06b7cfb88
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/python3
+            - /path-preflight/nas_tls_path_preflight.py
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+              ephemeral-storage: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+              ephemeral-storage: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: path-preflight
+              mountPath: /path-preflight
+              readOnly: true
+      volumes:
+        - name: path-preflight
+          configMap:
+            name: nas-tls-path-preflight
+            defaultMode: 0444
+            items:
+              - key: nas_tls_path_preflight.py
+                path: nas_tls_path_preflight.py

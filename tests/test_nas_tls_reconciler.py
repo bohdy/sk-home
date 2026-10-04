@@ -714,6 +714,7 @@ class ReconcilerTests(unittest.TestCase):
         for relative in (
             "infrastructure/nas-tls/delivery/cronjob.yaml",
             "infrastructure/nas-tls/bootstrap/job.yaml",
+            "infrastructure/nas-tls/bootstrap/path-preflight-job.yaml",
         ):
             manifest = (
                 MODULE_PATH.parents[3] / relative

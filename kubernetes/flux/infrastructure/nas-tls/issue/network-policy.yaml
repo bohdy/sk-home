@@ -1,6 +1,6 @@
-# The one reconciler identity has no ingress and can reach only the NAS DSM
-# HTTPS endpoint.  HostAliases avoids granting DNS egress to this credentialed
-# workload while preserving the canonical SNI and HTTP hostname.
+# The path preflight and reconciler identities have no ingress and can reach
+# only the NAS DSM HTTPS endpoint. HostAliases avoids granting DNS egress to
+# these workloads; the credentialed reconciler preserves canonical SNI and HTTP hostname.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
