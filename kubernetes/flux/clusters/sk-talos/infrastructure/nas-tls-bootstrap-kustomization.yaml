@@ -1,12 +1,13 @@
-# The first DSM import has an independent operator approval and trusted-channel
-# precondition.  Keep this child suspended even after source issuance is ready.
+# This child owns only the reviewed unauthenticated fixed-endpoint path
+# preflight. Apply it only after concrete explicit production approval for that
+# path check; credentialed inspect/import, delivery, and monitoring stay gated.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: nas-tls-bootstrap
   namespace: flux-system
 spec:
-  suspend: true
+  suspend: false
   interval: 10m
   retryInterval: 1m
   timeout: 10m

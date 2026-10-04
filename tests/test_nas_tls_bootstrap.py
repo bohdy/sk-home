@@ -372,7 +372,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(len(strict_clients), 2)
         self.assertTrue(all(client.import_calls == 0 for client in strict_clients))
 
-    def test_manifest_separates_bootstrap_wrapper_from_strict_cronjob(self) -> None:
+    def test_manifest_keeps_credentialed_wrapper_staged_but_inactive(self) -> None:
         job = (ROOT / "kubernetes/flux/infrastructure/nas-tls/bootstrap/job.yaml").read_text()
         cron = (ROOT / "kubernetes/flux/infrastructure/nas-tls/delivery/cronjob.yaml").read_text()
         kustomization = (ROOT / "kubernetes/flux/infrastructure/nas-tls/bootstrap/kustomization.yaml").read_text()
@@ -380,12 +380,15 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("/bootstrap/nas_tls_bootstrap.py", job)
         self.assertIn("name: nas-tls-bootstrap", job)
         self.assertIn("configMapGenerator:", kustomization)
-        self.assertIn("nas_tls_bootstrap.py", kustomization)
+        self.assertIn("  - path-preflight-job.yaml", kustomization)
+        self.assertIn("nas_tls_path_preflight.py", kustomization)
+        self.assertNotIn("  - job.yaml", kustomization)
+        self.assertNotIn("nas_tls_bootstrap.py", kustomization)
         self.assertNotIn("nas_tls_bootstrap.py", cron)
         self.assertNotIn("name: nas-tls-bootstrap", cron)
 
-    def test_rendered_bootstrap_job_is_retained_without_automatic_recreation(self) -> None:
-        """Keep terminal evidence while preserving the one-shot source protections."""
+    def test_rendered_path_preflight_job_is_retained_without_automatic_recreation(self) -> None:
+        """Keep terminal path evidence without automatic recreation or credentials."""
 
         result = subprocess.run(
             [
@@ -403,9 +406,11 @@ class BootstrapTests(unittest.TestCase):
             document
             for document in result.stdout.split("\n---\n")
             if "kind: Job\n" in document
-            and "name: nas-tls-bootstrap-inspect-v1" in document
+            and "name: nas-tls-path-preflight-v1" in document
         ]
         self.assertEqual(len(jobs), 1)
+        self.assertNotIn("nas-tls-bootstrap-inspect-v1", result.stdout)
+        self.assertNotIn("nas_tls_bootstrap.py", result.stdout)
         job = jobs[0]
         for automatic_recreation_field in (
             "ttlSecondsAfterFinished:",
@@ -422,16 +427,31 @@ class BootstrapTests(unittest.TestCase):
             "automountServiceAccountToken: false",
             "runAsNonRoot: true",
             "readOnlyRootFilesystem: true",
-            "secretName: nas-tls",
-            "mountPath: /source\n          name: source-certificate\n          readOnly: true",
+            "mountPath: /path-preflight",
+            "name: nas-tls-path-preflight",
+            "app.kubernetes.io/name: nas-tls-delivery",
         ):
             self.assertIn(protected_field, job)
+        for credential_or_source_field in (
+            "secretName:",
+            "source-certificate",
+            "dsm-auth",
+            "mountPath: /source",
+            "mountPath: /auth",
+            "mountPath: /etc/nas-tls",
+            "serviceAccountName:",
+        ):
+            self.assertNotIn(credential_or_source_field, job)
 
     def test_manifests_keep_both_internal_aliases_and_new_certificate_order(self) -> None:
         job = (ROOT / "kubernetes/flux/infrastructure/nas-tls/bootstrap/job.yaml").read_text()
+        preflight = (
+            ROOT / "kubernetes/flux/infrastructure/nas-tls/bootstrap/path-preflight-job.yaml"
+        ).read_text()
         cron = (ROOT / "kubernetes/flux/infrastructure/nas-tls/delivery/cronjob.yaml").read_text()
         certificate = (ROOT / "kubernetes/flux/infrastructure/nas-tls/issue/certificate.yaml").read_text()
         self.assertIn("- nas.bohdy.sk\n            - nas.bohdal.name", job)
+        self.assertIn("- nas.bohdy.sk\n            - nas.bohdal.name", preflight)
         self.assertIn("- nas.bohdy.sk\n                - nas.bohdal.name", cron)
         self.assertIn("- nas.bohdy.sk\n    - nas.bohdal.name", certificate)
         self.assertEqual(certificate.count("    - nas."), 2)
